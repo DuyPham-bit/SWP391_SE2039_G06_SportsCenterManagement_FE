@@ -16,8 +16,7 @@ export function StaffManagement() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
 
-  // Add staff mode: 'FROM_MEMBER' | 'NEW_ACCOUNT'
-  const [createMode, setCreateMode] = useState('FROM_MEMBER');
+  // Add staff from existing member
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const [availableMembers, setAvailableMembers] = useState([]);
   const [filteredMembers, setFilteredMembers] = useState([]);
@@ -63,7 +62,6 @@ export function StaffManagement() {
 
   const openCreateModal = async () => {
     setEditingStaff(null);
-    setCreateMode('FROM_MEMBER');
     setSelectedMember(null);
     setMemberSearchQuery('');
     setFormName('');
@@ -139,13 +137,13 @@ export function StaffManagement() {
 
   const handleSaveStaff = async (e) => {
     e.preventDefault();
-    if (!formName.trim() || !formEmail.trim()) {
-      showError('Vui lòng điền họ tên và email!');
+    if (!editingStaff && !selectedMember) {
+      showError('Vui lòng tìm và chọn một tài khoản thành viên từ danh sách!');
       return;
     }
 
-    if (!editingStaff && createMode === 'FROM_MEMBER' && !selectedMember) {
-      showError('Vui lòng tìm và chọn một tài khoản thành viên từ danh sách!');
+    if (!formName.trim() || !formEmail.trim()) {
+      showError('Vui lòng điền họ tên và email!');
       return;
     }
 
@@ -168,13 +166,10 @@ export function StaffManagement() {
           role: formRole,
           specialty: formSpecialty.trim(),
           certification: formCertification.trim(),
-          avatar: selectedMember?.avatar
+          avatar: selectedMember?.avatar,
+          memberId: selectedMember.id,
+          selectedAccountId: selectedMember.id
         };
-
-        if (createMode === 'FROM_MEMBER' && selectedMember) {
-          payload.memberId = selectedMember.id;
-          payload.selectedAccountId = selectedMember.id;
-        }
 
         const res = await staffApi.create(payload);
         if (res.oldId && res.newId) {
@@ -341,54 +336,12 @@ export function StaffManagement() {
         title={editingStaff ? `Chỉnh sửa: ${editingStaff.fullName} (${editingStaff.id})` : 'Thêm Nhân Viên Mới'}
       >
         <form onSubmit={handleSaveStaff} className="space-y-4">
-          {/* Mode selector when creating */}
-          {!editingStaff && (
-            <div className="flex border-b border-slate-200 mb-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setCreateMode('FROM_MEMBER');
-                  const nextId = staffApi.previewRoleId(formRole, selectedMember ? selectedMember.id : '');
-                  setPreviewId(nextId);
-                }}
-                className={`flex items-center gap-1.5 pb-2.5 px-3 text-xs font-bold font-chivo uppercase tracking-wider border-b-2 transition-all ${
-                  createMode === 'FROM_MEMBER'
-                    ? 'border-red-600 text-red-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <span className="material-symbols-outlined text-[16px]">person_search</span>
-                <span>Chọn từ tài khoản Thành Viên</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setCreateMode('NEW_ACCOUNT');
-                  setSelectedMember(null);
-                  setFormName('');
-                  setFormEmail('');
-                  setFormPhone('');
-                  const nextId = staffApi.previewRoleId(formRole, '');
-                  setPreviewId(nextId);
-                }}
-                className={`flex items-center gap-1.5 pb-2.5 px-3 text-xs font-bold font-chivo uppercase tracking-wider border-b-2 transition-all ${
-                  createMode === 'NEW_ACCOUNT'
-                    ? 'border-red-600 text-red-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <span className="material-symbols-outlined text-[16px]">add_circle</span>
-                <span>Tạo tài khoản mới</span>
-              </button>
-            </div>
-          )}
-
           {/* Member Search / Autocomplete Field */}
-          {!editingStaff && createMode === 'FROM_MEMBER' && (
+          {!editingStaff && (
             <div className="space-y-3">
               <div className="relative" ref={dropdownRef}>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Chọn thành viên (Nhập vài chữ cái theo ID / Tên / Email) *
+                  Chọn thành viên cần thêm làm nhân viên *
                 </label>
                 <div className="relative">
                   <span className="material-symbols-outlined absolute left-3 top-2.5 text-slate-400 text-[18px]">
@@ -396,7 +349,7 @@ export function StaffManagement() {
                   </span>
                   <input
                     type="text"
-                    placeholder="Gõ vài chữ cái (VD: usr-mem, 01, nguyen, tuấn, a...)"
+                    placeholder="Tìm theo ID, Tên, Email hoặc SĐT thành viên..."
                     value={memberSearchQuery}
                     onChange={e => handleMemberSearchChange(e.target.value)}
                     onFocus={() => setIsDropdownOpen(true)}
@@ -515,13 +468,15 @@ export function StaffManagement() {
               <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
                 <span className="text-slate-400">ID Hiện Tại:</span>
                 <span className="font-mono font-bold text-slate-100">
-                  {selectedMember ? selectedMember.id : (editingStaff ? editingStaff.id : 'Chưa có ID')}
+                  {selectedMember ? selectedMember.id : (editingStaff ? editingStaff.id : 'Chưa chọn thành viên')}
                 </span>
               </div>
               <span className="material-symbols-outlined text-[18px] text-amber-400">arrow_right_alt</span>
               <div className="flex items-center gap-1.5 bg-amber-400/20 px-2.5 py-1 rounded-lg border border-amber-400/40">
                 <span className="text-amber-300 font-semibold">ID Sau Khi Lưu:</span>
-                <span className="font-mono font-bold text-amber-300 text-sm">{previewId}</span>
+                <span className="font-mono font-bold text-amber-300 text-sm">
+                  {selectedMember || editingStaff ? previewId : 'Chờ chọn thành viên'}
+                </span>
               </div>
             </div>
             <p className="text-[11px] text-slate-400">
@@ -536,7 +491,7 @@ export function StaffManagement() {
             <input
               type="text"
               required
-              placeholder="Nguyễn Văn Huấn"
+              placeholder={selectedMember ? selectedMember.fullName : "Chọn tài khoản thành viên ở trên..."}
               value={formName}
               onChange={e => setFormName(e.target.value)}
               className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white"
@@ -545,19 +500,22 @@ export function StaffManagement() {
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-              Email tài khoản *
+              Email tài khoản (Cố định theo tài khoản) *
             </label>
             <input
               type="email"
               required
-              disabled={Boolean(editingStaff) || (createMode === 'FROM_MEMBER' && Boolean(selectedMember))}
-              placeholder="coach.ten@scms.vn"
+              disabled
+              placeholder={selectedMember ? selectedMember.email : "Tự động điền theo tài khoản thành viên..."}
               value={formEmail}
               onChange={e => setFormEmail(e.target.value)}
-              className={`w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 ${
-                editingStaff || (createMode === 'FROM_MEMBER' && selectedMember) ? 'bg-slate-100 cursor-not-allowed text-slate-600' : 'bg-white'
-              }`}
+              className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 bg-slate-100 cursor-not-allowed text-slate-600"
             />
+            {!editingStaff && (
+              <p className="text-[11px] text-slate-400 mt-1">
+                * Email đăng nhập được đồng bộ tự động từ tài khoản thành viên đã chọn.
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
