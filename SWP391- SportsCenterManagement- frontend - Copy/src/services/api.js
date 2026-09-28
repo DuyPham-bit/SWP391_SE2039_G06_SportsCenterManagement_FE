@@ -145,6 +145,46 @@ export const authApi = {
   }
 };
 
+export const getRolePrefix = (role) => {
+  switch (role) {
+    case 'COACH':
+      return 'usr-coa';
+    case 'RECEPTIONIST':
+      return 'usr-rec';
+    case 'MANAGER':
+      return 'usr-mgr';
+    default:
+      return `usr-${(role || 'stf').toLowerCase().slice(0, 3)}`;
+  }
+};
+
+export const generateRoleId = (role, oldId = '', allUsers = []) => {
+  const prefix = getRolePrefix(role);
+
+  // If oldId has a numeric suffix (e.g. usr-mem-01, usr-mem-02, MEM-8899, etc.)
+  const numMatch = oldId ? oldId.match(/(\d+)$/) : null;
+  if (numMatch) {
+    let num = parseInt(numMatch[1], 10);
+    const padLength = Math.max(2, numMatch[1].length);
+    let candidate = `${prefix}-${String(num).padStart(padLength, '0')}`;
+    while (allUsers.some(u => u.id === candidate && u.id !== oldId)) {
+      num++;
+      candidate = `${prefix}-${String(num).padStart(padLength, '0')}`;
+    }
+    return candidate;
+  }
+
+  // If oldId doesn't have a numeric suffix or is empty, use sequential count for role
+  const existingForRole = allUsers.filter(u => u.role === role || (u.id && u.id.startsWith(prefix)));
+  let candidateNum = existingForRole.length + 1;
+  let candidate = `${prefix}-${String(candidateNum).padStart(2, '0')}`;
+  while (allUsers.some(u => u.id === candidate && u.id !== oldId)) {
+    candidateNum++;
+    candidate = `${prefix}-${String(candidateNum).padStart(2, '0')}`;
+  }
+  return candidate;
+};
+
 export const staffApi = {
   async getAll() {
     await delay();
@@ -152,22 +192,178 @@ export const staffApi = {
     return users.filter(u => u.role === 'COACH' || u.role === 'RECEPTIONIST' || u.role === 'MANAGER');
   },
 
+  async getAvailableMembers(query = '') {
+    await delay(50);
+    const users = db.get(DB_KEYS.USERS);
+    // Find users who have role 'MEMBER' (can be promoted to staff)
+    const members = users.filter(u => u.role === 'MEMBER');
+    if (!query || !query.trim()) {
+      return members;
+    }
+    const q = query.trim().toLowerCase();
+    return members.filter(u =>
+      (u.id && u.id.toLowerCase().includes(q)) ||
+      (u.fullName && u.fullName.toLowerCase().includes(q)) ||
+      (u.email && u.email.toLowerCase().includes(q)) ||
+      (u.phone && u.phone.includes(q)) ||
+      (u.memberCode && u.memberCode.toLowerCase().includes(q))
+    );
+  },
+
+  previewRoleId(role, oldId) {
+    const users = db.get(DB_KEYS.USERS);
+    return generateRoleId(role, oldId, users);
+  },
+
   async create(staffData) {
     await delay();
     const users = db.get(DB_KEYS.USERS);
+
+    const isExistingAccount = Boolean(staffData.memberId || staffData.selectedAccountId);
+
+    if (isExistingAccount) {
+      const targetId = staffData.memberId || staffData.selectedAccountId;
+      const targetUserIndex = users.findIndex(u => u.id === targetId);
+      if (targetUserIndex === -1) {
+        throw new Error('Không tìm thấy tài khoản thành viên đã chọn!');
+      }
+
+      const oldUser = users[targetUserIndex];
+      const oldId = oldUser.id;
+      const newRole = staffData.role || 'COACH';
+      const newId = generateRoleId(newRole, oldId, users);
+
+      // Check email uniqueness if email was edited
+      if (staffData.email && staffData.email.trim().toLowerCase() !== oldUser.email.toLowerCase()) {
+        const cleanEmail = staffData.email.trim().toLowerCase();
+        if (users.some(u => u.id !== oldId && u.email.toLowerCase() === cleanEmail)) {
+          throw new Error('Email này đã được sử dụng bởi một tài khoản khác!');
+        }
+      }
+
+      // Update user with new role and new role-based ID
+      const updatedUser = {
+        ...oldUser,
+        id: newId,
+        role: newRole,
+        fullName: staffData.fullName ? staffData.fullName.trim() : oldUser.fullName,
+        email: staffData.email ? staffData.email.trim() : oldUser.email,
+        phone: staffData.phone !== undefined ? staffData.phone.trim() : (oldUser.phone || ''),
+        specialty: staffData.specialty ? staffData.specialty.trim() : (oldUser.specialty || ''),
+        certification: staffData.certification ? staffData.certification.trim() : (oldUser.certification || ''),
+        avatar: staffData.avatar || oldUser.avatar || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+        status: 'ACTIVE',
+        promotedAt: new Date().toISOString().split('T')[0]
+      };
+
+      // Replace user in array
+      users[targetUserIndex] = updatedUser;
+      db.set(DB_KEYS.USERS, users);
+
+      // Cascade update ID in other tables
+      if (oldId !== newId) {
+        // Bookings
+        const bookings = db.get(DB_KEYS.BOOKINGS);
+        let bookingsChanged = false;
+        bookings.forEach(b => {
+          if (b.memberId === oldId) {
+            b.memberId = newId;
+            bookingsChanged = true;
+          }
+        });
+        if (bookingsChanged) db.set(DB_KEYS.BOOKINGS, bookings);
+
+        // Checkins
+        const checkins = db.get(DB_KEYS.CHECKINS);
+        let checkinsChanged = false;
+        checkins.forEach(c => {
+          if (c.memberId === oldId) {
+            c.memberId = newId;
+            checkinsChanged = true;
+          }
+        });
+        if (checkinsChanged) db.set(DB_KEYS.CHECKINS, checkins);
+
+        // Classes (if was coach)
+        const classes = db.get(DB_KEYS.CLASSES);
+        let classesChanged = false;
+        classes.forEach(c => {
+          if (c.coachId === oldId) {
+            c.coachId = newId;
+            classesChanged = true;
+          }
+        });
+        if (classesChanged) db.set(DB_KEYS.CLASSES, classes);
+
+        // Training Plans
+        const plans = db.get(DB_KEYS.TRAINING_PLANS);
+        let plansChanged = false;
+        plans.forEach(p => {
+          if (p.memberId === oldId) {
+            p.memberId = newId;
+            plansChanged = true;
+          }
+          if (p.coachId === oldId) {
+            p.coachId = newId;
+            plansChanged = true;
+          }
+        });
+        if (plansChanged) db.set(DB_KEYS.TRAINING_PLANS, plans);
+
+        // Progress
+        const progress = db.get(DB_KEYS.PROGRESS);
+        let progressChanged = false;
+        progress.forEach(p => {
+          if (p.memberId === oldId) {
+            p.memberId = newId;
+            progressChanged = true;
+          }
+        });
+        if (progressChanged) db.set(DB_KEYS.PROGRESS, progress);
+
+        // Update auth session if current user was modified
+        try {
+          const session = localStorage.getItem('SCMS_AUTH_SESSION');
+          if (session) {
+            const parsed = JSON.parse(session);
+            if (parsed.id === oldId) {
+              localStorage.setItem('SCMS_AUTH_SESSION', JSON.stringify(updatedUser));
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      db.logAudit(
+        'Manager',
+        'MANAGER',
+        'PROMOTE_STAFF',
+        `Bổ nhiệm thành viên ${updatedUser.fullName} thành ${newRole} (ID chuyển đổi: ${oldId} ➜ ${newId})`
+      );
+
+      return {
+        ...updatedUser,
+        oldId,
+        newId
+      };
+    }
+
+    // Creating completely new staff without picking existing member
     if (users.some(u => u.email.toLowerCase() === staffData.email.trim().toLowerCase())) {
       throw new Error('Email nhân viên đã tồn tại!');
     }
+    const newId = generateRoleId(staffData.role, '', users);
     const newStaff = {
       ...staffData,
-      id: `usr-${staffData.role.toLowerCase().slice(0, 3)}-${Date.now()}`,
+      id: newId,
       password: staffData.password || 'password123',
       status: 'ACTIVE',
       avatar: staffData.avatar || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
       createdAt: new Date().toISOString().split('T')[0]
     };
     db.insert(DB_KEYS.USERS, newStaff);
-    db.logAudit('Manager', 'MANAGER', 'CREATE_STAFF', `Thêm nhân viên ${newStaff.fullName} (${newStaff.role})`);
+    db.logAudit('Manager', 'MANAGER', 'CREATE_STAFF', `Thêm nhân viên mới ${newStaff.fullName} (${newStaff.role}) với ID: ${newStaff.id}`);
     return newStaff;
   },
 
