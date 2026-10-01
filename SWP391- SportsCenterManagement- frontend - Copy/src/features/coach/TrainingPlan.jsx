@@ -1,5 +1,4 @@
-import { coachApi } from '../../services/api.js';
-import { db, DB_KEYS } from '../../services/dbStorage.js';
+import { coachApi, staffApi } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.js';
 import { useToast } from '../../context/ToastContext.js';
 import { LoadingSpinner } from '../../components/common/Table.js';
@@ -28,13 +27,18 @@ export function TrainingPlan() {
   ]);
   const [saving, setSaving] = useState(false);
 
-  const loadData = () => {
-    const userList = db.get(DB_KEYS.USERS).filter(u => u.role === 'MEMBER');
-    const planList = db.get(DB_KEYS.TRAINING_PLANS);
-    setMembers(userList);
-    setPlans(planList);
-    if (userList.length > 0) setSelectedMemberId(userList[0].id);
-    setLoading(false);
+  const loadData = async () => {
+    try {
+      const userList = await staffApi.getAvailableMembers();
+      const planList = await coachApi.getAllTrainingPlans();
+      setMembers(userList || []);
+      setPlans(planList || []);
+      if (userList && userList.length > 0) setSelectedMemberId(userList[0].id);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {

@@ -1,5 +1,4 @@
 import { receptionApi, packageApi } from '../../services/api.js';
-import { db, DB_KEYS } from '../../services/dbStorage.js';
 import { useToast } from '../../context/ToastContext.js';
 import { LoadingSpinner } from '../../components/common/Table.js';
 import { Badge } from '../../components/common/StatCard.js';
@@ -24,12 +23,12 @@ export function CounterMembership() {
   useEffect(() => {
     async function loadInitial() {
       try {
-        const users = db.get(DB_KEYS.USERS).filter(u => u.role === 'MEMBER');
+        const users = await receptionApi.getAllMembers();
         const pkgs = await packageApi.getAll();
-        setMembers(users);
-        setPackages(pkgs);
-        if (users.length > 0) setSelectedMember(users[0]);
-        if (pkgs.length > 0) setSelectedPackage(pkgs[0]);
+        setMembers(users || []);
+        setPackages(pkgs || []);
+        if (users && users.length > 0) setSelectedMember(users[0]);
+        if (pkgs && pkgs.length > 0) setSelectedPackage(pkgs[0]);
       } catch (e) {
         console.error(e);
       } finally {

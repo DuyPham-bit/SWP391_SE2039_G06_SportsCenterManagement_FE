@@ -1,9 +1,89 @@
 import { db, DB_KEYS } from './dbStorage.js';
+import { httpClient, isMockModeForced } from './httpClient.js';
+import { INITIAL_SPORTS } from './mockData.js';
 
-// Simulated delay helper
+// Simulated delay helper for mock mode
 const delay = (ms = 150) => new Promise(resolve => setTimeout(resolve, ms));
 
-export const authApi = {
+/**
+ * Universal executor that attempts real HTTP Backend API first,
+ * and gracefully falls back to local Mock DB if the Backend is offline or unreachable.
+ */
+async function callWithFallback(realApiFn, mockApiFn, endpointName = 'API') {
+  // If user or environment explicitly forces Mock Mode
+  if (isMockModeForced()) {
+    return await mockApiFn();
+  }
+
+  try {
+    const result = await realApiFn();
+    return result;
+  } catch (error) {
+    // Check if error is a network connection issue (Backend not started, ERR_NETWORK, timeout)
+    const isNetworkDown = error.isNetworkError || !error.status || error.message?.includes('Network Error');
+    
+    if (isNetworkDown) {
+      console.warn(`[SCMS API - Fallback] Không thể kết nối tới Backend (${endpointName}): ${error.message}. Đang sử dụng dữ liệu cục bộ (Mock DB).`);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('SCMS_API_FALLBACK_TRIGGERED', {
+            detail: { endpoint: endpointName, message: error.message }
+          })
+        );
+      }
+      return await mockApiFn();
+    }
+
+    // Real business error from Backend (e.g., 400 Bad Request, 401 Unauthorized, 403, 404, 500)
+    // Must rethrow so UI displays the exact error message from the backend
+    throw error;
+  }
+}
+
+// Helper functions for ID and role generation
+export const getRolePrefix = (role) => {
+  switch (role) {
+    case 'COACH':
+      return 'usr-coa';
+    case 'RECEPTIONIST':
+      return 'usr-rec';
+    case 'MANAGER':
+      return 'usr-mgr';
+    default:
+      return `usr-${(role || 'stf').toLowerCase().slice(0, 3)}`;
+  }
+};
+
+export const generateRoleId = (role, oldId = '', allUsers = []) => {
+  const prefix = getRolePrefix(role);
+
+  const numMatch = oldId ? oldId.match(/(\d+)$/) : null;
+  if (numMatch) {
+    let num = parseInt(numMatch[1], 10);
+    const padLength = Math.max(2, numMatch[1].length);
+    let candidate = `${prefix}-${String(num).padStart(padLength, '0')}`;
+    while (allUsers.some(u => u.id === candidate && u.id !== oldId)) {
+      num++;
+      candidate = `${prefix}-${String(num).padStart(padLength, '0')}`;
+    }
+    return candidate;
+  }
+
+  const existingForRole = allUsers.filter(u => u.role === role || (u.id && u.id.startsWith(prefix)));
+  let candidateNum = existingForRole.length + 1;
+  let candidate = `${prefix}-${String(candidateNum).padStart(2, '0')}`;
+  while (allUsers.some(u => u.id === candidate && u.id !== oldId)) {
+    candidateNum++;
+    candidate = `${prefix}-${String(candidateNum).padStart(2, '0')}`;
+  }
+  return candidate;
+};
+
+/* ==========================================================================
+   1. MOCK IMPLEMENTATIONS (Local DB Fallback)
+   ========================================================================== */
+
+const mockAuthApi = {
   async login(email, password) {
     await delay();
     const users = db.get(DB_KEYS.USERS);
@@ -60,7 +140,6 @@ export const authApi = {
     const users = db.get(DB_KEYS.USERS);
     const cleanEmail = email.trim().toLowerCase();
     
-    // Check if user already exists
     let user = users.find(u => u.email.toLowerCase() === cleanEmail);
 
     if (user) {
@@ -74,7 +153,6 @@ export const authApi = {
       };
     }
 
-    // Auto-create new MEMBER user with Google account
     const newUser = {
       id: `usr-mem-${Date.now()}`,
       email: cleanEmail,
@@ -118,7 +196,7 @@ export const authApi = {
 
     db.update(DB_KEYS.USERS, user.id, { password: newPassword });
     db.logAudit(user.fullName, user.role, 'RESET_PASSWORD', `Khôi phục mật khẩu thành công`);
-    return true;
+    return { success: true, message: 'Khôi phục mật khẩu thành công' };
   },
 
   async changePassword(userId, currentPassword, newPassword) {
@@ -134,7 +212,7 @@ export const authApi = {
     }
     db.update(DB_KEYS.USERS, userId, { password: newPassword });
     db.logAudit(user.fullName, user.role, 'CHANGE_PASSWORD', `Đổi mật khẩu tài khoản thành công`);
-    return true;
+    return { success: true };
   },
 
   async updateProfile(userId, profileData) {
@@ -142,50 +220,18 @@ export const authApi = {
     const updated = db.update(DB_KEYS.USERS, userId, profileData);
     if (!updated) throw new Error('Cập nhật thất bại!');
     return updated;
+  },
+
+  async getProfile(userId) {
+    await delay(50);
+    const users = db.get(DB_KEYS.USERS);
+    const user = users.find(u => u.id === userId);
+    if (!user) throw new Error('Không tìm thấy người dùng!');
+    return user;
   }
 };
 
-export const getRolePrefix = (role) => {
-  switch (role) {
-    case 'COACH':
-      return 'usr-coa';
-    case 'RECEPTIONIST':
-      return 'usr-rec';
-    case 'MANAGER':
-      return 'usr-mgr';
-    default:
-      return `usr-${(role || 'stf').toLowerCase().slice(0, 3)}`;
-  }
-};
-
-export const generateRoleId = (role, oldId = '', allUsers = []) => {
-  const prefix = getRolePrefix(role);
-
-  // If oldId has a numeric suffix (e.g. usr-mem-01, usr-mem-02, MEM-8899, etc.)
-  const numMatch = oldId ? oldId.match(/(\d+)$/) : null;
-  if (numMatch) {
-    let num = parseInt(numMatch[1], 10);
-    const padLength = Math.max(2, numMatch[1].length);
-    let candidate = `${prefix}-${String(num).padStart(padLength, '0')}`;
-    while (allUsers.some(u => u.id === candidate && u.id !== oldId)) {
-      num++;
-      candidate = `${prefix}-${String(num).padStart(padLength, '0')}`;
-    }
-    return candidate;
-  }
-
-  // If oldId doesn't have a numeric suffix or is empty, use sequential count for role
-  const existingForRole = allUsers.filter(u => u.role === role || (u.id && u.id.startsWith(prefix)));
-  let candidateNum = existingForRole.length + 1;
-  let candidate = `${prefix}-${String(candidateNum).padStart(2, '0')}`;
-  while (allUsers.some(u => u.id === candidate && u.id !== oldId)) {
-    candidateNum++;
-    candidate = `${prefix}-${String(candidateNum).padStart(2, '0')}`;
-  }
-  return candidate;
-};
-
-export const staffApi = {
+const mockStaffApi = {
   async getAll() {
     await delay();
     const users = db.get(DB_KEYS.USERS);
@@ -195,7 +241,6 @@ export const staffApi = {
   async getAvailableMembers(query = '') {
     await delay(50);
     const users = db.get(DB_KEYS.USERS);
-    // Find users who have role 'MEMBER' (can be promoted to staff)
     const members = users.filter(u => u.role === 'MEMBER');
     if (!query || !query.trim()) {
       return members;
@@ -233,7 +278,6 @@ export const staffApi = {
       const newRole = staffData.role || 'COACH';
       const newId = generateRoleId(newRole, oldId, users);
 
-      // Check email uniqueness if email was edited
       if (staffData.email && staffData.email.trim().toLowerCase() !== oldUser.email.toLowerCase()) {
         const cleanEmail = staffData.email.trim().toLowerCase();
         if (users.some(u => u.id !== oldId && u.email.toLowerCase() === cleanEmail)) {
@@ -241,7 +285,6 @@ export const staffApi = {
         }
       }
 
-      // Update user with new role and new role-based ID
       const updatedUser = {
         ...oldUser,
         id: newId,
@@ -256,13 +299,11 @@ export const staffApi = {
         promotedAt: new Date().toISOString().split('T')[0]
       };
 
-      // Replace user in array
       users[targetUserIndex] = updatedUser;
       db.set(DB_KEYS.USERS, users);
 
-      // Cascade update ID in other tables
       if (oldId !== newId) {
-        // Bookings
+        // Cascade update in bookings, checkins, classes, plans, progress
         const bookings = db.get(DB_KEYS.BOOKINGS);
         let bookingsChanged = false;
         bookings.forEach(b => {
@@ -273,7 +314,6 @@ export const staffApi = {
         });
         if (bookingsChanged) db.set(DB_KEYS.BOOKINGS, bookings);
 
-        // Checkins
         const checkins = db.get(DB_KEYS.CHECKINS);
         let checkinsChanged = false;
         checkins.forEach(c => {
@@ -284,7 +324,6 @@ export const staffApi = {
         });
         if (checkinsChanged) db.set(DB_KEYS.CHECKINS, checkins);
 
-        // Classes (if was coach)
         const classes = db.get(DB_KEYS.CLASSES);
         let classesChanged = false;
         classes.forEach(c => {
@@ -295,7 +334,6 @@ export const staffApi = {
         });
         if (classesChanged) db.set(DB_KEYS.CLASSES, classes);
 
-        // Training Plans
         const plans = db.get(DB_KEYS.TRAINING_PLANS);
         let plansChanged = false;
         plans.forEach(p => {
@@ -310,7 +348,6 @@ export const staffApi = {
         });
         if (plansChanged) db.set(DB_KEYS.TRAINING_PLANS, plans);
 
-        // Progress
         const progress = db.get(DB_KEYS.PROGRESS);
         let progressChanged = false;
         progress.forEach(p => {
@@ -320,19 +357,6 @@ export const staffApi = {
           }
         });
         if (progressChanged) db.set(DB_KEYS.PROGRESS, progress);
-
-        // Update auth session if current user was modified
-        try {
-          const session = localStorage.getItem('SCMS_AUTH_SESSION');
-          if (session) {
-            const parsed = JSON.parse(session);
-            if (parsed.id === oldId) {
-              localStorage.setItem('SCMS_AUTH_SESSION', JSON.stringify(updatedUser));
-            }
-          }
-        } catch (e) {
-          // ignore
-        }
       }
 
       db.logAudit(
@@ -349,7 +373,6 @@ export const staffApi = {
       };
     }
 
-    // Creating completely new staff without picking existing member
     if (users.some(u => u.email.toLowerCase() === staffData.email.trim().toLowerCase())) {
       throw new Error('Email nhân viên đã tồn tại!');
     }
@@ -386,7 +409,7 @@ export const staffApi = {
   }
 };
 
-export const packageApi = {
+const mockPackageApi = {
   async getAll() {
     await delay();
     return db.get(DB_KEYS.PACKAGES);
@@ -422,7 +445,7 @@ export const packageApi = {
   }
 };
 
-export const classApi = {
+const mockClassApi = {
   async getAll() {
     await delay();
     return db.get(DB_KEYS.CLASSES);
@@ -430,7 +453,6 @@ export const classApi = {
 
   async create(classData) {
     await delay();
-    // Validate capacity against room capacity
     const rooms = db.get(DB_KEYS.ROOMS);
     const room = rooms.find(r => r.id === classData.roomId);
     if (room && Number(classData.capacity) > room.capacity) {
@@ -464,7 +486,6 @@ export const classApi = {
     const cls = db.get(DB_KEYS.CLASSES).find(c => c.id === classId);
     if (!cls) throw new Error('Không tìm thấy lớp học!');
 
-    // Check conflict: check if coach already has another class with overlapping time & day
     const otherClasses = db.get(DB_KEYS.CLASSES).filter(c => c.id !== classId && c.coachId === coachId);
     const conflict = otherClasses.find(c => c.dayOfWeek === cls.dayOfWeek && c.timeSlot === cls.timeSlot);
     if (conflict) {
@@ -480,7 +501,7 @@ export const classApi = {
   }
 };
 
-export const roomApi = {
+const mockRoomApi = {
   async getAll() {
     await delay();
     return db.get(DB_KEYS.ROOMS);
@@ -503,7 +524,7 @@ export const roomApi = {
   }
 };
 
-export const bookingApi = {
+const mockBookingApi = {
   async getMemberBookings(memberId) {
     await delay();
     const bookings = db.get(DB_KEYS.BOOKINGS);
@@ -528,7 +549,6 @@ export const bookingApi = {
       throw new Error('Lớp học đã đủ số lượng học viên tối đa (FULL)!');
     }
 
-    // Check duplicate active booking for the same class
     const bookings = db.get(DB_KEYS.BOOKINGS);
     const existing = bookings.find(b => b.memberId === memberId && b.classId === classId && b.status === 'CONFIRMED');
     if (existing) {
@@ -563,7 +583,6 @@ export const bookingApi = {
 
     db.update(DB_KEYS.BOOKINGS, bookingId, { status: 'CANCELLED' });
 
-    // Decrement class enrolled count
     const classes = db.get(DB_KEYS.CLASSES);
     const cls = classes.find(c => c.id === target.classId);
     if (cls && cls.enrolledCount > 0) {
@@ -575,10 +594,13 @@ export const bookingApi = {
   }
 };
 
-export const receptionApi = {
+const mockReceptionApi = {
   async lookupMember(query) {
     await delay();
-    if (!query) return [];
+    if (!query) {
+      const users = db.get(DB_KEYS.USERS);
+      return users.filter(u => u.role === 'MEMBER');
+    }
     const q = query.trim().toLowerCase();
     const users = db.get(DB_KEYS.USERS);
     return users.filter(u =>
@@ -661,7 +683,7 @@ export const receptionApi = {
   }
 };
 
-export const coachApi = {
+const mockCoachApi = {
   async getClassMembers(classId) {
     await delay();
     const bookings = db.get(DB_KEYS.BOOKINGS).filter(b => b.classId === classId && b.status === 'CONFIRMED');
@@ -734,6 +756,11 @@ export const coachApi = {
     return newPlan;
   },
 
+  async getAllTrainingPlans() {
+    await delay();
+    return db.get(DB_KEYS.TRAINING_PLANS);
+  },
+
   async recordWorkoutProgress(progressData) {
     await delay();
     const newRec = {
@@ -744,6 +771,11 @@ export const coachApi = {
     db.insert(DB_KEYS.PROGRESS, newRec);
     db.logAudit(progressData.coachName, 'COACH', 'RECORD_PROGRESS', `Ghi nhận chỉ số thể lực cho hội viên`);
     return newRec;
+  },
+
+  async getAllProgress() {
+    await delay();
+    return db.get(DB_KEYS.PROGRESS);
   },
 
   async takeAttendance(classId, className, coachId, coachName, records) {
@@ -774,9 +806,13 @@ export const coachApi = {
     return newNotif;
   },
 
+  async getNotifications() {
+    await delay();
+    return db.get(DB_KEYS.NOTIFICATIONS);
+  },
+
   async getAIRecommendation({ memberName, fitnessGoal, currentLevel, notes }) {
     await delay(300);
-    // Intelligent rule-based AI recommendation logic
     return {
       title: `Giáo án cá nhân hóa AI: Phát triển ${fitnessGoal}`,
       targetAudience: `${memberName} (Trình độ: ${currentLevel})`,
@@ -794,7 +830,7 @@ export const coachApi = {
   }
 };
 
-export const memberApi = {
+const mockMemberApi = {
   async subscribeOnline({ memberId, packageId, paymentMethod = 'VNPAY' }) {
     await delay();
     const users = db.get(DB_KEYS.USERS);
@@ -867,7 +903,7 @@ Tất cả 9 cụm sân (Bể bơi Olympic, Cầu lông BWF, Sân FIFA, Gym Tech
   }
 };
 
-export const reportApi = {
+const mockReportApi = {
   async getOverview() {
     await delay();
     const users = db.get(DB_KEYS.USERS);
@@ -901,7 +937,7 @@ export const reportApi = {
   }
 };
 
-export const systemApi = {
+const mockSystemApi = {
   async getAuditLogs() {
     await delay();
     return db.get(DB_KEYS.AUDIT_LOGS);
@@ -926,5 +962,613 @@ export const systemApi = {
 
   resetAllData() {
     db.resetAll();
+  }
+};
+
+const mockSportsApi = {
+  async getAll() {
+    await delay(50);
+    return INITIAL_SPORTS;
+  }
+};
+
+
+/* ==========================================================================
+   2. EXPORTED REAL API SERVICES WITH FALLBACK (Matching SCMS_API_Specification.md)
+   ========================================================================== */
+
+/**
+ * 1. Auth & Account APIs
+ */
+export const authApi = {
+  async login(email, password) {
+    return callWithFallback(
+      async () => {
+        const res = await httpClient.post('/auth/login', { email, password });
+        if (res?.token) {
+          localStorage.setItem('SCMS_AUTH_TOKEN', res.token);
+        }
+        return res;
+      },
+      () => mockAuthApi.login(email, password),
+      'POST /auth/login'
+    );
+  },
+
+  async register(userData) {
+    return callWithFallback(
+      async () => {
+        const res = await httpClient.post('/auth/register', userData);
+        return res;
+      },
+      () => mockAuthApi.register(userData),
+      'POST /auth/register'
+    );
+  },
+
+  async loginWithGoogle(googleData) {
+    return callWithFallback(
+      async () => {
+        const res = await httpClient.post('/auth/google', googleData);
+        if (res?.token) {
+          localStorage.setItem('SCMS_AUTH_TOKEN', res.token);
+        }
+        return res;
+      },
+      () => mockAuthApi.loginWithGoogle(googleData),
+      'POST /auth/google'
+    );
+  },
+
+  async resetPassword(email, otp, newPassword) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.post('/auth/reset-password', { email, otp, newPassword });
+      },
+      () => mockAuthApi.resetPassword(email, otp, newPassword),
+      'POST /auth/reset-password'
+    );
+  },
+
+  async changePassword(userId, currentPassword, newPassword) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.put(`/users/${userId}/change-password`, { currentPassword, newPassword });
+      },
+      () => mockAuthApi.changePassword(userId, currentPassword, newPassword),
+      `PUT /users/${userId}/change-password`
+    );
+  },
+
+  async updateProfile(userId, profileData) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.put(`/users/${userId}/profile`, profileData);
+      },
+      () => mockAuthApi.updateProfile(userId, profileData),
+      `PUT /users/${userId}/profile`
+    );
+  },
+
+  async getProfile(userId) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.get(`/users/${userId}/profile`);
+      },
+      () => mockAuthApi.getProfile(userId),
+      `GET /users/${userId}/profile`
+    );
+  }
+};
+
+/**
+ * 2. Staff Management APIs
+ */
+export const staffApi = {
+  async getAll() {
+    return callWithFallback(
+      async () => {
+        return await httpClient.get('/staff');
+      },
+      () => mockStaffApi.getAll(),
+      'GET /staff'
+    );
+  },
+
+  async getAvailableMembers(query = '') {
+    return callWithFallback(
+      async () => {
+        return await httpClient.get('/staff/available-members', { params: { query } });
+      },
+      () => mockStaffApi.getAvailableMembers(query),
+      'GET /staff/available-members'
+    );
+  },
+
+  previewRoleId(role, oldId) {
+    return mockStaffApi.previewRoleId(role, oldId);
+  },
+
+  async create(staffData) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.post('/staff', staffData);
+      },
+      () => mockStaffApi.create(staffData),
+      'POST /staff'
+    );
+  },
+
+  async update(id, staffData) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.put(`/staff/${id}`, staffData);
+      },
+      () => mockStaffApi.update(id, staffData),
+      `PUT /staff/${id}`
+    );
+  },
+
+  async toggleStatus(id) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.patch(`/staff/${id}/toggle-status`);
+      },
+      () => mockStaffApi.toggleStatus(id),
+      `PATCH /staff/${id}/toggle-status`
+    );
+  }
+};
+
+/**
+ * 3. Package Management APIs
+ */
+export const packageApi = {
+  async getAll() {
+    return callWithFallback(
+      async () => {
+        return await httpClient.get('/packages');
+      },
+      () => mockPackageApi.getAll(),
+      'GET /packages'
+    );
+  },
+
+  async create(pkg) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.post('/packages', pkg);
+      },
+      () => mockPackageApi.create(pkg),
+      'POST /packages'
+    );
+  },
+
+  async update(id, pkg) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.put(`/packages/${id}`, pkg);
+      },
+      () => mockPackageApi.update(id, pkg),
+      `PUT /packages/${id}`
+    );
+  },
+
+  async toggleStatus(id) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.patch(`/packages/${id}/toggle-status`);
+      },
+      () => mockPackageApi.toggleStatus(id),
+      `PATCH /packages/${id}/toggle-status`
+    );
+  }
+};
+
+/**
+ * 4. Classes & Schedules APIs
+ */
+export const classApi = {
+  async getAll() {
+    return callWithFallback(
+      async () => {
+        return await httpClient.get('/classes');
+      },
+      () => mockClassApi.getAll(),
+      'GET /classes'
+    );
+  },
+
+  async create(classData) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.post('/classes', classData);
+      },
+      () => mockClassApi.create(classData),
+      'POST /classes'
+    );
+  },
+
+  async update(id, classData) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.put(`/classes/${id}`, classData);
+      },
+      () => mockClassApi.update(id, classData),
+      `PUT /classes/${id}`
+    );
+  },
+
+  async assignCoach(classId, coachId) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.put(`/classes/${classId}/assign-coach`, { coachId });
+      },
+      () => mockClassApi.assignCoach(classId, coachId),
+      `PUT /classes/${classId}/assign-coach`
+    );
+  }
+};
+
+/**
+ * 5. Rooms & Facilities APIs
+ */
+export const roomApi = {
+  async getAll() {
+    return callWithFallback(
+      async () => {
+        return await httpClient.get('/rooms');
+      },
+      () => mockRoomApi.getAll(),
+      'GET /rooms'
+    );
+  },
+
+  async create(roomData) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.post('/rooms', roomData);
+      },
+      () => mockRoomApi.create(roomData),
+      'POST /rooms'
+    );
+  },
+
+  async update(id, roomData) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.put(`/rooms/${id}`, roomData);
+      },
+      () => mockRoomApi.update(id, roomData),
+      `PUT /rooms/${id}`
+    );
+  }
+};
+
+/**
+ * 6. Bookings APIs
+ */
+export const bookingApi = {
+  async getMemberBookings(memberId) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.get(`/bookings/member/${memberId}`);
+      },
+      () => mockBookingApi.getMemberBookings(memberId),
+      `GET /bookings/member/${memberId}`
+    );
+  },
+
+  async bookClass(memberId, classId, bookingDate) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.post('/bookings', { memberId, classId, bookingDate });
+      },
+      () => mockBookingApi.bookClass(memberId, classId, bookingDate),
+      'POST /bookings'
+    );
+  },
+
+  async cancelBooking(bookingId, memberId) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.post(`/bookings/${bookingId}/cancel`, { memberId });
+      },
+      () => mockBookingApi.cancelBooking(bookingId, memberId),
+      `POST /bookings/${bookingId}/cancel`
+    );
+  }
+};
+
+/**
+ * 7. Receptionist Operations APIs
+ */
+export const receptionApi = {
+  async lookupMember(query) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.get('/reception/members/lookup', { params: { query } });
+      },
+      () => mockReceptionApi.lookupMember(query),
+      'GET /reception/members/lookup'
+    );
+  },
+
+  async getAllMembers() {
+    return callWithFallback(
+      async () => {
+        return await httpClient.get('/reception/members/lookup', { params: { query: '' } });
+      },
+      () => mockReceptionApi.lookupMember(''),
+      'GET /reception/members'
+    );
+  },
+
+  async registerCounterPackage({ memberId, packageId, paymentMethod = 'TIỀN MẶT' }) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.post('/reception/packages/register', { memberId, packageId, paymentMethod });
+      },
+      () => mockReceptionApi.registerCounterPackage({ memberId, packageId, paymentMethod }),
+      'POST /reception/packages/register'
+    );
+  },
+
+  async checkInMember(memberId, receptionistName = 'Lê Thị Thu Thảo') {
+    return callWithFallback(
+      async () => {
+        return await httpClient.post('/reception/check-in', { memberId, receptionistName });
+      },
+      () => mockReceptionApi.checkInMember(memberId, receptionistName),
+      'POST /reception/check-in'
+    );
+  },
+
+  async getCheckInHistory() {
+    return callWithFallback(
+      async () => {
+        return await httpClient.get('/reception/check-in/history');
+      },
+      () => mockReceptionApi.getCheckInHistory(),
+      'GET /reception/check-in/history'
+    );
+  }
+};
+
+/**
+ * 8. Coach Operations APIs
+ */
+export const coachApi = {
+  async getClassMembers(classId) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.get(`/coach/classes/${classId}/members`);
+      },
+      () => mockCoachApi.getClassMembers(classId),
+      `GET /coach/classes/${classId}/members`
+    );
+  },
+
+  async getCoachClassesAndMembers(coachId, coachName, isManager = false) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.get('/coach/classes-with-members', {
+          params: { coachId, coachName, isManager }
+        });
+      },
+      () => mockCoachApi.getCoachClassesAndMembers(coachId, coachName, isManager),
+      'GET /coach/classes-with-members'
+    );
+  },
+
+  async createTrainingPlan(planData) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.post('/coach/training-plans', planData);
+      },
+      () => mockCoachApi.createTrainingPlan(planData),
+      'POST /coach/training-plans'
+    );
+  },
+
+  async getAllTrainingPlans() {
+    return callWithFallback(
+      async () => {
+        return await httpClient.get('/coach/training-plans');
+      },
+      () => mockCoachApi.getAllTrainingPlans(),
+      'GET /coach/training-plans'
+    );
+  },
+
+  async recordWorkoutProgress(progressData) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.post('/coach/progress', progressData);
+      },
+      () => mockCoachApi.recordWorkoutProgress(progressData),
+      'POST /coach/progress'
+    );
+  },
+
+  async getAllProgress() {
+    return callWithFallback(
+      async () => {
+        return await httpClient.get('/coach/progress');
+      },
+      () => mockCoachApi.getAllProgress(),
+      'GET /coach/progress'
+    );
+  },
+
+  async takeAttendance(classId, className, coachId, coachName, records) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.post('/coach/attendance', {
+          classId,
+          className,
+          coachId,
+          coachName,
+          records
+        });
+      },
+      () => mockCoachApi.takeAttendance(classId, className, coachId, coachName, records),
+      'POST /coach/attendance'
+    );
+  },
+
+  async sendNotification(notifData) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.post('/coach/notifications', notifData);
+      },
+      () => mockCoachApi.sendNotification(notifData),
+      'POST /coach/notifications'
+    );
+  },
+
+  async getNotifications() {
+    return callWithFallback(
+      async () => {
+        return await httpClient.get('/coach/notifications');
+      },
+      () => mockCoachApi.getNotifications(),
+      'GET /coach/notifications'
+    );
+  },
+
+  async getAIRecommendation({ memberName, fitnessGoal, currentLevel, notes }) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.post('/coach/ai/recommend-plan', {
+          memberName,
+          fitnessGoal,
+          currentLevel,
+          notes
+        });
+      },
+      () => mockCoachApi.getAIRecommendation({ memberName, fitnessGoal, currentLevel, notes }),
+      'POST /coach/ai/recommend-plan'
+    );
+  }
+};
+
+/**
+ * 9. Member Operations APIs
+ */
+export const memberApi = {
+  async subscribeOnline({ memberId, packageId, paymentMethod = 'VNPAY' }) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.post('/members/packages/subscribe', {
+          memberId,
+          packageId,
+          paymentMethod
+        });
+      },
+      () => mockMemberApi.subscribeOnline({ memberId, packageId, paymentMethod }),
+      'POST /members/packages/subscribe'
+    );
+  },
+
+  async getMyProgress(memberId) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.get(`/members/${memberId}/progress`);
+      },
+      () => mockMemberApi.getMyProgress(memberId),
+      `GET /members/${memberId}/progress`
+    );
+  },
+
+  async getMyPlans(memberId) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.get(`/members/${memberId}/training-plans`);
+      },
+      () => mockMemberApi.getMyPlans(memberId),
+      `GET /members/${memberId}/training-plans`
+    );
+  },
+
+  async askAI(question, memberName = 'Hội viên') {
+    return callWithFallback(
+      async () => {
+        return await httpClient.post('/members/ai/ask', { question, memberName });
+      },
+      () => mockMemberApi.askAI(question, memberName),
+      'POST /members/ai/ask'
+    );
+  }
+};
+
+/**
+ * 10. Reports & System APIs
+ */
+export const reportApi = {
+  async getOverview() {
+    return callWithFallback(
+      async () => {
+        return await httpClient.get('/reports/overview');
+      },
+      () => mockReportApi.getOverview(),
+      'GET /reports/overview'
+    );
+  }
+};
+
+export const systemApi = {
+  async getAuditLogs() {
+    return callWithFallback(
+      async () => {
+        return await httpClient.get('/system/audit-logs');
+      },
+      () => mockSystemApi.getAuditLogs(),
+      'GET /system/audit-logs'
+    );
+  },
+
+  async getPermissions() {
+    return callWithFallback(
+      async () => {
+        return await httpClient.get('/system/permissions');
+      },
+      () => mockSystemApi.getPermissions(),
+      'GET /system/permissions'
+    );
+  },
+
+  async updatePermissions(role, permissions) {
+    return callWithFallback(
+      async () => {
+        return await httpClient.put(`/system/permissions/${role}`, { permissions });
+      },
+      () => mockSystemApi.updatePermissions(role, permissions),
+      `PUT /system/permissions/${role}`
+    );
+  },
+
+  async resetAllData() {
+    try {
+      await httpClient.post('/system/reset');
+    } catch (e) {
+      // Backend may not have reset endpoint
+    }
+    mockSystemApi.resetAllData();
+  }
+};
+
+/**
+ * 11. Sports Master Data APIs
+ */
+export const sportsApi = {
+  async getAll() {
+    return callWithFallback(
+      async () => {
+        return await httpClient.get('/sports');
+      },
+      () => mockSportsApi.getAll(),
+      'GET /sports'
+    );
   }
 };

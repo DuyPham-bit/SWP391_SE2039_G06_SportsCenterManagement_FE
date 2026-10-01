@@ -1,11 +1,13 @@
 import { useAuth } from '../../context/AuthContext.js';
 import { Badge } from '../common/StatCard.js';
+import { ApiStatusModal } from '../common/ApiStatusModal.js';
 
 const { useState } = React;
 
 export function Header({ onOpenProfile, onToggleSidebar }) {
   const { currentUser, role, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showApiModal, setShowApiModal] = useState(false);
 
   const getRoleLabel = (r) => {
     switch (r) {
@@ -42,11 +44,16 @@ export function Header({ onOpenProfile, onToggleSidebar }) {
           </div>
         </a>
 
-        {/* Live System Indicator */}
-        <div className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-xs font-semibold text-slate-600 ml-3">
+        {/* Live System & Backend REST API Indicator */}
+        <button
+          onClick={() => setShowApiModal(true)}
+          className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200 transition text-xs font-semibold text-slate-700 ml-3 cursor-pointer border border-slate-200"
+          title="Nhấn để xem trạng thái kết nối Backend REST API và chuyển chế độ"
+        >
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span>Hệ thống trực tuyến</span>
-        </div>
+          <span>API REST</span>
+          <span className="text-[10px] text-slate-400 font-mono">8080</span>
+        </button>
       </div>
 
       {/* Right: User Role Badge + User Avatar */}
@@ -117,6 +124,9 @@ export function Header({ onOpenProfile, onToggleSidebar }) {
           )}
         </div>
       </div>
+
+      {/* Backend REST API Connection Modal */}
+      <ApiStatusModal isOpen={showApiModal} onClose={() => setShowApiModal(false)} />
     </header>
   );
 }

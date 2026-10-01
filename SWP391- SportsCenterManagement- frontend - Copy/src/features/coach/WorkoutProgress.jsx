@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { coachApi } from '../../services/api.js';
-import { db, DB_KEYS } from '../../services/dbStorage.js';
 import { useAuth } from '../../context/AuthContext.js';
 import { useToast } from '../../context/ToastContext.js';
 import { LoadingSpinner } from '../../components/common/Table.js';
@@ -37,8 +36,8 @@ export function WorkoutProgress() {
       );
       setCoachClasses(classesData);
 
-      const allRecords = db.get(DB_KEYS.PROGRESS);
-      setRecords(allRecords);
+      const allRecords = await coachApi.getAllProgress();
+      setRecords(allRecords || []);
 
       // Select initial member if not set
       if (!selectedMemberCompositeKey) {

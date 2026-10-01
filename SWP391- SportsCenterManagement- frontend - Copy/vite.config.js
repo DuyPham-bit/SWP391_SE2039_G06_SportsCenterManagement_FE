@@ -55,7 +55,14 @@ export default defineConfig({
   server: {
     port: 3003,
     host: 'localhost',
-    open: false
+    open: false,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false
+      }
+    }
   },
   resolve: {
     extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json']

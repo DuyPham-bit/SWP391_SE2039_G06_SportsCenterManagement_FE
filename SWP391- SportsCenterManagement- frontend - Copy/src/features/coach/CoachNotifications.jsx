@@ -1,5 +1,4 @@
 import { coachApi, classApi } from '../../services/api.js';
-import { db, DB_KEYS } from '../../services/dbStorage.js';
 import { useAuth } from '../../context/AuthContext.js';
 import { useToast } from '../../context/ToastContext.js';
 import { LoadingSpinner } from '../../components/common/Table.js';
@@ -26,10 +25,10 @@ export function CoachNotifications() {
   const loadData = async () => {
     try {
       const classList = await classApi.getAll();
-      const notifs = db.get(DB_KEYS.NOTIFICATIONS);
-      setClasses(classList);
-      if (classList.length > 0) setSelectedClassId(classList[0].id);
-      setNotifications(notifs);
+      const notifs = await coachApi.getNotifications();
+      setClasses(classList || []);
+      if (classList && classList.length > 0) setSelectedClassId(classList[0].id);
+      setNotifications(notifs || []);
     } finally {
       setLoading(false);
     }

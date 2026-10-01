@@ -1,5 +1,4 @@
 import { receptionApi } from '../../services/api.js';
-import { db, DB_KEYS } from '../../services/dbStorage.js';
 import { useToast } from '../../context/ToastContext.js';
 import { Badge } from '../../components/common/StatCard.js';
 
@@ -16,10 +15,14 @@ export function MemberCheckIn() {
   const [processing, setProcessing] = useState(false);
 
   const loadData = async () => {
-    const users = db.get(DB_KEYS.USERS).filter(u => u.role === 'MEMBER');
-    const history = await receptionApi.getCheckInHistory();
-    setMembers(users);
-    setCheckIns(history);
+    try {
+      const users = await receptionApi.getAllMembers();
+      const history = await receptionApi.getCheckInHistory();
+      setMembers(users || []);
+      setCheckIns(history || []);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   useEffect(() => {

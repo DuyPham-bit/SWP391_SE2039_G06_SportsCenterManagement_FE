@@ -26,16 +26,34 @@ export function AuthProvider({ children }) {
       localStorage.setItem(SESSION_KEY, JSON.stringify(currentUser));
     } else {
       localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem('SCMS_AUTH_TOKEN');
     }
   }, [currentUser]);
 
-  // Refresh user data from DB storage
-  const refreshUser = () => {
+  // Listen to 401 unauthorized event from httpClient
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      logout();
+    };
+    window.addEventListener('SCMS_UNAUTHORIZED', handleUnauthorized);
+    return () => window.removeEventListener('SCMS_UNAUTHORIZED', handleUnauthorized);
+  }, []);
+
+  // Refresh user data from API / DB storage
+  const refreshUser = async () => {
     if (!currentUser) return;
-    const users = db.get(DB_KEYS.USERS);
-    const fresh = users.find(u => u.id === currentUser.id);
-    if (fresh) {
-      setCurrentUser(fresh);
+    try {
+      const fresh = await authApi.getProfile(currentUser.id);
+      if (fresh) {
+        setCurrentUser(fresh);
+        return;
+      }
+    } catch (e) {
+      const users = db.get(DB_KEYS.USERS);
+      const fresh = users.find(u => u.id === currentUser.id);
+      if (fresh) {
+        setCurrentUser(fresh);
+      }
     }
   };
 
@@ -43,6 +61,9 @@ export function AuthProvider({ children }) {
     setLoading(true);
     try {
       const res = await authApi.login(email, password);
+      if (res?.token) {
+        localStorage.setItem('SCMS_AUTH_TOKEN', res.token);
+      }
       setCurrentUser(res.user);
       return res.user;
     } finally {
@@ -54,6 +75,9 @@ export function AuthProvider({ children }) {
     setLoading(true);
     try {
       const newUser = await authApi.register(userData);
+      if (newUser?.token) {
+        localStorage.setItem('SCMS_AUTH_TOKEN', newUser.token);
+      }
       setCurrentUser(newUser);
       return newUser;
     } finally {
@@ -65,6 +89,9 @@ export function AuthProvider({ children }) {
     setLoading(true);
     try {
       const res = await authApi.loginWithGoogle(googleUser);
+      if (res?.token) {
+        localStorage.setItem('SCMS_AUTH_TOKEN', res.token);
+      }
       setCurrentUser(res.user);
       return res.user;
     } finally {
@@ -76,6 +103,8 @@ export function AuthProvider({ children }) {
     if (currentUser) {
       db.logAudit(currentUser.fullName, currentUser.role, 'LOGOUT', `Đăng xuất khỏi hệ thống`);
     }
+    localStorage.removeItem('SCMS_AUTH_TOKEN');
+    localStorage.removeItem(SESSION_KEY);
     setCurrentUser(null);
   };
 
