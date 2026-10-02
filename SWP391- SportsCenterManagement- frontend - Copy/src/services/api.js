@@ -727,11 +727,69 @@ export const coachApi = {
       ...planData,
       id: `tp-${Date.now()}`,
       status: 'ACTIVE',
+      isCustom: planData.isCustom || false,
       createdAt: new Date().toISOString().split('T')[0]
     };
     db.insert(DB_KEYS.TRAINING_PLANS, newPlan);
-    db.logAudit(planData.coachName, 'COACH', 'CREATE_TRAINING_PLAN', `Tạo giáo án cho ${planData.memberName}: ${planData.title}`);
+    const targetLabel = planData.isCustom ? `học viên ${planData.memberName}` : `lớp ${planData.className || 'đảm nhiệm'}`;
+    db.logAudit(planData.coachName, 'COACH', 'CREATE_TRAINING_PLAN', `Tạo giáo án cho ${targetLabel}: ${planData.title}`);
     return newPlan;
+  },
+
+  async savePersonalTrainingPlan(planData) {
+    await delay();
+    const plans = db.get(DB_KEYS.TRAINING_PLANS);
+    const existingIndex = plans.findIndex(
+      p => p.classId === planData.classId && p.memberId === planData.memberId && p.isCustom
+    );
+
+    let savedPlan;
+    if (existingIndex !== -1) {
+      plans[existingIndex] = {
+        ...plans[existingIndex],
+        ...planData,
+        isCustom: true,
+        updatedAt: new Date().toISOString().split('T')[0]
+      };
+      db.set(DB_KEYS.TRAINING_PLANS, plans);
+      savedPlan = plans[existingIndex];
+      db.logAudit(planData.coachName, 'COACH', 'UPDATE_PERSONAL_PLAN', `Cập nhật giáo án riêng cho học viên ${planData.memberName} (Lớp ${planData.className})`);
+    } else {
+      savedPlan = {
+        ...planData,
+        id: `tp-custom-${Date.now()}`,
+        isCustom: true,
+        status: 'ACTIVE',
+        createdAt: new Date().toISOString().split('T')[0]
+      };
+      db.insert(DB_KEYS.TRAINING_PLANS, savedPlan);
+      db.logAudit(planData.coachName, 'COACH', 'CREATE_PERSONAL_PLAN', `Tạo giáo án riêng đặc biệt cho học viên ${planData.memberName} (Lớp ${planData.className})`);
+    }
+    return savedPlan;
+  },
+
+  async deletePersonalTrainingPlan(classId, memberId, coachName = 'Huấn luyện viên') {
+    await delay();
+    const plans = db.get(DB_KEYS.TRAINING_PLANS);
+    const target = plans.find(p => p.classId === classId && p.memberId === memberId && p.isCustom);
+    if (target) {
+      db.remove(DB_KEYS.TRAINING_PLANS, target.id);
+      db.logAudit(coachName, 'COACH', 'DELETE_PERSONAL_PLAN', `Huỷ giáo án riêng của học viên ${target.memberName || memberId} (Lớp ${target.className})`);
+      return true;
+    }
+    return false;
+  },
+
+  async deleteTrainingPlan(planId, coachName = 'Huấn luyện viên') {
+    await delay();
+    const plans = db.get(DB_KEYS.TRAINING_PLANS);
+    const target = plans.find(p => p.id === planId);
+    if (target) {
+      db.remove(DB_KEYS.TRAINING_PLANS, planId);
+      db.logAudit(coachName, 'COACH', 'DELETE_TRAINING_PLAN', `Xoá giáo án: ${target.title}`);
+      return true;
+    }
+    return false;
   },
 
   async recordWorkoutProgress(progressData) {
@@ -835,8 +893,17 @@ export const memberApi = {
 
   async getMyPlans(memberId) {
     await delay();
-    const plans = db.get(DB_KEYS.TRAINING_PLANS);
-    return plans.filter(p => p.memberId === memberId);
+    const plans = db.get(DB_KEYS.TRAINING_PLANS) || [];
+    const bookings = (db.get(DB_KEYS.BOOKINGS) || []).filter(b => b.memberId === memberId && b.status === 'CONFIRMED');
+    const enrolledClassIds = bookings.map(b => b.classId);
+
+    return plans.filter(p => {
+      // Personal plan specifically for this member
+      if (p.memberId === memberId) return true;
+      // Class-level general plan for classes the member is enrolled in
+      if (!p.isCustom && enrolledClassIds.includes(p.classId)) return true;
+      return false;
+    });
   },
 
   async askAI(question, memberName = 'Hội viên') {
