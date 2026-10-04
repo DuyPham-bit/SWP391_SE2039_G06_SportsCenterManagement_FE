@@ -1,0 +1,371 @@
+using System.Data;
+using Microsoft.EntityFrameworkCore;
+using SportsCenterManagement.BLL.DTOs.CoreFlows;
+using SportsCenterManagement.BLL.Interfaces;
+using SportsCenterManagement.DAL.Entities;
+using SportsCenterManagement.DAL.Repositories.Interfaces;
+
+namespace SportsCenterManagement.BLL.Services;
+
+public sealed class CoreFlowService(IUnitOfWork unitOfWork) : ICoreFlowService
+{
+    private readonly IUnitOfWork _unitOfWork = unitOfWork;
+
+    public async Task<IReadOnlyList<MembershipPackage>> GetActivePackagesAsync(
+        long centerId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _unitOfWork.Repository<MembershipPackage>()
+            .Find(package => package.CenterId == centerId && package.Status == "Active")
+            .OrderBy(package => package.Price)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<PendingMembershipResult> CreatePendingMembershipAsync(
+        long memberId,
+        long packageId,
+        long? createdBy,
+        CancellationToken cancellationToken = default)
+    {
+        // Serializable ngăn retry đồng thời tạo hai hóa đơn cho cùng member và gói.
+        await using var transaction = await _unitOfWork.Context.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable, cancellationToken);
+        var member = await _unitOfWork.Repository<MemberProfile>().GetByIdAsync(memberId, cancellationToken)
+            ?? throw new KeyNotFoundException("Member was not found.");
+        var user = await _unitOfWork.Repository<User>().GetByIdAsync(member.UserId, cancellationToken);
+        if (user?.Status != "Active")
+        {
+            throw new UnauthorizedAccessException("Member account is not active.");
+        }
+
+        var package = await _unitOfWork.Repository<MembershipPackage>().Find(
+            item => item.Id == packageId)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (package is null)
+        {
+            throw new InvalidOperationException("Membership package is unavailable.");
+        }
+        if (member.CenterId.HasValue && member.CenterId.Value != package.CenterId)
+        {
+            throw new UnauthorizedAccessException("Membership package belongs to another center.");
+        }
+
+        var pending = await (
+            from item in _unitOfWork.Context.InvoiceItems
+            join pendingInvoice in _unitOfWork.Context.Invoices on item.InvoiceId equals pendingInvoice.Id
+            join pendingSubscription in _unitOfWork.Context.MemberSubscriptions on item.SubscriptionId equals pendingSubscription.Id
+            where pendingInvoice.MemberId == memberId
+                  && item.PackageId == packageId
+                  && pendingSubscription.Status == "PendingPayment"
+                  && (pendingInvoice.Status == "Issued" || pendingInvoice.Status == "PartiallyPaid")
+            orderby pendingInvoice.IssuedAt descending
+            select new { Invoice = pendingInvoice, Subscription = pendingSubscription })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (pending is not null)
+        {
+            if (!member.CenterId.HasValue)
+            {
+                member.CenterId = package.CenterId;
+                _unitOfWork.Repository<MemberProfile>().Update(member);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+            var paidAmount = await _unitOfWork.Repository<Payment>()
+                .Find(payment => payment.InvoiceId == pending.Invoice.Id && payment.PaymentStatus == "Succeeded")
+                .SumAsync(payment => (decimal?)payment.Amount, cancellationToken) ?? 0m;
+            await transaction.CommitAsync(cancellationToken);
+            return new PendingMembershipResult(pending.Subscription.Id, pending.Invoice.Id,
+                pending.Invoice.InvoiceNumber, pending.Invoice.TotalAmount - paidAmount);
+        }
+
+        if (package.Status != "Active")
+        {
+            throw new InvalidOperationException("Membership package is unavailable.");
+        }
+        var centerIsActive = await _unitOfWork.Repository<Center>()
+            .AnyAsync(center => center.Id == package.CenterId && center.Status == "Active", cancellationToken);
+        if (!centerIsActive)
+        {
+            throw new InvalidOperationException("Membership center is unavailable.");
+        }
+
+        if (package.Price <= 0 || package.DurationDays <= 0)
+        {
+            throw new InvalidOperationException("Membership package has an invalid price or duration.");
+        }
+
+        var now = DateTime.UtcNow;
+        // Gắn member vào center cùng transaction với hóa đơn và subscription.
+        if (!member.CenterId.HasValue)
+        {
+            member.CenterId = package.CenterId;
+            member.UpdatedAt = now;
+            _unitOfWork.Repository<MemberProfile>().Update(member);
+        }
+        var subscription = new MemberSubscription
+        {
+            MemberId = memberId,
+            PackageId = package.Id,
+            StartDate = null,
+            EndDate = null,
+            DurationDays = package.DurationDays,
+            Price = package.Price,
+            Status = "PendingPayment",
+            AutoRenew = false,
+            CreatedAt = now
+        };
+        await _unitOfWork.Repository<MemberSubscription>().AddAsync(subscription, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        var invoiceNumber = $"SC-{now:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..31];
+        var invoice = new Invoice
+        {
+            InvoiceNumber = invoiceNumber,
+            MemberId = memberId,
+            CenterId = package.CenterId,
+            CreatedBy = createdBy,
+            Subtotal = package.Price,
+            Discount = 0,
+            Tax = 0,
+            TotalAmount = package.Price,
+            Status = "Issued",
+            IssuedAt = now
+        };
+        await _unitOfWork.Repository<Invoice>().AddAsync(invoice, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        await _unitOfWork.Repository<InvoiceItem>().AddAsync(new InvoiceItem
+        {
+            InvoiceId = invoice.Id,
+            PackageId = package.Id,
+            SubscriptionId = subscription.Id,
+            Description = package.Name,
+            Quantity = 1,
+            UnitPrice = package.Price,
+            Amount = package.Price
+        }, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return new PendingMembershipResult(subscription.Id, invoice.Id, invoiceNumber, package.Price);
+    }
+
+    public async Task<ClassEnrollment> EnrollMemberAsync(
+        long classId,
+        long memberId,
+        long subscriptionId,
+        long? registeredBy,
+        CancellationToken cancellationToken = default)
+    {
+        var classEntity = await _unitOfWork.Repository<ClassEntity>().GetByIdAsync(classId, cancellationToken)
+            ?? throw new InvalidOperationException("Class was not found.");
+        if (classEntity.Status != "Published")
+        {
+            throw new InvalidOperationException("Class is not open for enrollment.");
+        }
+
+        if (classEntity.Capacity <= 0)
+        {
+            throw new InvalidOperationException("Class capacity is not configured.");
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var subscription = await _unitOfWork.Repository<MemberSubscription>().Find(
+                item => item.Id == subscriptionId && item.MemberId == memberId && item.Status == "Active")
+            .SingleOrDefaultAsync(cancellationToken);
+        if (subscription is null || !subscription.StartDate.HasValue || !subscription.EndDate.HasValue
+            || subscription.StartDate.Value > today || subscription.EndDate.Value < today)
+        {
+            throw new InvalidOperationException("An active membership is required to enroll.");
+        }
+
+        var membershipPackage = await _unitOfWork.Repository<MembershipPackage>().Find(
+            package => package.Id == subscription.PackageId)
+            .SingleAsync(cancellationToken);
+        if (membershipPackage.CenterId != classEntity.CenterId)
+        {
+            throw new InvalidOperationException("Membership and class belong to different centers.");
+        }
+
+        if (membershipPackage.MaxClasses is int maxClasses)
+        {
+            var activeClassCount = await _unitOfWork.Repository<ClassEnrollment>().CountAsync(
+                enrollment => enrollment.SubscriptionId == subscription.Id && enrollment.Status == "Confirmed",
+                cancellationToken);
+            var isAlreadyEnrolled = await _unitOfWork.Repository<ClassEnrollment>().AnyAsync(
+                enrollment => enrollment.ClassId == classId && enrollment.MemberId == memberId && enrollment.Status == "Confirmed",
+                cancellationToken);
+            if (!isAlreadyEnrolled && activeClassCount >= maxClasses)
+            {
+                throw new InvalidOperationException("Membership class allowance has been reached.");
+            }
+        }
+
+        await using var transaction = await _unitOfWork.Context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        var existing = await _unitOfWork.Repository<ClassEnrollment>().Find(
+            enrollment => enrollment.ClassId == classId && enrollment.MemberId == memberId)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (existing is not null && existing.Status == "Confirmed")
+        {
+            throw new InvalidOperationException("Member is already enrolled in this class.");
+        }
+
+        var confirmedCount = await _unitOfWork.Repository<ClassEnrollment>().CountAsync(
+            enrollment => enrollment.ClassId == classId && enrollment.Status == "Confirmed",
+            cancellationToken);
+        if (confirmedCount >= classEntity.Capacity)
+        {
+            throw new InvalidOperationException("Class is full.");
+        }
+
+        var now = DateTime.UtcNow;
+        if (existing is null)
+        {
+            existing = new ClassEnrollment
+            {
+                ClassId = classId,
+                MemberId = memberId,
+                RegisteredAt = now
+            };
+            await _unitOfWork.Repository<ClassEnrollment>().AddAsync(existing, cancellationToken);
+        }
+
+        existing.SubscriptionId = subscription.Id;
+        existing.RegisteredBy = registeredBy;
+        existing.RegisteredAt = now;
+        existing.CancelledAt = null;
+        existing.CancellationReason = null;
+        existing.Status = "Confirmed";
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return existing;
+    }
+
+    public async Task<Payment> RecordCashPaymentAsync(
+        long invoiceId,
+        long processedBy,
+        decimal amount,
+        string idempotencyKey,
+        CancellationToken cancellationToken = default)
+    {
+        idempotencyKey = idempotencyKey?.Trim() ?? string.Empty;
+        if (amount <= 0 || idempotencyKey.Length is 0 or > 100)
+        {
+            throw new InvalidOperationException("Payment amount or idempotency key is invalid.");
+        }
+
+        await using var transaction = await _unitOfWork.Context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        var existingPayment = await _unitOfWork.Repository<Payment>()
+            .Find(payment => payment.InvoiceId == invoiceId && payment.IdempotencyKey == idempotencyKey)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (existingPayment is not null)
+        {
+            if (existingPayment.Amount != amount)
+            {
+                throw new InvalidOperationException("Idempotency key was already used with a different payment amount.");
+            }
+
+            return existingPayment;
+        }
+
+        var invoice = await _unitOfWork.Repository<Invoice>().GetByIdAsync(invoiceId, cancellationToken)
+            ?? throw new InvalidOperationException("Invoice was not found.");
+        if (invoice.Status is "Paid" or "Cancelled" or "Voided" or "Refunded")
+        {
+            throw new InvalidOperationException("Invoice cannot accept another payment.");
+        }
+
+        var paidAmount = await _unitOfWork.Repository<Payment>()
+            .Find(payment => payment.InvoiceId == invoiceId && payment.PaymentStatus == "Succeeded")
+            .SumAsync(payment => (decimal?)payment.Amount, cancellationToken) ?? 0m;
+        var remaining = invoice.TotalAmount - paidAmount;
+        if (amount > remaining)
+        {
+            throw new InvalidOperationException("Payment exceeds the outstanding invoice balance.");
+        }
+
+        var now = DateTime.UtcNow;
+        var payment = new Payment
+        {
+            InvoiceId = invoice.Id,
+            MemberId = invoice.MemberId,
+            ProcessedBy = processedBy,
+            PaymentMethod = "Cash",
+            TransactionCode = $"CASH-{Guid.NewGuid():N}",
+            IdempotencyKey = idempotencyKey,
+            Amount = amount,
+            PaymentStatus = "Succeeded",
+            PaidAt = now,
+            CreatedAt = now
+        };
+        await _unitOfWork.Repository<Payment>().AddAsync(payment, cancellationToken);
+
+        var newPaidAmount = paidAmount + amount;
+        invoice.Status = newPaidAmount == invoice.TotalAmount ? "Paid" : "PartiallyPaid";
+        invoice.PaidAt = invoice.Status == "Paid" ? now : null;
+
+        if (invoice.Status == "Paid")
+        {
+            var db = _unitOfWork.Context;
+            var subscriptions = await (
+                from item in db.InvoiceItems
+                join subscription in db.MemberSubscriptions on item.SubscriptionId equals subscription.Id
+                where item.InvoiceId == invoice.Id
+                select subscription).ToListAsync(cancellationToken);
+            foreach (var subscription in subscriptions)
+            {
+                if (subscription.Status != "PendingPayment" || subscription.DurationDays <= 0)
+                {
+                    continue;
+                }
+                var today = DateOnly.FromDateTime(now);
+                var currentEnd = await _unitOfWork.Repository<MemberSubscription>()
+                    .Find(item => item.MemberId == subscription.MemberId && item.Status == "Active" && item.EndDate >= today)
+                    .MaxAsync(item => (DateOnly?)item.EndDate, cancellationToken);
+                subscription.StartDate = currentEnd.HasValue ? currentEnd.Value.AddDays(1) : today;
+                subscription.EndDate = subscription.StartDate.Value.AddDays(subscription.DurationDays - 1);
+                subscription.Status = "Active";
+                subscription.UpdatedAt = now;
+            }
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return payment;
+    }
+
+    public async Task<RevenueSummary> GetRevenueAsync(
+        long centerId,
+        DateOnly from,
+        DateOnly to,
+        CancellationToken cancellationToken = default)
+    {
+        if (from > to)
+        {
+            throw new InvalidOperationException("Start date must be on or before end date.");
+        }
+
+        var start = from.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var endExclusive = to.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var db = _unitOfWork.Context;
+        var gross = await (
+            from payment in db.Payments
+            join invoice in db.Invoices on payment.InvoiceId equals invoice.Id
+            where invoice.CenterId == centerId
+                && payment.PaymentStatus == "Succeeded"
+                && payment.PaidAt.HasValue
+                && payment.PaidAt.Value >= start && payment.PaidAt.Value < endExclusive
+            select (decimal?)payment.Amount).SumAsync(cancellationToken) ?? 0m;
+
+        var refunds = await (
+            from refund in db.PaymentRefunds
+            join payment in db.Payments on refund.PaymentId equals payment.Id
+            join invoice in db.Invoices on payment.InvoiceId equals invoice.Id
+            where invoice.CenterId == centerId
+                && refund.Status == "Succeeded"
+                && refund.ProcessedAt.HasValue
+                && refund.ProcessedAt.Value >= start && refund.ProcessedAt.Value < endExclusive
+            select (decimal?)refund.Amount).SumAsync(cancellationToken) ?? 0m;
+
+        return new RevenueSummary(centerId, from, to, gross, refunds, gross - refunds);
+    }
+}

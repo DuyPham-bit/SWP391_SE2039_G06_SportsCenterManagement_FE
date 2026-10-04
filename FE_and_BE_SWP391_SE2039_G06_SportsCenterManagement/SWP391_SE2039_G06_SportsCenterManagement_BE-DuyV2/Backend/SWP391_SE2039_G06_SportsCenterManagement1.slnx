@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="SportsCenterManagement.API/SportsCenterManagement.API.csproj" />
+  <Project Path="SportsCenterManagement.BLL/SportsCenterManagement.BLL.csproj" />
+  <Project Path="SportsCenterManagement.DAL/SportsCenterManagement.DAL.csproj" />
+</Solution>
