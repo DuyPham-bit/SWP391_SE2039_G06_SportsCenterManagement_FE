@@ -1,31 +1,113 @@
 import { useAuth } from '../../context/AuthContext.js';
 import { INITIAL_SPORTS } from '../../services/mockData.js';
-import { FacilitiesSection } from './FacilitiesSection.js';
+import { FacilitiesSection, SCMS_FACILITIES } from './FacilitiesSection.js';
 
 const { useState, useEffect } = React;
+
+// Ánh xạ 15 môn thể thao tới 9 cụm sân tiêu chuẩn SCMS
+export const SPORT_FACILITY_MAP = {
+  'boi-loi': 'room-01',          // Bể bơi 4 mùa nước ấm 25m
+  'bong-da': 'room-02',          // Sân bóng đá cỏ nhân tạo (Sân 5 & Sân 7)
+  'cau-long': 'room-03',         // Cụm sân cầu lông thảm chống trượt
+  'nhay-hien-dai': 'room-04',    // Phòng tập aerobic & vũ đạo trẻ trung
+  'bong-ro': 'room-05',          // Sân bóng rổ tiêu chuẩn phong trào
+  'tennis': 'room-06',           // Cụm sân tennis & pickleball phong trào
+  'vo-thuat': 'room-07',         // Phòng tập võ thuật & thể lực tự vệ
+  'gym-fitness': 'room-08',      // Phòng tập gym & thể hình tiện nghi
+  'yoga-pilates': 'room-09',     // Phòng tập yoga & dưỡng sinh yên tĩnh
+  'bong-chuyen': 'room-05',      // Sân bóng rổ & bóng chuyền đa năng
+  'bong-ban': 'room-03',         // Cụm sân cầu lông & bóng bàn trong nhà
+  'dien-kinh': 'room-02',        // Khu thể thao ngoài trời & đường chạy
+  'ban-cung': 'room-06',         // Khu sân bãi thể thao ngoài trời
+  'dap-xe': 'room-08',           // Phòng tập gym, cardio & spinning
+  'leo-nui': 'room-07'           // Khu tập võ thuật & leo núi thể lực
+};
 
 export function LandingPage() {
   const { isAuthenticated, role } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState('Tất cả');
+  const [selectedFacilityForModal, setSelectedFacilityForModal] = useState(null);
+  const [activeNav, setActiveNav] = useState('trang-chu');
 
-  // Handle smooth scroll when navigating to hash anchors (e.g. #co-so-vat-chat)
+  const navItems = [
+    { id: 'trang-chu', href: '#/', label: 'TRANG CHỦ', targetId: 'trang-chu' },
+    { id: 've-chung-toi', href: '#ve-chung-toi', label: 'VỀ CHÚNG TÔI', targetId: 've-chung-toi' },
+    { id: 'khoa-hoc', href: '#khoa-hoc', label: 'KHÓA HỌC (15 MÔN)', targetId: 'khoa-hoc' },
+    { id: 'co-so-vat-chat', href: '#co-so-vat-chat', label: 'CƠ SỞ VẬT CHẤT', targetId: 'co-so-vat-chat' }
+  ];
+
+  const handleSportClick = (sport) => {
+    const facilityId = SPORT_FACILITY_MAP[sport.id] || 'room-02';
+    const facility = SCMS_FACILITIES.find(f => f.id === facilityId) || SCMS_FACILITIES[0];
+    setSelectedFacilityForModal(facility);
+  };
+
+  const handleNavClick = (item, e) => {
+    e.preventDefault();
+    setActiveNav(item.id);
+    window.location.hash = item.href;
+
+    if (item.id === 'trang-chu') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      const el = document.getElementById(item.targetId);
+      if (el) {
+        const headerOffset = 80;
+        const elementPosition = el.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+        window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
+      }
+    }
+  };
+
+  // ScrollSpy & Hash synchronization
   useEffect(() => {
-    const scrollToTargetAnchor = () => {
+    const sectionIds = ['trang-chu', 've-chung-toi', 'khoa-hoc', 'co-so-vat-chat'];
+
+    const syncFromHash = () => {
       const raw = window.location.hash || '';
       const anchor = raw.replace(/^#\/?/, '').split('?')[0];
-      if (anchor && anchor !== 'login' && anchor !== 'register') {
+      if (anchor && sectionIds.includes(anchor)) {
+        setActiveNav(anchor);
         const el = document.getElementById(anchor);
         if (el) {
           setTimeout(() => {
-            el.scrollIntoView({ behavior: 'smooth' });
-          }, 150);
+            const headerOffset = 80;
+            const elementPosition = el.getBoundingClientRect().top;
+            const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+            window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
+          }, 100);
+        }
+      } else if (!anchor || anchor === '/') {
+        setActiveNav('trang-chu');
+      }
+    };
+
+    syncFromHash();
+
+    const handleScroll = () => {
+      if (window.scrollY < 250) {
+        setActiveNav('trang-chu');
+        return;
+      }
+
+      const scrollPos = window.scrollY + 140;
+      for (let i = sectionIds.length - 1; i >= 0; i--) {
+        const id = sectionIds[i];
+        const el = document.getElementById(id);
+        if (el && scrollPos >= el.offsetTop) {
+          setActiveNav(id);
+          break;
         }
       }
     };
 
-    scrollToTargetAnchor();
-    window.addEventListener('hashchange', scrollToTargetAnchor);
-    return () => window.removeEventListener('hashchange', scrollToTargetAnchor);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('hashchange', syncFromHash);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('hashchange', syncFromHash);
+    };
   }, []);
 
   const categories = ['Tất cả', 'Thể thao đối kháng', 'Bóng & Vợt', 'Sức bền & Tĩnh tâm'];
@@ -65,11 +147,24 @@ export function LandingPage() {
           </div>
 
           {/* Navigation Links */}
-          <nav className="hidden md:flex items-center gap-8 font-chivo text-xs font-bold uppercase tracking-wider text-slate-600">
-            <a href="#/" className="text-red-600 border-b-2 border-red-600 pb-1">TRANG CHỦ</a>
-            <a href="#ve-chung-toi" className="hover:text-red-600 transition-colors py-1">VỀ CHÚNG TÔI</a>
-            <a href="#khoa-hoc" className="hover:text-red-600 transition-colors py-1">KHÓA HỌC (15 MÔN)</a>
-            <a href="#co-so-vat-chat" className="hover:text-red-600 transition-colors py-1">CƠ SỞ VẬT CHẤT</a>
+          <nav className="hidden md:flex items-center gap-8 font-chivo text-xs uppercase tracking-wider">
+            {navItems.map(item => {
+              const isActive = activeNav === item.id;
+              return (
+                <a
+                  key={item.id}
+                  href={item.href}
+                  onClick={(e) => handleNavClick(item, e)}
+                  className={`pb-1 border-b-2 transition-all cursor-pointer ${
+                    isActive
+                      ? 'text-red-600 border-red-600 font-extrabold'
+                      : 'text-slate-600 hover:text-red-600 border-transparent font-bold'
+                  }`}
+                >
+                  {item.label}
+                </a>
+              );
+            })}
           </nav>
 
           {/* Action / Auth Button */}
@@ -104,7 +199,7 @@ export function LandingPage() {
       </header>
 
       {/* HERO SECTION */}
-      <section className="relative w-full min-h-[85vh] flex flex-col justify-center items-center text-center px-4 overflow-hidden pt-28 pb-16 bg-slate-950">
+      <section id="trang-chu" className="relative w-full min-h-[85vh] flex flex-col justify-center items-center text-center px-4 overflow-hidden pt-28 pb-16 bg-slate-950">
         {/* Background Image with Dark Olympic Scrim */}
         <div
           className="absolute inset-0 w-full h-full bg-cover bg-center opacity-40 scale-105 transition-transform duration-1000"
@@ -333,10 +428,11 @@ export function LandingPage() {
             {filteredSports.map(sport => (
               <div
                 key={sport.id}
-                onClick={() => window.location.hash = '#/login'}
-                className="bg-white text-slate-900 p-6 rounded-xl shadow-md hover:shadow-xl hover:bg-slate-50 transition-all duration-300 flex flex-col items-center justify-center text-center min-h-[160px] group cursor-pointer border border-slate-100"
+                onClick={() => handleSportClick(sport)}
+                className="bg-white text-slate-900 p-6 rounded-xl shadow-md hover:shadow-xl hover:bg-slate-50 transition-all duration-300 flex flex-col items-center justify-center text-center min-h-[160px] group cursor-pointer border border-slate-100 hover:border-red-400 transform hover:-translate-y-1 relative overflow-hidden"
+                title={`Bấm để xem thông tin sân tập ${sport.venue} & đăng ký trải nghiệm`}
               >
-                <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-red-600 group-hover:text-white transition-all shadow-xs">
                   <span className="material-symbols-outlined text-[28px]">{sport.icon}</span>
                 </div>
                 <span className="font-chivo text-base font-bold text-slate-900 group-hover:text-red-600 transition-colors">
@@ -345,22 +441,29 @@ export function LandingPage() {
                 <span className="text-xs text-slate-500 font-medium mt-1">
                   {sport.venue}
                 </span>
+                <span className="text-[11px] text-red-600 font-bold opacity-0 group-hover:opacity-100 transition-opacity mt-2 flex items-center gap-0.5">
+                  <span>Xem thông tin sân</span>
+                  <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                </span>
               </div>
             ))}
 
             {/* CTA 16th Card */}
             <div
-              onClick={() => window.location.hash = '#/register'}
+              onClick={() => {
+                const el = document.getElementById('co-so-vat-chat');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
               className="bg-red-600 text-white p-6 rounded-xl shadow-lg hover:bg-red-700 transition-all duration-300 flex flex-col items-center justify-center text-center min-h-[160px] group cursor-pointer hover:-translate-y-1"
             >
               <div className="w-12 h-12 rounded-full bg-white text-red-600 flex items-center justify-center mb-3 group-hover:rotate-12 transition-transform shadow-md">
-                <span className="material-symbols-outlined text-[28px]">contact_support</span>
+                <span className="material-symbols-outlined text-[28px]">stadium</span>
               </div>
               <span className="font-chivo text-base font-black uppercase text-white leading-tight">
-                Đăng ký tập thử
+                Đặt Thuê Cụm Sân
               </span>
               <span className="text-xs text-white/90 mt-1 font-semibold flex items-center gap-1">
-                Nhận buổi trải nghiệm miễn phí <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                Xem 9 cụm sân &amp; đặt chỗ ngay <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
               </span>
             </div>
           </div>
@@ -368,7 +471,10 @@ export function LandingPage() {
       </section>
 
       {/* FACILITIES SECTION FROM FONTMAU */}
-      <FacilitiesSection />
+      <FacilitiesSection
+        externalFacility={selectedFacilityForModal}
+        onModalClose={() => setSelectedFacilityForModal(null)}
+      />
 
       {/* MEMBERSHIP CALLOUT BANNER */}
       <section className="w-full bg-slate-100 py-16 px-4 md:px-10" id="uu-dai">
@@ -475,6 +581,14 @@ export function LandingPage() {
               <a href="#/login" className="hover:text-white">Cổng Huấn luyện viên</a>
               <a href="#/login" className="hover:text-white">Cổng Hội viên</a>
               <a href="#/register" className="text-red-400 hover:text-red-300 font-bold">Đăng ký Hội viên mới</a>
+              <a href="/swagger.html" target="_blank" rel="noreferrer" className="text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1">
+                <span className="material-symbols-outlined text-[15px]">api</span>
+                <span>Swagger API</span>
+              </a>
+              <a href="/SCMS_Sports_Center_API.postman_collection.json" download="SCMS_Sports_Center_API.postman_collection.json" className="text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1">
+                <span className="material-symbols-outlined text-[15px]">download</span>
+                <span>Postman</span>
+              </a>
             </div>
           </div>
         </div>

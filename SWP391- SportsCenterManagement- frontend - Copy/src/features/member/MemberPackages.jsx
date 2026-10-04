@@ -1,4 +1,4 @@
-import { packageApi, memberApi } from '../../services/api.js';
+import { packageApi, memberApi, isMockMode } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.js';
 import { useToast } from '../../context/ToastContext.js';
 import { Modal } from '../../components/common/Modal.js';
@@ -24,6 +24,8 @@ export function MemberPackages() {
       try {
         const data = await packageApi.getAll();
         setPackages(data.filter(p => p.status === 'ACTIVE'));
+      } catch (err) {
+        showError(err.message || 'Không thể tải danh mục gói tập.');
       } finally {
         setLoading(false);
       }
@@ -46,6 +48,10 @@ export function MemberPackages() {
         packageId: selectedPkg.id,
         paymentMethod
       });
+      if (res.paymentUrl) {
+        window.location.assign(res.paymentUrl);
+        return;
+      }
       refreshUser();
       showSuccess(`Đăng ký gói ${selectedPkg.name} thành công! Mã giao dịch: ${res.transactionRef}`);
       setModalOpen(false);
@@ -177,7 +183,7 @@ export function MemberPackages() {
                 Chọn cổng thanh toán *
               </label>
               <div className="grid grid-cols-3 gap-2">
-                {['VNPAY', 'MOMO', 'VIETQR'].map(m => (
+                {(isMockMode ? ['VNPAY', 'MOMO', 'VIETQR'] : ['VNPAY']).map(m => (
                   <button
                     key={m}
                     type="button"

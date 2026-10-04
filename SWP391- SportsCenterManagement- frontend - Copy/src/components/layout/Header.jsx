@@ -47,6 +47,18 @@ export function Header({ onOpenProfile, onToggleSidebar }) {
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           <span>Hệ thống trực tuyến</span>
         </div>
+
+        {/* Swagger / OpenAPI Link */}
+        <a
+          href="/swagger.html"
+          target="_blank"
+          rel="noreferrer"
+          className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+          title="Mở tài liệu Swagger / OpenAPI 3.0 tương tác"
+        >
+          <span className="material-symbols-outlined text-[16px] text-emerald-600">api</span>
+          <span>Swagger UI</span>
+        </a>
       </div>
 
       {/* Right: User Role Badge + User Avatar */}
@@ -79,7 +91,7 @@ export function Header({ onOpenProfile, onToggleSidebar }) {
 
           {showUserMenu && (
             <div
-              className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50"
+              className="absolute right-0 mt-2 w-60 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50"
               onMouseLeave={() => setShowUserMenu(false)}
             >
               <div className="px-4 py-2 border-b border-slate-100">
@@ -102,6 +114,25 @@ export function Header({ onOpenProfile, onToggleSidebar }) {
               >
                 <span className="material-symbols-outlined text-[18px] text-slate-400">home</span>
                 <span>Trang chủ Landing Page</span>
+              </a>
+
+              <a
+                href="/swagger.html"
+                target="_blank"
+                rel="noreferrer"
+                className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+              >
+                <span className="material-symbols-outlined text-[18px] text-emerald-600">api</span>
+                <span>Swagger / OpenAPI UI</span>
+              </a>
+
+              <a
+                href="/SCMS_Sports_Center_API.postman_collection.json"
+                download="SCMS_Sports_Center_API.postman_collection.json"
+                className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+              >
+                <span className="material-symbols-outlined text-[18px] text-orange-500">file_download</span>
+                <span>Tải Postman Collection</span>
               </a>
 
               <div className="border-t border-slate-100 my-1" />

@@ -1,4 +1,4 @@
-const { useState, useMemo } = React;
+const { useState, useMemo, useEffect } = React;
 
 export const SCMS_FACILITIES = [
   {
@@ -228,7 +228,7 @@ export const SCMS_FACILITIES = [
   }
 ];
 
-export function FacilitiesSection() {
+export function FacilitiesSection({ externalFacility = null, onModalClose = null } = {}) {
   const [activeCategory, setActiveCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFacility, setSelectedFacility] = useState(null);
@@ -269,17 +269,39 @@ export function FacilitiesSection() {
     });
   }, [activeCategory, searchQuery]);
 
-  const handleOpenModal = (facility, type = 'rent') => {
+  const handleOpenModal = (facility, initialTab = 'rent') => {
     setSelectedFacility(facility);
-    setBookingType(type);
-    setActiveModalTab('booking');
+    setBookingType('rent');
+    const targetTab = (initialTab === 'rent' || initialTab === 'booking') ? 'booking' : 'specs';
+    setActiveModalTab(targetTab);
     setSubmitted(false);
   };
 
   const handleCloseModal = () => {
     setSelectedFacility(null);
     setSubmitted(false);
+    if (onModalClose) onModalClose();
   };
+
+  // Sync when parent component (LandingPage) requests to open a specific facility -> open specs
+  useEffect(() => {
+    if (externalFacility) {
+      handleOpenModal(externalFacility, 'specs');
+    }
+  }, [externalFacility]);
+
+  // Support global event dispatching as well
+  useEffect(() => {
+    const handleCustomOpen = (e) => {
+      const { facility, facilityId, type } = e.detail || {};
+      const target = facility || SCMS_FACILITIES.find(f => f.id === facilityId);
+      if (target) {
+        handleOpenModal(target, type || 'specs');
+      }
+    };
+    window.addEventListener('SCMS_OPEN_FACILITY', handleCustomOpen);
+    return () => window.removeEventListener('SCMS_OPEN_FACILITY', handleCustomOpen);
+  }, []);
 
   const handleToggleExtraService = (service) => {
     setFormState(prev => {
@@ -526,9 +548,9 @@ export function FacilitiesSection() {
 
                     <button
                       type="button"
-                      onClick={() => handleOpenModal(fac, 'tour')}
+                      onClick={() => handleOpenModal(fac, 'specs')}
                       className="px-3.5 py-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 font-chivo text-xs font-bold uppercase transition-colors flex items-center gap-1"
-                      title="Xem thông số kỹ thuật & Lên lịch tham quan"
+                      title="Xem thông số kỹ thuật &amp; Tiện ích sân"
                     >
                       <span className="material-symbols-outlined text-[17px]">info</span>
                       <span>Chi tiết</span>
@@ -630,28 +652,28 @@ export function FacilitiesSection() {
           </div>
         </div>
 
-        {/* CALL TO ACTION: TOUR & FREE TRIAL BANNER */}
+        {/* CALL TO ACTION: RENTAL & EVENT BANNER */}
         <div className="bg-gradient-to-r from-red-600 via-red-600 to-red-700 text-white rounded-3xl p-8 sm:p-12 shadow-xl flex flex-col lg:flex-row items-center justify-between gap-8">
           <div className="max-w-2xl">
             <span className="inline-block px-3 py-1 rounded bg-black/20 text-white font-chivo text-[11px] font-black uppercase tracking-wider mb-2">
-              DÀNH CHO ĐỘI NHÓM &amp; HỘI VIÊN MỚI
+              DÀNH CHO ĐỘI NHÓM &amp; TỔ CHỨC SỰ KIỆN
             </span>
             <h3 className="font-chivo text-2xl sm:text-3xl font-black uppercase text-white">
-              Đăng Ký Tham Quan Khảo Sát &amp; Trải Nghiệm Thử Sân Tập
+              Liên Hệ Đặt Thuê Sân Tập &amp; Tổ Chức Giải Đấu
             </h3>
             <p className="text-white/90 text-xs sm:text-sm mt-2 leading-relaxed">
-              Bạn đang tìm sân tập thường xuyên cho đội nhóm hoặc muốn tham quan thực tế trước khi đăng ký? Hãy liên hệ ngay với chúng tôi để được tư vấn khung giờ trống và hỗ trợ trải nghiệm buổi đầu.
+              Bạn đang tìm sân tập thường xuyên cho đội nhóm hoặc cần thuê sân tổ chức giao lưu, giải đấu phong trào? Hãy liên hệ ngay với chúng tôi để chọn khung giờ đẹp và nhận mức giá ưu đãi nhất.
             </p>
           </div>
 
           <div className="shrink-0 flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
             <button
               type="button"
-              onClick={() => handleOpenModal(SCMS_FACILITIES[0], 'tour')}
+              onClick={() => handleOpenModal(SCMS_FACILITIES[0], 'rent')}
               className="w-full sm:w-auto px-7 py-3.5 bg-white hover:bg-slate-100 text-red-600 font-chivo text-xs font-black uppercase tracking-wider rounded-xl shadow-lg transition-transform hover:-translate-y-0.5 flex items-center justify-center gap-2"
             >
-              <span className="material-symbols-outlined text-[19px]">tour</span>
-              <span>Lên Lịch Tham Quan</span>
+              <span className="material-symbols-outlined text-[19px]">calendar_today</span>
+              <span>Đặt Thuê Cụm Sân Ngay</span>
             </button>
             <a
               href="#/login"
@@ -706,7 +728,7 @@ export function FacilitiesSection() {
                 }`}
               >
                 <span className="material-symbols-outlined text-[16px]">edit_calendar</span>
-                <span>{bookingType === 'rent' ? 'Đặt thuê cụm sân' : 'Đăng ký khảo sát'}</span>
+                <span>Đặt thuê cụm sân</span>
               </button>
               <button
                 onClick={() => setActiveModalTab('specs')}
@@ -740,7 +762,7 @@ export function FacilitiesSection() {
                     <span className="material-symbols-outlined text-3xl">check</span>
                   </div>
                   <h4 className="font-chivo text-xl font-black text-emerald-900 uppercase">
-                    {bookingType === 'rent' ? 'Gửi Yêu Cầu Đặt Sân Thành Công!' : 'Đăng Ký Tham Quan Thành Công!'}
+                    Gửi Yêu Cầu Đặt Thuê Sân Thành Công!
                   </h4>
                   <p className="text-xs text-emerald-800 leading-relaxed max-w-md mx-auto">
                     Cảm ơn <strong>{formState.fullName}</strong>! Nhân viên phụ trách cụm sân <strong>{selectedFacility.name}</strong> sẽ liên hệ trực tiếp qua số <strong>{formState.phone}</strong> trong thời gian sớm nhất để xác nhận giờ tập và hỗ trợ nhận sân.
@@ -841,29 +863,16 @@ export function FacilitiesSection() {
 
                   {/* Form */}
                   <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="flex items-center gap-2 pb-1 border-b border-slate-200">
-                      <button
-                        type="button"
-                        onClick={() => setBookingType('rent')}
-                        className={`text-xs font-chivo font-black uppercase px-3 py-1.5 rounded-lg transition-colors ${
-                          bookingType === 'rent'
-                            ? 'bg-red-600 text-white'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                        }`}
-                      >
-                        Thuê Cụm Sân
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setBookingType('tour')}
-                        className={`text-xs font-chivo font-black uppercase px-3 py-1.5 rounded-lg transition-colors ${
-                          bookingType === 'tour'
-                            ? 'bg-red-600 text-white'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                        }`}
-                      >
-                        Khảo Sát / Tập Thử
-                      </button>
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-red-600 text-[20px]">calendar_month</span>
+                        <span className="text-xs font-chivo font-black uppercase tracking-wider text-slate-900">
+                          Phiếu Đăng Ký Đặt Thuê Cụm Sân
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-slate-500 font-medium">
+                        Giữ chỗ &amp; xác nhận nhanh qua điện thoại
+                      </span>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1006,7 +1015,7 @@ export function FacilitiesSection() {
                         className="px-6 py-2.5 text-xs font-bold uppercase tracking-wider rounded-lg bg-red-600 hover:bg-red-700 text-white shadow-md transition-colors flex items-center gap-1.5"
                       >
                         <span className="material-symbols-outlined text-[16px]">send</span>
-                        <span>{bookingType === 'rent' ? 'Xác Nhận Đặt Sân' : 'Gửi Đăng Ký Khảo Sát'}</span>
+                        <span>Xác Nhận Đặt Thuê Sân</span>
                       </button>
                     </div>
                   </form>

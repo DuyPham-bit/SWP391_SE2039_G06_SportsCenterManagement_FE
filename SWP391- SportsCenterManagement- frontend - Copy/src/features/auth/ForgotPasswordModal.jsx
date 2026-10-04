@@ -1,4 +1,4 @@
-import { authApi } from '../../services/api.js';
+import { authApi, isMockMode } from '../../services/api.js';
 import { useToast } from '../../context/ToastContext.js';
 import { Modal } from '../../components/common/Modal.js';
 
@@ -14,18 +14,25 @@ export function ForgotPasswordModal({ isOpen, onClose, onResetSuccess }) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleRequestOtp = (e) => {
+  const handleRequestOtp = async (e) => {
     e.preventDefault();
     if (!email.trim()) {
       showError('Vui lòng nhập email đăng ký tài khoản!');
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const response = await authApi.requestPasswordReset(email);
       setStep(2);
-      showInfo('Mã xác thực OTP đã được gửi đến email của bạn!');
-    }, 600);
+      const developmentOtp = response?.developmentOtp || response?.DevelopmentOtp;
+      showInfo(developmentOtp
+        ? `Mã OTP môi trường phát triển: ${developmentOtp}`
+        : 'Nếu email tồn tại, mã xác thực đã được gửi.');
+    } catch (err) {
+      showError(err.message || 'Không thể yêu cầu mã xác thực.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleResetPassword = async (e) => {
@@ -34,8 +41,15 @@ export function ForgotPasswordModal({ isOpen, onClose, onResetSuccess }) {
       showError('Vui lòng nhập mã OTP!');
       return;
     }
-    if (newPassword.length < 6) {
-      showError('Mật khẩu mới phải từ 6 ký tự trở lên!');
+    if (newPassword.length < (isMockMode ? 6 : 8)
+      || (!isMockMode && (!/[A-Z]/.test(newPassword)
+        || !/[a-z]/.test(newPassword)
+        || !/[0-9]/.test(newPassword)
+        || !/[^a-zA-Z0-9]/.test(newPassword)
+        || /\s/.test(newPassword)))) {
+      showError(isMockMode
+        ? 'Mật khẩu mới phải từ 6 ký tự trở lên!'
+        : 'Mật khẩu mới phải có ít nhất 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt, không chứa khoảng trắng.');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -128,7 +142,7 @@ export function ForgotPasswordModal({ isOpen, onClose, onResetSuccess }) {
             <input
               type="password"
               required
-              placeholder="Tối thiểu 6 ký tự"
+              placeholder={isMockMode ? 'Tối thiểu 6 ký tự' : 'Tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt'}
               value={newPassword}
               onChange={e => setNewPassword(e.target.value)}
               className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white"

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "start": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/generate_api_specs.cjs",
+    "gen:docs": "node scripts/generate_api_specs.cjs",
     "preview": "vite preview"
   },
   "keywords": [

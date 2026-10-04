@@ -1,4 +1,4 @@
-import { authApi } from '../services/api.js';
+import { authApi, isMockMode } from '../services/api.js';
 import { db, DB_KEYS } from '../services/dbStorage.js';
 
 const { createContext, useContext, useState, useEffect } = React;
@@ -29,9 +29,35 @@ export function AuthProvider({ children }) {
     }
   }, [currentUser]);
 
-  // Refresh user data from DB storage
-  const refreshUser = () => {
+  useEffect(() => {
+    if (isMockMode) return;
+    if (!currentUser?.token) {
+      setCurrentUser(null);
+      return;
+    }
+
+    let active = true;
+    authApi.getProfile()
+      .then(user => {
+        if (active) setCurrentUser({ ...user, token: currentUser.token });
+      })
+      .catch(error => {
+        console.error('Không thể khôi phục phiên đăng nhập API:', error);
+        if (active) setCurrentUser(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const refreshUser = async () => {
     if (!currentUser) return;
+    if (!isMockMode) {
+      const fresh = await authApi.getProfile();
+      setCurrentUser({ ...fresh, token: currentUser.token });
+      return fresh;
+    }
     const users = db.get(DB_KEYS.USERS);
     const fresh = users.find(u => u.id === currentUser.id);
     if (fresh) {
@@ -73,7 +99,7 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
-    if (currentUser) {
+    if (isMockMode && currentUser) {
       db.logAudit(currentUser.fullName, currentUser.role, 'LOGOUT', `Đăng xuất khỏi hệ thống`);
     }
     setCurrentUser(null);
@@ -88,7 +114,11 @@ export function AuthProvider({ children }) {
 
   const changePassword = async (currentPassword, newPassword) => {
     if (!currentUser) return;
-    await authApi.changePassword(currentUser.id, currentPassword, newPassword);
+    const token = await authApi.changePassword(currentUser.id, currentPassword, newPassword);
+    if (!isMockMode) {
+      setCurrentUser({ ...currentUser, token });
+      return;
+    }
     refreshUser();
   };
 

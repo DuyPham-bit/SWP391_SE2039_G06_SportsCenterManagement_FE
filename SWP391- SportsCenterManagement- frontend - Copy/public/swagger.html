@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SCMS API Documentation - Interactive Swagger UI</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@700;900&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" />
+  <style>
+    :root {
+      --primary: #dc2626;
+      --primary-dark: #b91c1c;
+      --slate-900: #0f172a;
+      --slate-800: #1e293b;
+      --slate-700: #334155;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background: #f8fafc;
+      font-family: 'Inter', -apple-system, sans-serif;
+      color: #0f172a;
+    }
+    .custom-topbar {
+      background: var(--slate-900);
+      color: #ffffff;
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 2px solid var(--primary);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .brand-badge {
+      background: var(--primary);
+      color: #fff;
+      font-family: 'Chivo', sans-serif;
+      font-weight: 900;
+      font-size: 15px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      letter-spacing: 0.5px;
+      box-shadow: 0 2px 8px rgba(220, 38, 38, 0.4);
+    }
+    .brand-title {
+      font-family: 'Chivo', sans-serif;
+      font-weight: 900;
+      font-size: 17px;
+      letter-spacing: -0.3px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .brand-subtitle {
+      font-size: 11px;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 600;
+    }
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .btn-action {
+      background: var(--slate-800);
+      color: #ffffff;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 7px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--slate-700);
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .btn-action:hover {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+      transform: translateY(-1px);
+    }
+    .mode-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .pulse-dot {
+      width: 7px;
+      height: 7px;
+      background: #10b981;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #10b981;
+    }
+    .swagger-ui .topbar { display: none !important; }
+    .swagger-ui .info { margin: 25px 0 15px 0; }
+    .swagger-ui .info .title {
+      font-family: 'Chivo', sans-serif;
+      font-weight: 900;
+      color: var(--slate-900);
+    }
+    .swagger-ui .btn.authorize {
+      background-color: var(--primary) !important;
+      border-color: var(--primary) !important;
+      color: #fff !important;
+      font-weight: 700;
+      border-radius: 8px;
+    }
+    .swagger-ui .btn.authorize svg { fill: #fff !important; }
+    .swagger-ui .opblock.opblock-post { border-color: #2563eb; background: rgba(37, 99, 235, .04); }
+    .swagger-ui .opblock.opblock-get { border-color: #059669; background: rgba(5, 150, 105, .04); }
+    .swagger-ui .opblock.opblock-put { border-color: #d97706; background: rgba(217, 119, 6, .04); }
+    .swagger-ui .opblock.opblock-delete { border-color: #ef4444; background: rgba(239, 68, 68, .04); }
+    .swagger-ui .opblock.opblock-patch { border-color: #7c3aed; background: rgba(124, 58, 237, .04); }
+  </style>
+</head>
+<body>
+  <header class="custom-topbar">
+    <div class="topbar-left">
+      <span class="brand-badge">SCMS</span>
+      <div>
+        <div class="brand-title">
+          Sports Center Management System
+          <span style="font-size: 11px; background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 4px; font-weight: 500;">OpenAPI 3.0</span>
+        </div>
+        <div class="brand-subtitle">Interactive Swagger UI & Live Tester (Updated 02/10/2026)</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="mode-indicator">
+        <span class="pulse-dot"></span>
+        <span>Interactive API Spec</span>
+      </div>
+      <a href="/openapi.json" target="_blank" class="btn-action" title="Xem mã nguồn JSON của OpenAPI Specification">
+        <span>{ } OpenAPI JSON</span>
+      </a>
+      <a href="/SCMS_Sports_Center_API.postman_collection.json" download="SCMS_Sports_Center_API.postman_collection.json" class="btn-action" title="Tải file Postman Collection v2.1.0">
+        <span>📥 Postman Collection</span>
+      </a>
+      <a href="/SCMS_Environment.postman_environment.json" download="SCMS_Environment.postman_environment.json" class="btn-action" title="Tải file Postman Environment">
+        <span>⚙️ Postman Env</span>
+      </a>
+      <a href="/" class="btn-action" style="background: var(--primary); border-color: var(--primary);">
+        <span>← Về Ứng Dụng SCMS</span>
+      </a>
+    </div>
+  </header>
+
+  <div id="swagger-ui"></div>
+
+  <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js"></script>
+  <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-standalone-preset.js"></script>
+  <script>
+    window.onload = function() {
+      window.ui = SwaggerUIBundle({
+        url: "/openapi.json",
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        plugins: [
+          SwaggerUIBundle.plugins.DownloadUrl
+        ],
+        layout: "BaseLayout",
+        defaultModelsExpandDepth: 1,
+        defaultModelExpandDepth: 1,
+        docExpansion: "list",
+        filter: true,
+        showRequestDuration: true,
+        persistAuthorization: true,
+        tryItOutEnabled: true
+      });
+    };
+  </script>
+</body>
+</html>

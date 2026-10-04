@@ -3,8 +3,111 @@ import { db, DB_KEYS } from './dbStorage.js';
 // Simulated delay helper
 const delay = (ms = 150) => new Promise(resolve => setTimeout(resolve, ms));
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:54162/api')
+  .replace(/\/+$/, '');
+// Chế độ mock mặc định để frontend chạy độc lập, không cần backend.
+// Chỉ chuyển sang API thật khi người dùng đặt rõ VITE_USE_MOCK=false.
+export const isMockMode = import.meta.env.VITE_USE_MOCK !== 'false';
+const SESSION_KEY = 'SCMS_AUTH_SESSION';
+
+const getSessionToken = () => {
+  try {
+    return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null')?.token || null;
+  } catch {
+    return null;
+  }
+};
+
+async function apiRequest(path, { method = 'GET', body, token = getSessionToken() } = {}) {
+  const headers = { Accept: 'application/json' };
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}/${path.replace(/^\/+/, '')}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body)
+    });
+  } catch (error) {
+    throw new Error(`Không thể kết nối API tại ${API_BASE_URL}. Hãy kiểm tra backend đang chạy và VITE_API_BASE_URL.`);
+  }
+
+  const responseText = await response.text();
+  let data = null;
+  if (responseText) {
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      data = responseText;
+    }
+  }
+
+  if (!response.ok) {
+    const message = typeof data === 'object' && data
+      ? data.message || data.title
+      : data;
+    throw new Error(message || `API trả về lỗi HTTP ${response.status}.`);
+  }
+  return data;
+}
+
+const readField = (value, camelName, pascalName) => value?.[camelName] ?? value?.[pascalName];
+
+function mapProfile(profile, token) {
+  const role = readField(profile, 'role', 'Role') || 'MEMBER';
+  return {
+    id: String(readField(profile, 'userId', 'UserId')),
+    email: readField(profile, 'email', 'Email') || '',
+    fullName: readField(profile, 'fullName', 'FullName') || '',
+    phone: readField(profile, 'phone', 'Phone') || '',
+    role: role.toUpperCase(),
+    status: (readField(profile, 'status', 'Status') || 'ACTIVE').toUpperCase(),
+    memberCode: readField(profile, 'memberCode', 'MemberCode') || '',
+    createdAt: readField(profile, 'createdAt', 'CreatedAt'),
+    packageId: null,
+    packageName: 'Chưa đăng ký gói tập',
+    packageExpiry: null,
+    packageStatus: 'INACTIVE',
+    token
+  };
+}
+
+function mapPackage(pkg) {
+  const status = readField(pkg, 'status', 'Status') || 'Active';
+  return {
+    id: String(readField(pkg, 'id', 'Id')),
+    name: readField(pkg, 'name', 'Name') || '',
+    description: readField(pkg, 'description', 'Description') || '',
+    durationDays: Number(readField(pkg, 'durationDays', 'DurationDays') || 0),
+    price: Number(readField(pkg, 'price', 'Price') || 0),
+    allowedSports: Number(readField(pkg, 'maxClasses', 'MaxClasses') || 15),
+    badge: readField(pkg, 'accessType', 'AccessType') || '',
+    status: status.toUpperCase() === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE',
+    features: []
+  };
+}
+
+async function loginWithApi(email, password) {
+  const result = await apiRequest('auth/login', {
+    method: 'POST',
+    body: { email: email.trim(), password }
+  });
+  const token = readField(result, 'accessToken', 'AccessToken');
+  if (!token) throw new Error('API đăng nhập không trả về access token.');
+  const profile = await apiRequest('profile/me', { token });
+  return { token, user: mapProfile(profile, token) };
+}
+
 export const authApi = {
+  async getProfile() {
+    const profile = await apiRequest('profile/me');
+    return mapProfile(profile, getSessionToken());
+  },
+
   async login(email, password) {
+    if (!isMockMode) return loginWithApi(email, password);
     await delay();
     const users = db.get(DB_KEYS.USERS);
     const user = users.find(u => u.email.toLowerCase() === email.trim().toLowerCase());
@@ -27,6 +130,22 @@ export const authApi = {
   },
 
   async register({ fullName, email, phone, password }) {
+    if (!isMockMode) {
+      const normalizedEmail = email.trim();
+      const localPart = normalizedEmail.split('@')[0].replace(/[^a-zA-Z0-9_.-]/g, '_');
+      const username = localPart.length >= 3 ? localPart : `user_${localPart}`;
+      await apiRequest('auth/register', {
+        method: 'POST',
+        body: {
+          username,
+          email: normalizedEmail,
+          password,
+          fullName: fullName.trim(),
+          phone: phone.trim() || null
+        }
+      });
+      return (await loginWithApi(normalizedEmail, password)).user;
+    }
     await delay();
     const users = db.get(DB_KEYS.USERS);
     if (users.some(u => u.email.toLowerCase() === email.trim().toLowerCase())) {
@@ -56,6 +175,9 @@ export const authApi = {
   },
 
   async loginWithGoogle({ email, fullName, avatar }) {
+    if (!isMockMode) {
+      throw new Error('Đăng nhập Google chưa được cấu hình trên backend.');
+    }
     await delay(250);
     const users = db.get(DB_KEYS.USERS);
     const cleanEmail = email.trim().toLowerCase();
@@ -103,6 +225,13 @@ export const authApi = {
   },
 
   async resetPassword(email, otp, newPassword) {
+    if (!isMockMode) {
+      await apiRequest('auth/reset-password', {
+        method: 'POST',
+        body: { email: email.trim(), otp, newPassword }
+      });
+      return true;
+    }
     await delay();
     const users = db.get(DB_KEYS.USERS);
     const user = users.find(u => u.email.toLowerCase() === email.trim().toLowerCase());
@@ -121,7 +250,27 @@ export const authApi = {
     return true;
   },
 
+  async requestPasswordReset(email) {
+    if (!isMockMode) {
+      return apiRequest('auth/request-password-reset', {
+        method: 'POST',
+        body: { email: email.trim() }
+      });
+    }
+    await delay();
+    return { message: 'Mã xác thực đã được gửi.', developmentOtp: '123456' };
+  },
+
   async changePassword(userId, currentPassword, newPassword) {
+    if (!isMockMode) {
+      const result = await apiRequest('auth/change-password', {
+        method: 'POST',
+        body: { currentPassword, newPassword }
+      });
+      const token = readField(result, 'accessToken', 'AccessToken');
+      if (!token) throw new Error('API đổi mật khẩu không trả về access token mới.');
+      return token;
+    }
     await delay();
     const users = db.get(DB_KEYS.USERS);
     const user = users.find(u => u.id === userId);
@@ -138,6 +287,16 @@ export const authApi = {
   },
 
   async updateProfile(userId, profileData) {
+    if (!isMockMode) {
+      const profile = await apiRequest('profile/me', {
+        method: 'PATCH',
+        body: {
+          fullName: profileData.fullName,
+          phone: profileData.phone || null
+        }
+      });
+      return mapProfile(profile, getSessionToken());
+    }
     await delay();
     const updated = db.update(DB_KEYS.USERS, userId, profileData);
     if (!updated) throw new Error('Cập nhật thất bại!');
@@ -388,11 +547,33 @@ export const staffApi = {
 
 export const packageApi = {
   async getAll() {
+    if (!isMockMode) {
+      const centerId = import.meta.env.VITE_CENTER_ID || '1';
+      const packages = await apiRequest(`centers/${encodeURIComponent(centerId)}/membership-packages`);
+      if (!Array.isArray(packages)) throw new Error('API gói tập trả về dữ liệu không hợp lệ.');
+      return packages.map(mapPackage);
+    }
     await delay();
     return db.get(DB_KEYS.PACKAGES);
   },
 
   async create(pkg) {
+    if (!isMockMode) {
+      const centerId = import.meta.env.VITE_CENTER_ID || '1';
+      const created = await apiRequest(`centers/${encodeURIComponent(centerId)}/membership-packages`, {
+        method: 'POST',
+        body: {
+          name: pkg.name,
+          description: pkg.description || null,
+          durationDays: Number(pkg.durationDays),
+          price: Number(pkg.price),
+          maxClasses: Number(pkg.allowedSports) || null,
+          accessType: pkg.badge || null,
+          status: 'Active'
+        }
+      });
+      return mapPackage(created);
+    }
     await delay();
     const newPkg = {
       ...pkg,
@@ -405,6 +586,21 @@ export const packageApi = {
   },
 
   async update(id, pkg) {
+    if (!isMockMode) {
+      const updated = await apiRequest(`membership-packages/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: {
+          name: pkg.name,
+          description: pkg.description || null,
+          durationDays: Number(pkg.durationDays),
+          price: Number(pkg.price),
+          maxClasses: Number(pkg.allowedSports) || null,
+          accessType: pkg.badge || null,
+          status: pkg.status === 'INACTIVE' ? 'Inactive' : 'Active'
+        }
+      });
+      return mapPackage(updated);
+    }
     await delay();
     const updated = db.update(DB_KEYS.PACKAGES, id, pkg);
     db.logAudit('Manager', 'MANAGER', 'UPDATE_PACKAGE', `Cập nhật gói tập: ${updated.name}`);
@@ -412,6 +608,15 @@ export const packageApi = {
   },
 
   async toggleStatus(id) {
+    if (!isMockMode) {
+      const packages = await this.getAll();
+      const target = packages.find(pkg => pkg.id === String(id));
+      if (!target) throw new Error('Không tìm thấy gói đang hoạt động để cập nhật trạng thái.');
+      return this.update(id, {
+        ...target,
+        status: target.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
+      });
+    }
     await delay();
     const pkgs = db.get(DB_KEYS.PACKAGES);
     const target = pkgs.find(p => p.id === id);
@@ -727,11 +932,69 @@ export const coachApi = {
       ...planData,
       id: `tp-${Date.now()}`,
       status: 'ACTIVE',
+      isCustom: planData.isCustom || false,
       createdAt: new Date().toISOString().split('T')[0]
     };
     db.insert(DB_KEYS.TRAINING_PLANS, newPlan);
-    db.logAudit(planData.coachName, 'COACH', 'CREATE_TRAINING_PLAN', `Tạo giáo án cho ${planData.memberName}: ${planData.title}`);
+    const targetLabel = planData.isCustom ? `học viên ${planData.memberName}` : `lớp ${planData.className || 'đảm nhiệm'}`;
+    db.logAudit(planData.coachName, 'COACH', 'CREATE_TRAINING_PLAN', `Tạo giáo án cho ${targetLabel}: ${planData.title}`);
     return newPlan;
+  },
+
+  async savePersonalTrainingPlan(planData) {
+    await delay();
+    const plans = db.get(DB_KEYS.TRAINING_PLANS);
+    const existingIndex = plans.findIndex(
+      p => p.classId === planData.classId && p.memberId === planData.memberId && p.isCustom
+    );
+
+    let savedPlan;
+    if (existingIndex !== -1) {
+      plans[existingIndex] = {
+        ...plans[existingIndex],
+        ...planData,
+        isCustom: true,
+        updatedAt: new Date().toISOString().split('T')[0]
+      };
+      db.set(DB_KEYS.TRAINING_PLANS, plans);
+      savedPlan = plans[existingIndex];
+      db.logAudit(planData.coachName, 'COACH', 'UPDATE_PERSONAL_PLAN', `Cập nhật giáo án riêng cho học viên ${planData.memberName} (Lớp ${planData.className})`);
+    } else {
+      savedPlan = {
+        ...planData,
+        id: `tp-custom-${Date.now()}`,
+        isCustom: true,
+        status: 'ACTIVE',
+        createdAt: new Date().toISOString().split('T')[0]
+      };
+      db.insert(DB_KEYS.TRAINING_PLANS, savedPlan);
+      db.logAudit(planData.coachName, 'COACH', 'CREATE_PERSONAL_PLAN', `Tạo giáo án riêng đặc biệt cho học viên ${planData.memberName} (Lớp ${planData.className})`);
+    }
+    return savedPlan;
+  },
+
+  async deletePersonalTrainingPlan(classId, memberId, coachName = 'Huấn luyện viên') {
+    await delay();
+    const plans = db.get(DB_KEYS.TRAINING_PLANS);
+    const target = plans.find(p => p.classId === classId && p.memberId === memberId && p.isCustom);
+    if (target) {
+      db.remove(DB_KEYS.TRAINING_PLANS, target.id);
+      db.logAudit(coachName, 'COACH', 'DELETE_PERSONAL_PLAN', `Huỷ giáo án riêng của học viên ${target.memberName || memberId} (Lớp ${target.className})`);
+      return true;
+    }
+    return false;
+  },
+
+  async deleteTrainingPlan(planId, coachName = 'Huấn luyện viên') {
+    await delay();
+    const plans = db.get(DB_KEYS.TRAINING_PLANS);
+    const target = plans.find(p => p.id === planId);
+    if (target) {
+      db.remove(DB_KEYS.TRAINING_PLANS, planId);
+      db.logAudit(coachName, 'COACH', 'DELETE_TRAINING_PLAN', `Xoá giáo án: ${target.title}`);
+      return true;
+    }
+    return false;
   },
 
   async recordWorkoutProgress(progressData) {
@@ -796,6 +1059,18 @@ export const coachApi = {
 
 export const memberApi = {
   async subscribeOnline({ memberId, packageId, paymentMethod = 'VNPAY' }) {
+    if (!isMockMode) {
+      if (paymentMethod !== 'VNPAY') {
+        throw new Error('Backend hiện chỉ hỗ trợ thanh toán qua VNPay.');
+      }
+      const response = await apiRequest('payments/create-vnpay-url', {
+        method: 'POST',
+        body: { packageId: Number(packageId) }
+      });
+      const paymentUrl = readField(response, 'paymentUrl', 'PaymentUrl');
+      if (!paymentUrl) throw new Error('API thanh toán không trả về đường dẫn VNPay.');
+      return { paymentUrl };
+    }
     await delay();
     const users = db.get(DB_KEYS.USERS);
     const member = users.find(u => u.id === memberId);
@@ -835,8 +1110,17 @@ export const memberApi = {
 
   async getMyPlans(memberId) {
     await delay();
-    const plans = db.get(DB_KEYS.TRAINING_PLANS);
-    return plans.filter(p => p.memberId === memberId);
+    const plans = db.get(DB_KEYS.TRAINING_PLANS) || [];
+    const bookings = (db.get(DB_KEYS.BOOKINGS) || []).filter(b => b.memberId === memberId && b.status === 'CONFIRMED');
+    const enrolledClassIds = bookings.map(b => b.classId);
+
+    return plans.filter(p => {
+      // Personal plan specifically for this member
+      if (p.memberId === memberId) return true;
+      // Class-level general plan for classes the member is enrolled in
+      if (!p.isCustom && enrolledClassIds.includes(p.classId)) return true;
+      return false;
+    });
   },
 
   async askAI(question, memberName = 'Hội viên') {

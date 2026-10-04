@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext.js';
 import { useToast } from '../../context/ToastContext.js';
 import { ForgotPasswordModal } from './ForgotPasswordModal.js';
 import { GoogleLoginModal } from './GoogleLoginModal.js';
+import { isMockMode } from '../../services/api.js';
 
 export function LoginPage() {
   const { login, register, isAuthenticated, role } = useAuth();
@@ -84,8 +85,14 @@ export function LoginPage() {
       showError('Vui lòng điền đầy đủ các thông tin đăng ký!');
       return;
     }
-    if (regPassword.length < 6) {
-      showError('Mật khẩu phải dài tối thiểu 6 ký tự!');
+    if (regPassword.length < (isMockMode ? 6 : 12)
+      || (!isMockMode && (!/[A-Z]/.test(regPassword)
+        || !/[a-z]/.test(regPassword)
+        || !/[0-9]/.test(regPassword)
+        || !/[^a-zA-Z0-9]/.test(regPassword)))) {
+      showError(isMockMode
+        ? 'Mật khẩu phải dài tối thiểu 6 ký tự!'
+        : 'Mật khẩu phải có ít nhất 12 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.');
       return;
     }
     if (regPassword !== regConfirmPassword) {
@@ -399,7 +406,9 @@ export function LoginPage() {
                     </label>
                     <input
                       className="h-10 text-sm px-4 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 w-full text-slate-900 placeholder-slate-400 bg-white"
-                      placeholder="Tối thiểu 6 ký tự"
+                      placeholder={isMockMode
+                        ? 'Tối thiểu 6 ký tự'
+                        : 'Tối thiểu 12 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt'}
                       type="password"
                       required
                       value={regPassword}
