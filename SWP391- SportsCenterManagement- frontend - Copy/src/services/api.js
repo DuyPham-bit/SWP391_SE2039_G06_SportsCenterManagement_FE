@@ -1,10 +1,12 @@
 import { db, DB_KEYS } from './dbStorage.js';
+import { assertAsciiPassword } from './passwordPolicy.js';
 
 // Simulated delay helper
 const delay = (ms = 150) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const authApi = {
   async login(email, password) {
+    assertAsciiPassword(password);
     await delay();
     const users = db.get(DB_KEYS.USERS);
     const user = users.find(u => u.email.toLowerCase() === email.trim().toLowerCase());
@@ -27,6 +29,7 @@ export const authApi = {
   },
 
   async register({ fullName, email, phone, password }) {
+    assertAsciiPassword(password);
     await delay();
     const users = db.get(DB_KEYS.USERS);
     if (users.some(u => u.email.toLowerCase() === email.trim().toLowerCase())) {
@@ -103,6 +106,7 @@ export const authApi = {
   },
 
   async resetPassword(email, otp, newPassword) {
+    assertAsciiPassword(newPassword);
     await delay();
     const users = db.get(DB_KEYS.USERS);
     const user = users.find(u => u.email.toLowerCase() === email.trim().toLowerCase());
@@ -122,6 +126,8 @@ export const authApi = {
   },
 
   async changePassword(userId, currentPassword, newPassword) {
+    assertAsciiPassword(currentPassword);
+    assertAsciiPassword(newPassword);
     await delay();
     const users = db.get(DB_KEYS.USERS);
     const user = users.find(u => u.id === userId);

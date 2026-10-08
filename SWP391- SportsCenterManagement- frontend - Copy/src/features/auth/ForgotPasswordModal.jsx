@@ -1,6 +1,8 @@
 import { authApi } from '../../services/api.js';
 import { useToast } from '../../context/ToastContext.js';
 import { Modal } from '../../components/common/Modal.js';
+import { PasswordInput } from './PasswordInput.js';
+import { isAsciiPassword, PASSWORD_CHARACTER_ERROR } from '../../services/passwordPolicy.js';
 
 const { useState } = React;
 
@@ -32,6 +34,10 @@ export function ForgotPasswordModal({ isOpen, onClose, onResetSuccess }) {
     e.preventDefault();
     if (!otp.trim()) {
       showError('Vui lòng nhập mã OTP!');
+      return;
+    }
+    if (!isAsciiPassword(newPassword) || !isAsciiPassword(confirmPassword)) {
+      showError(PASSWORD_CHARACTER_ERROR);
       return;
     }
     if (newPassword.length < 6) {
@@ -122,11 +128,12 @@ export function ForgotPasswordModal({ isOpen, onClose, onResetSuccess }) {
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+            <label htmlFor="reset-new-password" className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
               Mật khẩu mới *
             </label>
-            <input
-              type="password"
+            <PasswordInput
+              id="reset-new-password"
+              autoComplete="new-password"
               required
               placeholder="Tối thiểu 6 ký tự"
               value={newPassword}
@@ -136,11 +143,12 @@ export function ForgotPasswordModal({ isOpen, onClose, onResetSuccess }) {
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+            <label htmlFor="reset-confirm-password" className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
               Nhập lại mật khẩu mới *
             </label>
-            <input
-              type="password"
+            <PasswordInput
+              id="reset-confirm-password"
+              autoComplete="new-password"
               required
               placeholder="Khớp với mật khẩu mới ở trên"
               value={confirmPassword}

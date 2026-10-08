@@ -5,7 +5,7 @@ export const SCMS_FACILITIES = [
     id: 'room-01',
     name: 'Bể Bơi 4 Mùa Nước Ấm 25m',
     category: 'aquatics',
-    categoryName: 'Thể thao dưới nước',
+    categoryName: 'Bơi lội',
     location: 'Khu A • Tầng 1',
     zone: 'Khu A',
     capacity: '25 - 35 người/ca',
@@ -30,7 +30,7 @@ export const SCMS_FACILITIES = [
     id: 'room-02',
     name: 'Sân Bóng Đá Cỏ Nhân Tạo (Sân 5 & Sân 7)',
     category: 'team-sports',
-    categoryName: 'Sân bóng & Đồng đội',
+    categoryName: 'Sân bóng & Vợt',
     location: 'Khu Ngoài trời',
     zone: 'Ngoài trời',
     capacity: '10 - 20 cầu thủ/sân',
@@ -55,7 +55,7 @@ export const SCMS_FACILITIES = [
     id: 'room-03',
     name: 'Cụm Sân Cầu Lông Thảm Chống Trượt',
     category: 'team-sports',
-    categoryName: 'Sân bóng & Đồng đội',
+    categoryName: 'Sân bóng & Vợt',
     location: 'Khu B • Tầng 2',
     zone: 'Khu B',
     capacity: '16 - 24 người chơi',
@@ -78,34 +78,34 @@ export const SCMS_FACILITIES = [
   },
   {
     id: 'room-04',
-    name: 'Phòng Tập Aerobic & Vũ Đạo Trẻ Trung',
-    category: 'combat-studio',
-    categoryName: 'Võ thuật & Vũ đạo',
-    location: 'Khu C • Tầng 2',
-    zone: 'Khu C',
-    capacity: '15 - 25 học viên/lớp',
-    openHours: '06:30 - 21:00 hàng ngày',
-    priceRate: 'Theo buổi học từ 40.000đ hoặc thuê phòng từ 120.000đ/giờ',
-    badge: 'Phòng Tập Đa Năng',
+    name: 'Khu Bóng Bàn Trong Nhà',
+    category: 'team-sports',
+    categoryName: 'Sân bóng & Vợt',
+    location: 'Khu B • Tầng 3',
+    zone: 'Khu B',
+    capacity: '8 - 16 người chơi',
+    openHours: '06:00 - 22:00 hàng ngày',
+    priceRate: 'Từ 40.000đ - 70.000đ/giờ/bàn',
+    badge: 'Bàn Tập Chuyên Dụng',
     badgeColor: 'bg-purple-600',
-    image: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?q=80&w=1200&auto=format&fit=crop',
-    secondaryImage: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?q=80&w=800&auto=format&fit=crop',
-    highlights: 'Sàn gỗ công nghiệp êm chân • Tường gương lớn soi động tác • Loa kết nối Bluetooth',
-    description: 'Phòng tập rộng rãi, thoáng mát dành cho các lớp nhảy hiện đại, Zumba, Aerobic và các câu lạc bộ vũ đạo phong trào. Trang bị gương tường lớn giúp học viên dễ dàng theo dõi động tác, hệ thống âm thanh sôi động và máy lạnh làm mát phục vụ suốt buổi tập.',
+    image: 'https://images.unsplash.com/photo-1708268411988-d30e0e1eef0c?q=80&w=1200&auto=format&fit=crop',
+    secondaryImage: 'https://images.unsplash.com/photo-1621726543096-a8be76db3708?q=80&w=800&auto=format&fit=crop',
+    highlights: '4 bàn bóng bàn chuyên dụng • Lưới và vợt tập đầy đủ • Đèn chiếu sáng đều, hạn chế chói',
+    description: 'Khu bóng bàn trong nhà gồm 4 bàn tập, bố trí khoảng trống quanh bàn để di chuyển và luyện kỹ thuật an toàn. Mặt sàn chống trượt, ánh sáng đều và thông gió nhẹ phù hợp cho các lớp bóng bàn cơ bản, luyện đánh đơn, đánh đôi và giao lưu câu lạc bộ.',
     specs: [
-      { label: 'Diện tích', value: '80m² mặt sàn thông suốt' },
-      { label: 'Mặt sàn', value: 'Sàn gỗ công nghiệp chống trơn trượt' },
-      { label: 'Gương tường', value: 'Gương phẳng cao 2.2m góc nhìn rộng' },
-      { label: 'Âm thanh', value: 'Dàn loa công suất vừa phải, kết nối tiện lợi' }
+      { label: 'Quy mô', value: '4 bàn bóng bàn trong nhà' },
+      { label: 'Kích thước bàn', value: '2.74m x 1.525m, cao 0.76m' },
+      { label: 'Mặt sàn', value: 'Sàn thể thao chống trượt, có khoảng trống di chuyển' },
+      { label: 'Thiết bị tập', value: 'Lưới, vợt, bóng tập và bảng điểm' }
     ],
-    amenities: ['Bục tập Step Aerobic', 'Dóng múa phụ trợ bài tập khởi động', 'Điều hòa 2 chiều và quạt trần', 'Kệ cất túi xách và giày múa'],
-    tags: ['Zumba & Aerobic', 'Nhảy hiện đại phong trào', 'Vận động giữ dáng']
+    amenities: ['Cho mượn vợt và bóng tập cơ bản', 'Ghế nghỉ giữa các lượt chơi', 'Tủ cất đồ cá nhân', 'Bình nước lọc phục vụ miễn phí'],
+    tags: ['Bóng bàn cơ bản', 'Đánh đơn & Đánh đôi', 'Giao lưu câu lạc bộ']
   },
   {
     id: 'room-05',
     name: 'Sân Bóng Rổ Tiêu Chuẩn Phong Trào',
     category: 'team-sports',
-    categoryName: 'Sân bóng & Đồng đội',
+    categoryName: 'Sân bóng & Vợt',
     location: 'Khu B • Tầng 1',
     zone: 'Khu B',
     capacity: '15 - 20 người chơi',
@@ -128,34 +128,34 @@ export const SCMS_FACILITIES = [
   },
   {
     id: 'room-06',
-    name: 'Cụm Sân Tennis & Pickleball Phong Trào',
-    category: 'combat-studio',
-    categoryName: 'Võ thuật & Vũ đạo',
+    name: 'Cụm Sân Pickleball Ngoài Trời',
+    category: 'team-sports',
+    categoryName: 'Sân bóng & Vợt',
     location: 'Khu Ngoài trời',
     zone: 'Ngoài trời',
-    capacity: '12 - 16 người chơi',
+    capacity: '8 - 16 người chơi',
     openHours: '05:30 - 22:00 hàng ngày',
-    priceRate: 'Tennis: từ 90.000đ - 160.000đ/giờ • Pickleball: từ 50.000đ - 90.000đ/giờ',
+    priceRate: 'Từ 50.000đ - 90.000đ/giờ/sân',
     badge: 'Sân Sơn Đạt Chuẩn',
     badgeColor: 'bg-teal-600',
-    image: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?q=80&w=1200&auto=format&fit=crop',
-    secondaryImage: 'https://images.unsplash.com/photo-1554068865-24cecd4e34b8?q=80&w=800&auto=format&fit=crop',
+    image: 'https://images.unsplash.com/photo-1693142517898-2f986215e412?q=80&w=1200&auto=format&fit=crop',
+    secondaryImage: 'https://images.unsplash.com/photo-1753901821774-22a88913130f?q=80&w=800&auto=format&fit=crop',
     highlights: 'Mặt sân cứng phẳng đẹp • Lưới căng đúng kích thước • Đèn chiếu sáng phục vụ chơi tối',
-    description: 'Cụm sân ngoài trời phục vụ bộ môn Tennis và môn thể thao mới nổi Pickleball. Mặt sân bằng phẳng phủ sơn thể thao êm chân, bám bóng tốt và ráo nước nhanh. Xung quanh có lưới rào thép bọc nhựa an toàn, tiện lợi cho việc tập luyện giải trí hàng ngày.',
+    description: 'Cụm 4 sân Pickleball ngoài trời dành cho các lớp nhập môn, luyện đánh đơn, đánh đôi và giao lưu phong trào. Mặt sân phủ sơn thể thao chống trượt, có vạch khu vực bếp rõ ràng và lưới riêng cho từng sân. Hệ thống đèn LED và rào chắn bóng hỗ trợ tập luyện thuận tiện vào buổi tối.',
     specs: [
-      { label: 'Quy mô', value: '2 sân Tennis + 2 sân Pickleball' },
-      { label: 'Mặt sàn', value: 'Sơn phủ thể thao chuyên dụng ngoài trời' },
+      { label: 'Quy mô', value: '4 sân Pickleball, mỗi sân 6.1m x 13.41m' },
+      { label: 'Mặt sàn', value: 'Sơn Acrylic chống trượt, vạch khu vực bếp rõ ràng' },
       { label: 'Hệ thống đèn', value: 'Đèn pha LED chiếu sáng ban đêm' },
       { label: 'Rào chắn', value: 'Lưới thép bọc nhựa bảo vệ quanh sân' }
     ],
     amenities: ['Ghế ngồi nghỉ có ô che nắng', 'Dịch vụ cho thuê vợt và bóng tập', 'Bình nước uống mát phục vụ người chơi', 'Bãi đỗ xe rộng rãi ngay cạnh sân'],
-    tags: ['Tennis phong trào', 'Pickleball giải trí', 'Rèn luyện phản xạ']
+    tags: ['Pickleball cơ bản', 'Đánh đơn & Đánh đôi', 'Rèn luyện phản xạ']
   },
   {
     id: 'room-07',
-    name: 'Phòng Tập Võ Thuật & Thể Lực Tự Vệ',
+    name: 'Phòng Tập Võ Thuật & Boxing',
     category: 'combat-studio',
-    categoryName: 'Võ thuật & Vũ đạo',
+    categoryName: 'Võ thuật & Boxing',
     location: 'Khu C • Tầng 1',
     zone: 'Khu C',
     capacity: '15 - 25 võ sinh/ca',
@@ -178,9 +178,9 @@ export const SCMS_FACILITIES = [
   },
   {
     id: 'room-08',
-    name: 'Phòng Tập Gym & Thể Hình Tiện Nghi',
+    name: 'Phòng Tập Gym & Fitness',
     category: 'fitness',
-    categoryName: 'Gym & Thể hình',
+    categoryName: 'Gym, Yoga & Pilates',
     location: 'Khu A • Tầng 2',
     zone: 'Khu A',
     capacity: '30 - 45 hội viên cùng lúc',
@@ -203,9 +203,9 @@ export const SCMS_FACILITIES = [
   },
   {
     id: 'room-09',
-    name: 'Phòng Tập Yoga & Dưỡng Sinh Yên Tĩnh',
+    name: 'Phòng Tập Yoga & Pilates',
     category: 'fitness',
-    categoryName: 'Gym & Thể hình',
+    categoryName: 'Gym, Yoga & Pilates',
     location: 'Khu C • Tầng 3',
     zone: 'Khu C',
     capacity: '15 - 20 học viên/lớp',
@@ -215,16 +215,16 @@ export const SCMS_FACILITIES = [
     badgeColor: 'bg-emerald-700',
     image: 'https://images.unsplash.com/photo-1545205597-3d9d02c29597?q=80&w=1200&auto=format&fit=crop',
     secondaryImage: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=800&auto=format&fit=crop',
-    highlights: 'Không gian yên tĩnh ngập tràn ánh sáng • Thảm tập sạch sẽ • Nhạc thiền nhẹ nhàng',
-    description: 'Phòng tập Yoga được thiết kế nhẹ nhàng, kín đáo, mang đến cảm giác thư giãn và cân bằng sau những giờ làm việc mệt mỏi. Trang bị thảm tập êm ái, gạch xốp, bóng tập và dây kháng lực hỗ trợ người mới bắt đầu dễ dàng làm quen với bộ môn.',
+    highlights: 'Không gian yên tĩnh • Khu thảm Yoga & Pilates Mat • Máy Reformer tập theo nhóm nhỏ',
+    description: 'Phòng tập Yoga & Pilates có khu thảm cho các bài tập thở, kéo giãn, thăng bằng và Pilates Mat, cùng khu máy Reformer dành cho nhóm nhỏ theo lịch hướng dẫn. Trang bị thảm tập, gạch Yoga, dây đai, vòng Pilates và bóng tập hỗ trợ học viên rèn luyện sự dẻo dai, sức mạnh cơ trung tâm và kiểm soát tư thế.',
     specs: [
       { label: 'Không gian', value: 'Yên tĩnh, thoáng mát, sàn lót gỗ sạch sẽ' },
-      { label: 'Thảm tập', value: 'Thảm Yoga TPE êm ái, bám sàn tốt' },
-      { label: 'Dụng cụ hỗ trợ', value: 'Gạch xốp, dây đai kéo giãn, bóng tập' },
-      { label: 'Không khí & Âm nhạc', value: 'Nhạc thư giãn nhẹ nhàng, không khí thoáng đãng' }
+      { label: 'Khu thảm', value: 'Thảm Yoga TPE và thảm Pilates Mat bám sàn tốt' },
+      { label: 'Khu Pilates Reformer', value: '4 máy Reformer cho lớp nhóm nhỏ theo lịch' },
+      { label: 'Dụng cụ hỗ trợ', value: 'Gạch Yoga, dây đai, vòng Pilates và bóng tập' }
     ],
     amenities: ['Bình nước uống lọc miễn phí', 'Giá cất thảm và tủ để đồ cá nhân', 'Phòng thay đồ lịch sự', 'Có mở các lớp cơ bản cho người mới'],
-    tags: ['Yoga dưỡng sinh', 'Kéo giãn & Giảm đau mỏi vai gáy', 'Tĩnh tâm thư thái']
+    tags: ['Yoga cơ bản', 'Pilates Mat & Reformer', 'Kéo giãn & Cân bằng tư thế']
   }
 ];
 
@@ -242,19 +242,20 @@ export function FacilitiesSection({ externalFacility = null, onModalClose = null
     email: '',
     organization: '',
     expectedDate: '',
-    timeSlot: 'Sáng (07:00 - 11:30)',
+    timeSlot: 'Sáng (08:00 - 11:30)',
     rentalPurpose: 'Tập luyện thể thao thường xuyên',
     extraServices: ['Nước uống đóng chai'],
     notes: ''
   });
   const [submitted, setSubmitted] = useState(false);
+  const [showFacilityPicker, setShowFacilityPicker] = useState(false);
 
   const categories = [
-    { id: 'all', label: 'Tất cả (9 cụm sân)', icon: 'grid_view' },
-    { id: 'team-sports', label: 'Sân bóng & Đồng đội', icon: 'sports_soccer' },
-    { id: 'aquatics', label: 'Bơi lội & Thể thao nước', icon: 'pool' },
+    { id: 'all', label: `Tất cả (${SCMS_FACILITIES.length} cụm sân)`, icon: 'grid_view' },
+    { id: 'team-sports', label: 'Sân bóng & Vợt', icon: 'sports_soccer' },
+    { id: 'aquatics', label: 'Bơi lội', icon: 'pool' },
     { id: 'fitness', label: 'Gym, Yoga & Pilates', icon: 'fitness_center' },
-    { id: 'combat-studio', label: 'Võ thuật & Vũ đạo', icon: 'sports_mma' }
+    { id: 'combat-studio', label: 'Võ thuật & Boxing', icon: 'sports_mma' }
   ];
 
   const filteredFacilities = useMemo(() => {
@@ -275,12 +276,21 @@ export function FacilitiesSection({ externalFacility = null, onModalClose = null
     const targetTab = (initialTab === 'rent' || initialTab === 'booking') ? 'booking' : 'specs';
     setActiveModalTab(targetTab);
     setSubmitted(false);
+    setShowFacilityPicker(false);
   };
 
   const handleCloseModal = () => {
     setSelectedFacility(null);
     setSubmitted(false);
+    setShowFacilityPicker(false);
     if (onModalClose) onModalClose();
+  };
+
+  const handleChangeFacility = (facilityId) => {
+    const facility = SCMS_FACILITIES.find(f => f.id === facilityId);
+    if (!facility) return;
+    setSelectedFacility(facility);
+    setShowFacilityPicker(false);
   };
 
   // Sync when parent component (LandingPage) requests to open a specific facility -> open specs
@@ -343,7 +353,7 @@ export function FacilitiesSection({ externalFacility = null, onModalClose = null
             HỆ THỐNG CƠ SỞ VẬT CHẤT <span className="text-red-600">TIỆN NGHI &amp; CHẤT LƯỢNG</span>
           </h2>
           <p className="font-inter text-slate-600 text-sm sm:text-base mt-4 leading-relaxed">
-            Khu liên hợp thể thao rộng rãi, sạch đẹp với 9 cụm sân bãi và phòng tập tiện nghi. Phục vụ nhu cầu rèn luyện sức khỏe hàng ngày, sinh hoạt câu lạc bộ và các giải đấu phong trào với mức chi phí hợp lý, dễ dàng tiếp cận cho mọi người.
+            Khu liên hợp thể thao rộng rãi, sạch đẹp với {SCMS_FACILITIES.length} cụm sân bãi và phòng tập dành cho bơi lội, Gym &amp; Fitness, Yoga &amp; Pilates, Võ thuật &amp; Boxing, bóng đá, cầu lông, bóng rổ, bóng bàn và Pickleball. Phục vụ nhu cầu học tập, rèn luyện sức khỏe, sinh hoạt câu lạc bộ và thi đấu phong trào.
           </p>
         </div>
 
@@ -364,7 +374,7 @@ export function FacilitiesSection({ externalFacility = null, onModalClose = null
               <span className="material-symbols-outlined text-[28px]">verified</span>
             </div>
             <div>
-              <div className="font-chivo text-2xl sm:text-3xl font-black text-slate-900">9 Khu Vực</div>
+              <div className="font-chivo text-2xl sm:text-3xl font-black text-slate-900">{SCMS_FACILITIES.length} Khu Vực</div>
               <div className="text-xs text-slate-500 font-semibold uppercase tracking-wider mt-0.5">Đa dạng môn tập luyện</div>
             </div>
           </div>
@@ -445,7 +455,7 @@ export function FacilitiesSection({ externalFacility = null, onModalClose = null
           </div>
         </div>
 
-        {/* 9 FACILITIES ATHLETIC CARDS GRID */}
+        {/* FACILITIES ATHLETIC CARDS GRID */}
         {filteredFacilities.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 p-8">
             <span className="material-symbols-outlined text-5xl text-slate-300 mb-3 block">search_off</span>
@@ -575,7 +585,7 @@ export function FacilitiesSection({ externalFacility = null, onModalClose = null
                 SƠ ĐỒ CÁC KHU VỰC TẬP LUYỆN
               </h3>
               <p className="text-slate-300 text-xs sm:text-sm mt-3 leading-relaxed">
-                9 cụm sân bãi và phòng tập được quy hoạch gọn gàng, lối đi thông thoáng, biển báo chỉ dẫn rõ ràng. Hệ thống quầy lễ tân tiếp đón chu đáo và hỗ trợ đặt sân nhanh chóng trực tiếp hoặc online.
+                {SCMS_FACILITIES.length} cụm sân bãi và phòng tập được quy hoạch gọn gàng, lối đi thông thoáng, biển báo chỉ dẫn rõ ràng. Hệ thống quầy lễ tân tiếp đón chu đáo và hỗ trợ đặt sân nhanh chóng trực tiếp hoặc online.
               </p>
 
               {/* 4 Added Service Amenities */}
@@ -604,11 +614,11 @@ export function FacilitiesSection({ externalFacility = null, onModalClose = null
               <div className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-red-500/50 transition-colors">
                 <div className="flex items-center gap-2 text-red-400 font-chivo text-xs font-bold uppercase mb-1.5">
                   <span className="material-symbols-outlined text-[18px]">pool</span>
-                  <span>Khu A: Bơi Lội &amp; Thể Hình</span>
+                  <span>Khu A: Bơi Lội, Gym &amp; Fitness</span>
                 </div>
                 <ul className="text-xs text-slate-300 space-y-1">
                   <li>• <strong>Tầng 1:</strong> Bể bơi 4 mùa 25m trong nhà nước ấm</li>
-                  <li>• <strong>Tầng 2:</strong> Phòng tập Gym &amp; Thể hình tiện nghi</li>
+                  <li>• <strong>Tầng 2:</strong> Phòng tập Gym &amp; Fitness</li>
                   <li>• <strong>Tầng 3:</strong> Khu thay đồ &amp; tắm tráng nóng lạnh</li>
                 </ul>
               </div>
@@ -616,35 +626,35 @@ export function FacilitiesSection({ externalFacility = null, onModalClose = null
               <div className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-red-500/50 transition-colors">
                 <div className="flex items-center gap-2 text-blue-400 font-chivo text-xs font-bold uppercase mb-1.5">
                   <span className="material-symbols-outlined text-[18px]">sports_basketball</span>
-                  <span>Khu B: Bóng Rổ &amp; Cầu Lông</span>
+                  <span>Khu B: Bóng Rổ, Cầu Lông &amp; Bóng Bàn</span>
                 </div>
                 <ul className="text-xs text-slate-300 space-y-1">
                   <li>• <strong>Tầng 1:</strong> Sân bóng rổ tiêu chuẩn phong trào có mái che</li>
                   <li>• <strong>Tầng 2:</strong> Cụm 4 sân cầu lông thảm cao su chống trượt</li>
-                  <li>• Khu ghế ngồi chờ nghỉ ngơi có quạt mát</li>
+                  <li>• <strong>Tầng 3:</strong> Khu bóng bàn trong nhà với 4 bàn tập</li>
                 </ul>
               </div>
 
               <div className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-red-500/50 transition-colors">
                 <div className="flex items-center gap-2 text-purple-400 font-chivo text-xs font-bold uppercase mb-1.5">
                   <span className="material-symbols-outlined text-[18px]">self_improvement</span>
-                  <span>Khu C: Vũ Đạo, Võ Thuật &amp; Yoga</span>
+                  <span>Khu C: Võ Thuật, Boxing, Yoga &amp; Pilates</span>
                 </div>
                 <ul className="text-xs text-slate-300 space-y-1">
-                  <li>• <strong>Tầng 1:</strong> Phòng tập võ thuật &amp; tự vệ thể lực</li>
-                  <li>• <strong>Tầng 2:</strong> Phòng tập Aerobic &amp; vũ đạo trẻ trung</li>
-                  <li>• <strong>Tầng 3:</strong> Phòng tập Yoga &amp; dưỡng sinh yên tĩnh</li>
+                  <li>• <strong>Tầng 1:</strong> Phòng tập võ thuật &amp; Boxing, thảm và bao cát</li>
+                  <li>• <strong>Tầng 3:</strong> Phòng tập Yoga &amp; Pilates, khu thảm và máy Reformer</li>
+                  <li>• Tủ đồ cá nhân và khu thay đồ phục vụ học viên</li>
                 </ul>
               </div>
 
               <div className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-red-500/50 transition-colors">
                 <div className="flex items-center gap-2 text-emerald-400 font-chivo text-xs font-bold uppercase mb-1.5">
                   <span className="material-symbols-outlined text-[18px]">stadium</span>
-                  <span>Khu Ngoài Trời: Bóng Đá &amp; Tennis</span>
+                  <span>Khu Ngoài Trời: Bóng Đá &amp; Pickleball</span>
                 </div>
                 <ul className="text-xs text-slate-300 space-y-1">
                   <li>• Cụm sân bóng đá cỏ nhân tạo (sân 5 và sân 7)</li>
-                  <li>• Cụm 2 sân Tennis &amp; 2 sân Pickleball phong trào</li>
+                  <li>• Cụm 4 sân Pickleball, có lưới riêng và vạch khu vực bếp</li>
                   <li>• Dàn đèn pha LED chiếu sáng ban đêm rõ nét</li>
                 </ul>
               </div>
@@ -848,17 +858,51 @@ export function FacilitiesSection({ externalFacility = null, onModalClose = null
                 /* BOOKING & TOUR FORM TAB */
                 <>
                   {/* Quick Card Summary */}
-                  <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                    <img
-                      src={selectedFacility.image}
-                      alt={selectedFacility.name}
-                      className="w-16 h-16 rounded-lg object-cover shrink-0"
-                    />
-                    <div className="text-xs">
-                      <strong className="text-slate-900 block font-bold">{selectedFacility.name}</strong>
-                      <span className="text-slate-500 block mt-0.5">{selectedFacility.location} • Giờ mở cửa: {selectedFacility.openHours}</span>
-                      <span className="text-red-600 font-semibold block mt-0.5">{selectedFacility.priceRate}</span>
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div className="flex items-start sm:items-center gap-3">
+                      <img
+                        src={selectedFacility.image}
+                        alt={selectedFacility.name}
+                        className="w-12 h-12 sm:w-16 sm:h-16 rounded-lg object-cover shrink-0"
+                      />
+                      <div className="text-xs flex-1 min-w-0">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <strong className="text-slate-900 block font-bold">{selectedFacility.name}</strong>
+                          <button
+                            type="button"
+                            onClick={() => setShowFacilityPicker(prev => !prev)}
+                            aria-expanded={showFacilityPicker}
+                            aria-controls="booking-facility-picker"
+                            className="self-start sm:self-auto shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-red-200 bg-white text-red-600 text-[11px] font-bold hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-[16px]" aria-hidden="true">swap_horiz</span>
+                            <span>Đổi sân</span>
+                          </button>
+                        </div>
+                        <span className="text-slate-500 block mt-0.5">{selectedFacility.location} • Giờ mở cửa: {selectedFacility.openHours}</span>
+                        <span className="text-red-600 font-semibold block mt-0.5">{selectedFacility.priceRate}</span>
+                      </div>
                     </div>
+                    {showFacilityPicker && (
+                      <div id="booking-facility-picker" className="mt-3 pt-3 border-t border-slate-200">
+                        <label htmlFor="booking-facility" className="block text-xs font-bold text-slate-700 mb-1.5">
+                          Chọn sân hoặc phòng tập muốn đặt
+                        </label>
+                        <select
+                          id="booking-facility"
+                          autoFocus
+                          value={selectedFacility.id}
+                          onChange={e => handleChangeFacility(e.target.value)}
+                          className="w-full min-w-0 px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600"
+                        >
+                          {SCMS_FACILITIES.map(facility => (
+                            <option key={facility.id} value={facility.id}>
+                              {facility.name} — {facility.location}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
 
                   {/* Form */}
