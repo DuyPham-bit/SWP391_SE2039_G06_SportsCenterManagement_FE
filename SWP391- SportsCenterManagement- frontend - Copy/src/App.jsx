@@ -1,46 +1,46 @@
-import React, { useState, useEffect } from 'react';
-import { AuthProvider } from './context/AuthContext.js';
-import { ToastProvider } from './context/ToastContext.js';
-import { ProtectedRoute, RoleGuard } from './components/auth/RoleGuard.js';
-import { AppLayout } from './components/layout/AppLayout.js';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
+import { AuthProvider } from './context/AuthContext.jsx';
+import { ToastProvider } from './context/ToastContext.jsx';
+import { ProtectedRoute, RoleGuard } from './components/auth/RoleGuard.jsx';
+import { AppLayout } from './components/layout/AppLayout.jsx';
 
 // Public & Auth Pages
-import { LandingPage } from './features/landing/LandingPage.js';
-import { LoginPage } from './features/auth/LoginPage.js';
+import { LandingPage } from './features/landing/LandingPage.jsx';
+const LoginPage = lazy(() => import('./features/auth/LoginPage.jsx').then(module => ({ default: module.LoginPage })));
 
 // Manager Pages
-import { ManagerDashboard } from './features/manager/ManagerDashboard.js';
-import { StaffManagement } from './features/manager/StaffManagement.js';
-import { PackageManagement } from './features/manager/PackageManagement.js';
-import { ClassesAndRooms } from './features/manager/ClassesAndRooms.js';
-import { CoachAssignment } from './features/manager/CoachAssignment.js';
-import { ReportsAnalytics } from './features/manager/ReportsAnalytics.js';
-import { RolesPermissions } from './features/manager/RolesPermissions.js';
-import { AuditLogs } from './features/manager/AuditLogs.js';
+const ManagerDashboard = lazy(() => import('./features/manager/ManagerDashboard.jsx').then(module => ({ default: module.ManagerDashboard })));
+const StaffManagement = lazy(() => import('./features/manager/StaffManagement.jsx').then(module => ({ default: module.StaffManagement })));
+const PackageManagement = lazy(() => import('./features/manager/PackageManagement.jsx').then(module => ({ default: module.PackageManagement })));
+const ClassesAndRooms = lazy(() => import('./features/manager/ClassesAndRooms.jsx').then(module => ({ default: module.ClassesAndRooms })));
+const CoachAssignment = lazy(() => import('./features/manager/CoachAssignment.jsx').then(module => ({ default: module.CoachAssignment })));
+const ReportsAnalytics = lazy(() => import('./features/manager/ReportsAnalytics.jsx').then(module => ({ default: module.ReportsAnalytics })));
+const RolesPermissions = lazy(() => import('./features/manager/RolesPermissions.jsx').then(module => ({ default: module.RolesPermissions })));
+const AuditLogs = lazy(() => import('./features/manager/AuditLogs.jsx').then(module => ({ default: module.AuditLogs })));
 
 // Receptionist Pages
-import { ReceptionistDashboard } from './features/receptionist/ReceptionistDashboard.js';
-import { MemberLookup } from './features/receptionist/MemberLookup.js';
-import { CounterMembership } from './features/receptionist/CounterMembership.js';
-import { MemberCheckIn } from './features/receptionist/MemberCheckIn.js';
+const ReceptionistDashboard = lazy(() => import('./features/receptionist/ReceptionistDashboard.jsx').then(module => ({ default: module.ReceptionistDashboard })));
+const MemberLookup = lazy(() => import('./features/receptionist/MemberLookup.jsx').then(module => ({ default: module.MemberLookup })));
+const CounterMembership = lazy(() => import('./features/receptionist/CounterMembership.jsx').then(module => ({ default: module.CounterMembership })));
+const MemberCheckIn = lazy(() => import('./features/receptionist/MemberCheckIn.jsx').then(module => ({ default: module.MemberCheckIn })));
 
 // Coach Pages
-import { CoachDashboard } from './features/coach/CoachDashboard.js';
-import { TeachingSchedule } from './features/coach/TeachingSchedule.js';
-import { ClassMembers } from './features/coach/ClassMembers.js';
-import { Attendance } from './features/coach/Attendance.js';
-import { TrainingPlan } from './features/coach/TrainingPlan.js';
-import { WorkoutProgress } from './features/coach/WorkoutProgress.js';
-import { CoachNotifications } from './features/coach/CoachNotifications.js';
-import { AIRecommendation } from './features/coach/AIRecommendation.js';
+const CoachDashboard = lazy(() => import('./features/coach/CoachDashboard.jsx').then(module => ({ default: module.CoachDashboard })));
+const TeachingSchedule = lazy(() => import('./features/coach/TeachingSchedule.jsx').then(module => ({ default: module.TeachingSchedule })));
+const ClassMembers = lazy(() => import('./features/coach/ClassMembers.jsx').then(module => ({ default: module.ClassMembers })));
+const Attendance = lazy(() => import('./features/coach/Attendance.jsx').then(module => ({ default: module.Attendance })));
+const TrainingPlan = lazy(() => import('./features/coach/TrainingPlan.jsx').then(module => ({ default: module.TrainingPlan })));
+const WorkoutProgress = lazy(() => import('./features/coach/WorkoutProgress.jsx').then(module => ({ default: module.WorkoutProgress })));
+const CoachNotifications = lazy(() => import('./features/coach/CoachNotifications.jsx').then(module => ({ default: module.CoachNotifications })));
+const AIRecommendation = lazy(() => import('./features/coach/AIRecommendation.jsx').then(module => ({ default: module.AIRecommendation })));
 
 // Member Pages
-import { MemberDashboard } from './features/member/MemberDashboard.js';
-import { MemberPackages } from './features/member/MemberPackages.js';
-import { ClassScheduleView } from './features/member/ClassScheduleView.js';
-import { MyBookings } from './features/member/MyBookings.js';
-import { MyProgress } from './features/member/MyProgress.js';
-import { MemberAIAssistant } from './features/member/MemberAIAssistant.js';
+const MemberDashboard = lazy(() => import('./features/member/MemberDashboard.jsx').then(module => ({ default: module.MemberDashboard })));
+const MemberPackages = lazy(() => import('./features/member/MemberPackages.jsx').then(module => ({ default: module.MemberPackages })));
+const ClassScheduleView = lazy(() => import('./features/member/ClassScheduleView.jsx').then(module => ({ default: module.ClassScheduleView })));
+const MyBookings = lazy(() => import('./features/member/MyBookings.jsx').then(module => ({ default: module.MyBookings })));
+const MyProgress = lazy(() => import('./features/member/MyProgress.jsx').then(module => ({ default: module.MyProgress })));
+const MemberAIAssistant = lazy(() => import('./features/member/MemberAIAssistant.jsx').then(module => ({ default: module.MemberAIAssistant })));
 
 function AppRouter() {
   const [currentHash, setCurrentHash] = useState(() => window.location.hash || '#/');
@@ -65,49 +65,19 @@ function AppRouter() {
 
   const path = currentHash.split('?')[0];
 
-  // Helper bọc layout & guard cho role Manager
-  const renderManagerRoute = (Component, requiredCapability) => (
-    <AppLayout currentPath={path}>
-      <ProtectedRoute>
-        <RoleGuard allowedRoles={['MANAGER']} requiredCapability={requiredCapability}>
+  const renderRoleRoute = (Component, allowedRoles, requiredCapability) => (
+    <ProtectedRoute>
+      <AppLayout currentPath={path}>
+        <RoleGuard allowedRoles={allowedRoles} requiredCapability={requiredCapability}>
           <Component />
         </RoleGuard>
-      </ProtectedRoute>
-    </AppLayout>
+      </AppLayout>
+    </ProtectedRoute>
   );
-
-  // Helper bọc layout & guard cho role Receptionist (Manager cũng có quyền xem)
-  const renderReceptionistRoute = (Component, requiredCapability) => (
-    <AppLayout currentPath={path}>
-      <ProtectedRoute>
-        <RoleGuard allowedRoles={['RECEPTIONIST', 'MANAGER']} requiredCapability={requiredCapability}>
-          <Component />
-        </RoleGuard>
-      </ProtectedRoute>
-    </AppLayout>
-  );
-
-  // Helper bọc layout & guard cho role Coach (Manager cũng có quyền xem)
-  const renderCoachRoute = (Component, requiredCapability) => (
-    <AppLayout currentPath={path}>
-      <ProtectedRoute>
-        <RoleGuard allowedRoles={['COACH', 'MANAGER']} requiredCapability={requiredCapability}>
-          <Component />
-        </RoleGuard>
-      </ProtectedRoute>
-    </AppLayout>
-  );
-
-  // Helper bọc layout & guard cho role Member (Manager cũng có quyền xem)
-  const renderMemberRoute = (Component, requiredCapability) => (
-    <AppLayout currentPath={path}>
-      <ProtectedRoute>
-        <RoleGuard allowedRoles={['MEMBER', 'MANAGER']} requiredCapability={requiredCapability}>
-          <Component />
-        </RoleGuard>
-      </ProtectedRoute>
-    </AppLayout>
-  );
+  const renderManagerRoute = (Component, capability) => renderRoleRoute(Component, ['MANAGER'], capability);
+  const renderReceptionistRoute = (Component, capability) => renderRoleRoute(Component, ['RECEPTIONIST'], capability);
+  const renderCoachRoute = (Component, capability) => renderRoleRoute(Component, ['COACH'], capability);
+  const renderMemberRoute = (Component, capability) => renderRoleRoute(Component, ['MEMBER'], capability);
 
   // Check if route is a dashboard or auth route
   const isDashboardOrAuth =
@@ -179,7 +149,7 @@ function AppRouter() {
     case '#/member/dashboard':
       return renderMemberRoute(MemberDashboard);
     case '#/member/packages':
-      return renderMemberRoute(MemberPackages, 'manage_packages');
+      return renderMemberRoute(MemberPackages, 'view_packages');
     case '#/member/schedule':
       return renderMemberRoute(ClassScheduleView, 'book_class');
     case '#/member/bookings':
@@ -225,7 +195,9 @@ export default function App() {
   return (
     <ToastProvider>
       <AuthProvider>
-        <AppRouter />
+        <Suspense fallback={<div role="status" className="min-h-screen grid place-items-center text-sm text-slate-500">Đang tải trang...</div>}>
+          <AppRouter />
+        </Suspense>
       </AuthProvider>
     </ToastProvider>
   );

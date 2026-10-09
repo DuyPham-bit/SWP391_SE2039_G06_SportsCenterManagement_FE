@@ -1,14 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { systemApi } from '../../services/api.js';
-import { useToast } from '../../context/ToastContext.js';
-import { useAuth } from '../../context/AuthContext.js';
-import { LoadingSpinner } from '../../components/common/Table.js';
-import { Badge } from '../../components/common/StatCard.js';
-import { SYSTEM_CAPABILITIES, getCapabilityById } from '../../services/permissions.js';
+import { useToast } from '../../context/ToastContext.jsx';
+import { LoadingSpinner } from '../../components/common/Table.jsx';
+import { Badge } from '../../components/common/StatCard.jsx';
+import { SYSTEM_CAPABILITIES } from '../../services/permissions.js';
 
 export function RolesPermissions() {
   const { showSuccess, showError } = useToast();
-  const { currentUser, updateProfile } = useAuth();
   const [permissions, setPermissions] = useState(null);
   const [selectedRole, setSelectedRole] = useState('RECEPTIONIST');
   const [saving, setSaving] = useState(false);
@@ -27,7 +25,7 @@ export function RolesPermissions() {
       }
     }
     fetchPermissions();
-  }, []);
+  }, [showError]);
 
   const handleToggleCapability = (capId) => {
     if (!permissions) return;

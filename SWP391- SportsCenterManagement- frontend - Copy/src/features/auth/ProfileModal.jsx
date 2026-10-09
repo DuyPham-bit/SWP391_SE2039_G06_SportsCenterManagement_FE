@@ -1,8 +1,9 @@
-import { useAuth } from '../../context/AuthContext.js';
-import { useToast } from '../../context/ToastContext.js';
-import { Modal } from '../../components/common/Modal.js';
-import { Badge } from '../../components/common/StatCard.js';
-import { PasswordInput } from './PasswordInput.js';
+import React from 'react';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
+import { Modal } from '../../components/common/Modal.jsx';
+import { Badge } from '../../components/common/StatCard.jsx';
+import { PasswordInput } from './PasswordInput.jsx';
 import { isAsciiPassword, PASSWORD_CHARACTER_ERROR } from '../../services/passwordPolicy.js';
 
 const { useState } = React;

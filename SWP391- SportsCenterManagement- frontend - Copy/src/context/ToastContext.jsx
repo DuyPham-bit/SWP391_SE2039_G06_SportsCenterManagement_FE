@@ -1,3 +1,4 @@
+import React from 'react';
 const { createContext, useContext, useState, useCallback } = React;
 
 const ToastContext = createContext(null);
@@ -47,10 +48,11 @@ export function ToastProvider({ children }) {
     <ToastContext.Provider value={{ showToast, showSuccess, showError, showWarning, showInfo, removeToast }}>
       {children}
       {/* Toast Overlay Container */}
-      <div className="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2.5 pointer-events-none max-w-sm w-full">
+      <div className="fixed bottom-4 inset-x-4 sm:inset-x-auto sm:bottom-5 sm:right-5 z-[9999] flex flex-col gap-2.5 pointer-events-none sm:max-w-sm sm:w-full">
         {toasts.map(t => (
           <div
             key={t.id}
+            role={t.type === 'error' ? 'alert' : 'status'}
             className={`pointer-events-auto flex items-start gap-3 p-4 rounded-lg shadow-lg border text-sm font-medium transition-all duration-300 transform translate-y-0 ${getToastStyles(t.type)}`}
           >
             <span className="material-symbols-outlined text-[20px] shrink-0 mt-0.5">
@@ -58,6 +60,8 @@ export function ToastProvider({ children }) {
             </span>
             <div className="flex-1 text-sm leading-snug">{t.message}</div>
             <button
+              type="button"
+              aria-label="Đóng thông báo"
               onClick={() => removeToast(t.id)}
               className="text-white/80 hover:text-white transition-colors"
             >

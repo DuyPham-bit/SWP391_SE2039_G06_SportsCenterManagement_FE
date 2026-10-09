@@ -1,8 +1,9 @@
+import React from 'react';
 import { receptionApi, packageApi } from '../../services/api.js';
 import { db, DB_KEYS } from '../../services/dbStorage.js';
-import { useToast } from '../../context/ToastContext.js';
-import { LoadingSpinner } from '../../components/common/Table.js';
-import { Badge } from '../../components/common/StatCard.js';
+import { useToast } from '../../context/ToastContext.jsx';
+import { LoadingSpinner } from '../../components/common/Table.jsx';
+import { Badge } from '../../components/common/StatCard.jsx';
 
 const { useState, useEffect } = React;
 
@@ -185,7 +186,7 @@ export function CounterMembership() {
 
                 <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-xs font-bold">
                   <span className="text-slate-500">Môn rèn luyện:</span>
-                  <span className="text-slate-900">{pkg.allowedSports === 15 ? 'Toàn bộ 15 môn' : `${pkg.allowedSports} môn`}</span>
+                  <span className="text-slate-900">{pkg.allowedSports >= 9 ? 'Toàn bộ 9 môn' : `${pkg.allowedSports} môn`}</span>
                 </div>
               </div>
             ))}

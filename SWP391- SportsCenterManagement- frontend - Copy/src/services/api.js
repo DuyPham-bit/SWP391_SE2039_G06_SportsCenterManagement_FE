@@ -1,5 +1,7 @@
 import { db, DB_KEYS } from './dbStorage.js';
 import { assertAsciiPassword } from './passwordPolicy.js';
+import { toLocalDateInput } from './dateUtils.js';
+import { toSessionUser } from './sessionUser.js';
 
 // Simulated delay helper
 const delay = (ms = 150) => new Promise(resolve => setTimeout(resolve, ms));
@@ -333,7 +335,7 @@ export const staffApi = {
           if (session) {
             const parsed = JSON.parse(session);
             if (parsed.id === oldId) {
-              localStorage.setItem('SCMS_AUTH_SESSION', JSON.stringify(updatedUser));
+              localStorage.setItem('SCMS_AUTH_SESSION', JSON.stringify(toSessionUser(updatedUser)));
             }
           }
         } catch (e) {
@@ -429,6 +431,11 @@ export const packageApi = {
 };
 
 export const classApi = {
+  async getForCoach(coachId, { isManager = false } = {}) {
+    await delay();
+    const classes = db.get(DB_KEYS.CLASSES);
+    return isManager ? classes : classes.filter(cls => coachId && cls.coachId === coachId);
+  },
   async getAll() {
     await delay();
     return db.get(DB_KEYS.CLASSES);
@@ -548,7 +555,7 @@ export const bookingApi = {
       classId: cls.id,
       className: cls.name,
       timeSlot: cls.timeSlot,
-      bookingDate: bookingDate || '2026-09-25',
+      bookingDate: bookingDate || toLocalDateInput(),
       roomName: cls.roomName,
       status: 'CONFIRMED',
       createdAt: new Date().toLocaleString('vi-VN')
@@ -694,8 +701,7 @@ export const coachApi = {
 
     const assignedClasses = allClasses.filter(c => {
       if (isManager) return true;
-      if (!coachId && !coachName) return true;
-      return (coachId && c.coachId === coachId) || (coachName && c.coachName === coachName);
+      return coachId ? c.coachId === coachId : Boolean(coachName && c.coachName === coachName);
     });
 
     return assignedClasses.map(cls => {

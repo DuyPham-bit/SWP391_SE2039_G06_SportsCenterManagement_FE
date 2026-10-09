@@ -1,6 +1,7 @@
+import React from 'react';
 import { memberApi } from '../../services/api.js';
-import { useAuth } from '../../context/AuthContext.js';
-import { LoadingSpinner } from '../../components/common/Table.js';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { LoadingSpinner } from '../../components/common/Table.jsx';
 
 const { useState, useEffect } = React;
 

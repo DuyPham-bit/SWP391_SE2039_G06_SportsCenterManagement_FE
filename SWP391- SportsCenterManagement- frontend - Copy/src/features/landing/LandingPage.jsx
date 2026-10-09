@@ -1,6 +1,7 @@
-import { useAuth } from '../../context/AuthContext.js';
+import React from 'react';
+import { useAuth } from '../../context/AuthContext.jsx';
 import { SUPPORTED_SPORTS } from '../../services/sportsCatalog.js';
-import { FacilitiesSection, SCMS_FACILITIES } from './FacilitiesSection.js';
+import { FacilitiesSection, SCMS_FACILITIES } from './FacilitiesSection.jsx';
 
 const { useState, useEffect } = React;
 
@@ -122,22 +123,22 @@ export function LandingPage() {
       <header className="fixed top-0 left-0 right-0 w-full z-50 bg-white/95 backdrop-blur-md border-b border-slate-200">
         <div className="h-20 w-full max-w-[1280px] mx-auto px-4 md:px-8 flex items-center justify-between">
           {/* Brand Logo */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-red-600 flex items-center justify-center text-white shadow-md font-chivo font-black text-xl">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-red-600 flex items-center justify-center text-white shadow-md font-chivo font-black text-xl">
               S
             </div>
             <div className="flex flex-col">
               <span className="font-chivo text-xl font-extrabold uppercase tracking-tight text-slate-900 leading-none">
                 SCMS
               </span>
-              <span className="font-chivo text-[11px] tracking-widest text-red-600 uppercase font-bold leading-none mt-1">
+              <span className="hidden sm:block font-chivo text-[11px] tracking-widest text-red-600 uppercase font-bold leading-none mt-1">
                 Sports Center
               </span>
             </div>
           </div>
 
           {/* Navigation Links */}
-          <nav className="hidden md:flex items-center gap-8 font-chivo text-xs uppercase tracking-wider">
+          <nav className="hidden lg:flex items-center gap-8 font-chivo text-xs uppercase tracking-wider">
             {navItems.map(item => {
               const isActive = activeNav === item.id;
               return (
@@ -162,25 +163,26 @@ export function LandingPage() {
             {isAuthenticated ? (
               <a
                 href={getDashboardLink()}
-                className="bg-red-600 hover:bg-red-700 text-white font-chivo text-xs font-bold uppercase px-5 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+                className="whitespace-nowrap bg-red-600 hover:bg-red-700 text-white font-chivo text-xs font-bold uppercase px-3 sm:px-5 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2"
               >
                 <span className="material-symbols-outlined text-[18px]">space_dashboard</span>
-                <span>Vào Dashboard ({role})</span>
+                <span className="sm:hidden">Tài khoản</span>
+                <span className="hidden sm:inline">Vào Dashboard ({role})</span>
               </a>
             ) : (
               <div className="flex items-center gap-2">
                 <a
                   href="#/login"
-                  className="text-slate-700 hover:text-red-600 font-chivo text-xs font-bold uppercase px-3.5 py-2 transition-colors"
+                  className="whitespace-nowrap text-slate-700 hover:text-red-600 font-chivo text-xs font-bold uppercase px-2 sm:px-3.5 py-2 transition-colors"
                 >
                   ĐĂNG NHẬP
                 </a>
                 <a
                   href="#/register"
-                  className="bg-red-600 hover:bg-red-700 text-white font-chivo text-xs font-bold uppercase px-4 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-1.5"
+                  className="whitespace-nowrap bg-red-600 hover:bg-red-700 text-white font-chivo text-xs font-bold uppercase px-3 sm:px-4 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-1.5"
                 >
                   <span>ĐĂNG KÝ</span>
-                  <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                  <span className="hidden sm:inline material-symbols-outlined text-[16px]">arrow_forward</span>
                 </a>
               </div>
             )}

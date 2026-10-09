@@ -1,6 +1,7 @@
+import React from 'react';
 import { reportApi, systemApi } from '../../services/api.js';
-import { StatCard, Badge } from '../../components/common/StatCard.js';
-import { LoadingSpinner } from '../../components/common/Table.js';
+import { StatCard, Badge } from '../../components/common/StatCard.jsx';
+import { LoadingSpinner } from '../../components/common/Table.jsx';
 
 const { useState, useEffect } = React;
 
@@ -41,11 +42,11 @@ export function ManagerDashboard() {
             Bảng Quản Lý Tổng Quan (Manager Dashboard)
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Theo dõi thời gian thực 9 cụm sân, 15 bộ môn và hiệu suất hoạt động toàn trung tâm thể thao.
+            Theo dõi thời gian thực 9 cụm sân, 9 bộ môn và hiệu suất hoạt động toàn trung tâm thể thao.
           </p>
         </div>
 
-        <div className="flex gap-2 shrink-0">
+        <div className="flex flex-wrap gap-2 shrink-0">
           <a
             href="#/manager/reports"
             className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold font-chivo uppercase tracking-wider transition-colors shadow-md flex items-center gap-1.5"

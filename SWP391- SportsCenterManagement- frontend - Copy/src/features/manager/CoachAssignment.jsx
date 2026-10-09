@@ -1,8 +1,9 @@
+import React from 'react';
 import { classApi, staffApi } from '../../services/api.js';
-import { useToast } from '../../context/ToastContext.js';
-import { Modal } from '../../components/common/Modal.js';
-import { Badge } from '../../components/common/StatCard.js';
-import { LoadingSpinner } from '../../components/common/Table.js';
+import { useToast } from '../../context/ToastContext.jsx';
+import { Modal } from '../../components/common/Modal.jsx';
+import { Badge } from '../../components/common/StatCard.jsx';
+import { LoadingSpinner } from '../../components/common/Table.jsx';
 
 const { useState, useEffect } = React;
 
@@ -18,7 +19,7 @@ export function CoachAssignment() {
   const [selectedCoachId, setSelectedCoachId] = useState('');
   const [assigning, setAssigning] = useState(false);
 
-  const loadData = async () => {
+  const loadData = React.useCallback(async () => {
     try {
       const [classList, staffList] = await Promise.all([
         classApi.getAll(),
@@ -31,11 +32,11 @@ export function CoachAssignment() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showError]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const openAssignModal = (cls) => {
     setSelectedClass(cls);

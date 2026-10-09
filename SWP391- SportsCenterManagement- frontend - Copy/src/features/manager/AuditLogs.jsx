@@ -1,6 +1,7 @@
+import React from 'react';
 import { systemApi } from '../../services/api.js';
-import { Table, LoadingSpinner } from '../../components/common/Table.js';
-import { Badge } from '../../components/common/StatCard.js';
+import { Table, LoadingSpinner } from '../../components/common/Table.jsx';
+import { Badge } from '../../components/common/StatCard.jsx';
 
 const { useState, useEffect } = React;
 

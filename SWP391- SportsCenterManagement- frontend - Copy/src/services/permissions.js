@@ -149,6 +149,16 @@ export const SYSTEM_CAPABILITIES = [
 
   // 4. Hội viên
   {
+    id: 'view_packages',
+    label: 'Xem Gói tập Hội viên',
+    desc: 'Xem các gói tập để lựa chọn mua hoặc gia hạn',
+    path: '#/member/packages',
+    icon: 'card_membership',
+    category: 'HỘI VIÊN & ĐẶT CHỖ',
+    targetScreenName: 'Mua / Gia Hạn Gói',
+    defaultRole: 'MEMBER'
+  },
+  {
     id: 'book_class',
     label: 'Đặt chỗ Lớp học',
     desc: 'Hội viên đăng ký tham gia lớp học thể thao',
@@ -182,6 +192,14 @@ export function hasCapability(role, capId) {
   if (!capId) return true;
   const perms = getPermissionsForRole(role);
   return perms.includes(capId);
+}
+
+export function canAccessRoute(role, allowedRoles = [], requiredCapability) {
+  if (role === 'MANAGER') return true;
+  if (!role) return false;
+  return requiredCapability
+    ? hasCapability(role, requiredCapability)
+    : allowedRoles.includes(role);
 }
 
 // Helper to get capability metadata by ID
@@ -257,7 +275,7 @@ export function getDynamicNavItems(role) {
         items.push({ path: '#/coach/attendance', icon: 'fact_check', label: 'Điểm Danh Lớp' });
       }
 
-      const hasPlanCaps = perms.includes('create_training_plan') || perms.includes('get_ai_recommendation');
+      const hasPlanCaps = perms.includes('create_training_plan') || perms.includes('get_ai_recommendation') || perms.includes('view_teaching_schedule');
       if (hasPlanCaps) {
         items.push({ label: 'GIÁO ÁN & CHUYÊN MÔN', isHeader: true });
         if (perms.includes('create_training_plan')) {
@@ -292,9 +310,10 @@ export function getDynamicNavItems(role) {
     case 'MEMBER': {
       const items = [
         { label: 'HỘI VIÊN SCMS', isHeader: true },
-        { path: '#/member/dashboard', icon: 'home_app_logo', label: 'Trang Cá Nhân' },
-        { path: '#/member/packages', icon: 'card_membership', label: 'Mua / Gia Hạn Gói' }
+        { path: '#/member/dashboard', icon: 'home_app_logo', label: 'Trang Cá Nhân' }
       ];
+
+      if (perms.includes('view_packages')) items.push({ path: '#/member/packages', icon: 'card_membership', label: 'Mua / Gia Hạn Gói' });
 
       if (perms.includes('book_class')) {
         items.push({ label: 'LỊCH HỌC & ĐẶT CHỖ', isHeader: true });

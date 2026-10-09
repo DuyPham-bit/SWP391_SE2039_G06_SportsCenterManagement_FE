@@ -1,5 +1,6 @@
+import React from 'react';
 import { receptionApi } from '../../services/api.js';
-import { Badge } from '../../components/common/StatCard.js';
+import { Badge } from '../../components/common/StatCard.jsx';
 
 const { useState } = React;
 

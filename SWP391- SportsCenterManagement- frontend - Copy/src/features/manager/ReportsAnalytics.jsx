@@ -1,7 +1,10 @@
+import React from 'react';
 import { reportApi } from '../../services/api.js';
-import { StatCard } from '../../components/common/StatCard.js';
-import { LoadingSpinner } from '../../components/common/Table.js';
-import { useToast } from '../../context/ToastContext.js';
+import { StatCard } from '../../components/common/StatCard.jsx';
+import { LoadingSpinner } from '../../components/common/Table.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
+import { downloadCsv } from '../../services/csvExport.js';
+import { toLocalDateInput } from '../../services/dateUtils.js';
 
 const { useState, useEffect } = React;
 
@@ -26,7 +29,19 @@ export function ReportsAnalytics() {
   }, []);
 
   const handleExport = () => {
-    showSuccess('Đã xuất file báo cáo phân tích SCMS Analytics thành công (scms-report-2026.csv)!');
+    if (!metrics) return;
+    downloadCsv(`scms-report-${toLocalDateInput()}.csv`, [
+      ['Chỉ số', 'Giá trị'],
+      ['Tổng hội viên', metrics.totalMembers],
+      ['Hội viên hoạt động', metrics.activeMembers],
+      ['Huấn luyện viên', metrics.totalCoaches],
+      ['Lớp học', metrics.totalClasses],
+      ['Lượt đặt lớp', metrics.totalBookings],
+      ['Lượt check-in', metrics.todayCheckins],
+      ['Tỷ lệ lấp đầy (%)', metrics.occupancyRate],
+      ['Doanh thu tháng (VND)', metrics.monthlyRevenue]
+    ]);
+    showSuccess('Đã xuất dữ liệu đang hiển thị ra file CSV.');
   };
 
   if (loading) return <LoadingSpinner text="Đang trích xuất báo cáo phân tích..." />;
@@ -211,7 +226,7 @@ export function ReportsAnalytics() {
 
             <div>
               <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
-                <span>Cụm sân Tennis Plexicushion</span>
+                <span>Cụm sân Pickleball ngoài trời</span>
                 <span className="font-bold text-slate-700">75% lấp đầy</span>
               </div>
               <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">

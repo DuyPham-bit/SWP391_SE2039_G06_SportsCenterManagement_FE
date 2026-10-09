@@ -1,7 +1,8 @@
+import React from 'react';
 import { authApi } from '../../services/api.js';
-import { useToast } from '../../context/ToastContext.js';
-import { Modal } from '../../components/common/Modal.js';
-import { PasswordInput } from './PasswordInput.js';
+import { useToast } from '../../context/ToastContext.jsx';
+import { Modal } from '../../components/common/Modal.jsx';
+import { PasswordInput } from './PasswordInput.jsx';
 import { isAsciiPassword, PASSWORD_CHARACTER_ERROR } from '../../services/passwordPolicy.js';
 
 const { useState } = React;

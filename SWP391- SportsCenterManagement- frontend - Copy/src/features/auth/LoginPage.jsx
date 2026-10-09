@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../context/AuthContext.js';
-import { useToast } from '../../context/ToastContext.js';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
 import { SUPPORTED_SPORTS } from '../../services/sportsCatalog.js';
 import { isAsciiPassword, PASSWORD_CHARACTER_ERROR } from '../../services/passwordPolicy.js';
-import { AuthField } from './AuthField.js';
-import { ForgotPasswordModal } from './ForgotPasswordModal.js';
-import { GoogleLoginModal } from './GoogleLoginModal.js';
+import { AuthField } from './AuthField.jsx';
+import { ForgotPasswordModal } from './ForgotPasswordModal.jsx';
+import { GoogleLoginModal } from './GoogleLoginModal.jsx';
 
 const REMEMBERED_EMAIL_KEY = 'SCMS_REMEMBERED_EMAIL';
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

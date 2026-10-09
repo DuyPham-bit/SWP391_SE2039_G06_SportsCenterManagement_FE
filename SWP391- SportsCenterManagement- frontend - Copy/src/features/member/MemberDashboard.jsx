@@ -1,7 +1,8 @@
+import React from 'react';
 import { bookingApi } from '../../services/api.js';
-import { useAuth } from '../../context/AuthContext.js';
-import { StatCard, Badge } from '../../components/common/StatCard.js';
-import { LoadingSpinner } from '../../components/common/Table.js';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { StatCard, Badge } from '../../components/common/StatCard.jsx';
+import { LoadingSpinner } from '../../components/common/Table.jsx';
 
 const { useState, useEffect } = React;
 

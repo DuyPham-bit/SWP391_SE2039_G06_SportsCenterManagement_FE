@@ -1,7 +1,8 @@
+import React from 'react';
 import { classApi, coachApi } from '../../services/api.js';
-import { useAuth } from '../../context/AuthContext.js';
-import { useToast } from '../../context/ToastContext.js';
-import { LoadingSpinner } from '../../components/common/Table.js';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
+import { LoadingSpinner } from '../../components/common/Table.jsx';
 
 const { useState, useEffect } = React;
 
@@ -20,7 +21,7 @@ export function Attendance() {
   useEffect(() => {
     async function loadClasses() {
       try {
-        const all = await classApi.getAll();
+        const all = await classApi.getForCoach(currentUser?.id, { isManager: currentUser?.role === 'MANAGER' });
         setClasses(all);
         if (all.length > 0) setSelectedClassId(all[0].id);
       } finally {
@@ -28,7 +29,7 @@ export function Attendance() {
       }
     }
     loadClasses();
-  }, []);
+  }, [currentUser]);
 
   useEffect(() => {
     async function loadMembers() {
@@ -115,14 +116,14 @@ export function Attendance() {
 
       {/* Class Selector Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-center gap-3">
           <span className="text-xs font-bold uppercase tracking-wider text-slate-500 shrink-0">
             Chọn ca dạy:
           </span>
           <select
             value={selectedClassId}
             onChange={e => setSelectedClassId(e.target.value)}
-            className="px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white font-semibold text-slate-900"
+            className="min-w-0 w-full flex-1 px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white font-semibold text-slate-900"
           >
             {classes.map(cls => (
               <option key={cls.id} value={cls.id}>

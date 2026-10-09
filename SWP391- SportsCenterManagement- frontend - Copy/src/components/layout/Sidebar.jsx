@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../context/AuthContext.js';
+import { useAuth } from '../../context/AuthContext.jsx';
 import { getDynamicNavItems } from '../../services/permissions.js';
 
 export function Sidebar({ isOpen, onClose, currentPath }) {

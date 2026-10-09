@@ -1,11 +1,15 @@
-import { useAuth } from '../../context/AuthContext.js';
-import { hasCapability, getCapabilityById } from '../../services/permissions.js';
+import React from 'react';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { canAccessRoute, getCapabilityById } from '../../services/permissions.js';
 
 export function ProtectedRoute({ children }) {
   const { isAuthenticated } = useAuth();
 
+  React.useEffect(() => {
+    if (!isAuthenticated) window.location.hash = '#/login';
+  }, [isAuthenticated]);
+
   if (!isAuthenticated) {
-    window.location.hash = '#/login';
     return null;
   }
 
@@ -15,12 +19,13 @@ export function ProtectedRoute({ children }) {
 export function RoleGuard({ allowedRoles = [], requiredCapability, children }) {
   const { role } = useAuth();
 
-  // 1. Manager has superuser access
-  // 2. Direct role match
-  // 3. User's role has the specific capability granted via Roles & Permissions matrix
-  const isRoleAllowed = allowedRoles.includes(role);
-  const hasCap = requiredCapability ? hasCapability(role, requiredCapability) : false;
-  const isAllowed = role === 'MANAGER' || isRoleAllowed || hasCap;
+  const [, refreshPermissions] = React.useReducer(value => value + 1, 0);
+  React.useEffect(() => {
+    const handleChange = () => refreshPermissions();
+    window.addEventListener('SCMS_PERMISSIONS_CHANGED', handleChange);
+    return () => window.removeEventListener('SCMS_PERMISSIONS_CHANGED', handleChange);
+  }, []);
+  const isAllowed = canAccessRoute(role, allowedRoles, requiredCapability);
 
   if (!isAllowed) {
     const capInfo = requiredCapability ? getCapabilityById(requiredCapability) : null;

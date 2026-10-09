@@ -1,10 +1,11 @@
+import React from 'react';
 import { coachApi } from '../../services/api.js';
 import { db, DB_KEYS } from '../../services/dbStorage.js';
-import { useAuth } from '../../context/AuthContext.js';
-import { useToast } from '../../context/ToastContext.js';
-import { Table, LoadingSpinner } from '../../components/common/Table.js';
-import { Badge } from '../../components/common/StatCard.js';
-import { Modal } from '../../components/common/Modal.js';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
+import { Table, LoadingSpinner } from '../../components/common/Table.jsx';
+import { Badge } from '../../components/common/StatCard.jsx';
+import { Modal } from '../../components/common/Modal.jsx';
 
 const { useState, useEffect } = React;
 
@@ -32,7 +33,7 @@ export function ClassMembers() {
   const [deleting, setDeleting] = useState(false);
 
   // Load coach classes
-  const loadData = async () => {
+  const loadData = React.useCallback(async () => {
     try {
       const isManager = currentUser?.role === 'MANAGER';
       const coachClasses = await coachApi.getCoachClassesAndMembers(
@@ -42,9 +43,7 @@ export function ClassMembers() {
       );
       setClasses(coachClasses);
 
-      if (coachClasses.length > 0 && !selectedClassId) {
-        setSelectedClassId(coachClasses[0].id);
-      }
+      setSelectedClassId(previous => previous || coachClasses[0]?.id || '');
 
       // Load all training plans
       const allPlans = db.get(DB_KEYS.TRAINING_PLANS) || [];
@@ -55,11 +54,11 @@ export function ClassMembers() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser, showError]);
 
   useEffect(() => {
     loadData();
-  }, [currentUser?.id]);
+  }, [loadData]);
 
   // Load members whenever selectedClassId changes
   useEffect(() => {
@@ -195,7 +194,7 @@ export function ClassMembers() {
     {
       header: 'Học Viên',
       render: (row) => (
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-center gap-3">
           <img
             src={row.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100'}
             alt=""
@@ -314,7 +313,7 @@ export function ClassMembers() {
             <select
               value={selectedClassId}
               onChange={e => setSelectedClassId(e.target.value)}
-              className="px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white font-semibold text-slate-900"
+              className="min-w-0 w-full flex-1 px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white font-semibold text-slate-900"
             >
               {classes.map(cls => (
                 <option key={cls.id} value={cls.id}>

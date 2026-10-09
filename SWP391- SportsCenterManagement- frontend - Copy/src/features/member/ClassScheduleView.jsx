@@ -1,9 +1,11 @@
+import { toLocalDateInput } from '../../services/dateUtils.js';
+import React from 'react';
 import { classApi, bookingApi } from '../../services/api.js';
-import { useAuth } from '../../context/AuthContext.js';
-import { useToast } from '../../context/ToastContext.js';
-import { Modal } from '../../components/common/Modal.js';
-import { Badge } from '../../components/common/StatCard.js';
-import { LoadingSpinner } from '../../components/common/Table.js';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
+import { Modal } from '../../components/common/Modal.jsx';
+import { Badge } from '../../components/common/StatCard.jsx';
+import { LoadingSpinner } from '../../components/common/Table.jsx';
 import { INITIAL_SPORTS } from '../../services/mockData.js';
 
 const { useState, useEffect } = React;
@@ -20,10 +22,10 @@ export function ClassScheduleView() {
   // Booking Modal
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [selectedClass, setSelectedClass] = useState(null);
-  const [bookingDate, setBookingDate] = useState('2026-09-25');
+  const [bookingDate, setBookingDate] = useState(() => toLocalDateInput());
   const [bookingLoading, setBookingLoading] = useState(false);
 
-  const loadClasses = async () => {
+  const loadClasses = React.useCallback(async () => {
     try {
       const [classList, myBookings] = await Promise.all([
         classApi.getAll(),
@@ -37,14 +39,16 @@ export function ClassScheduleView() {
           .map(b => b.classId)
       );
       setBookedClassIds(confirmedIds);
+    } catch (error) {
+      showError(error.message || 'Không thể tải dữ liệu. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser, showError]);
 
   useEffect(() => {
     loadClasses();
-  }, [currentUser?.id]);
+  }, [loadClasses]);
 
   const openBookingModal = (cls) => {
     if (currentUser?.packageStatus !== 'ACTIVE') {
@@ -93,7 +97,7 @@ export function ClassScheduleView() {
           Lịch Mở Lớp Thể Thao & Đặt Chỗ Rèn Luyện
         </h1>
         <p className="text-xs text-slate-500 mt-0.5">
-          Khám phá các ca tập đạt chuẩn Olympic thuộc 15 bộ môn và giữ chỗ luyện tập cùng Huấn luyện viên chuyên môn.
+          Khám phá các ca tập đạt chuẩn Olympic thuộc 9 bộ môn và giữ chỗ luyện tập cùng Huấn luyện viên chuyên môn.
         </p>
       </div>
 
@@ -109,7 +113,7 @@ export function ClassScheduleView() {
         >
           Tất cả môn
         </button>
-        {INITIAL_SPORTS.slice(0, 8).map(s => (
+        {INITIAL_SPORTS.map(s => (
           <button
             key={s.id}
             onClick={() => setSelectedSport(s.name)}

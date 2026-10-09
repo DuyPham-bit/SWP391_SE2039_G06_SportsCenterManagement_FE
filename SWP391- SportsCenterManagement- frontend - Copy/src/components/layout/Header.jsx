@@ -1,5 +1,6 @@
-import { useAuth } from '../../context/AuthContext.js';
-import { Badge } from '../common/StatCard.js';
+import React from 'react';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { Badge } from '../common/StatCard.jsx';
 
 const { useState } = React;
 

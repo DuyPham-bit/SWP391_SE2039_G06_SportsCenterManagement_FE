@@ -1,8 +1,10 @@
+import { SUPPORTED_SPORTS } from '../../services/sportsCatalog.js';
+import React from 'react';
 import { classApi, roomApi, staffApi } from '../../services/api.js';
-import { useToast } from '../../context/ToastContext.js';
-import { Table, LoadingSpinner } from '../../components/common/Table.js';
-import { Modal } from '../../components/common/Modal.js';
-import { Badge } from '../../components/common/StatCard.js';
+import { useToast } from '../../context/ToastContext.jsx';
+import { Table, LoadingSpinner } from '../../components/common/Table.jsx';
+import { Modal } from '../../components/common/Modal.jsx';
+import { Badge } from '../../components/common/StatCard.jsx';
 
 const { useState, useEffect } = React;
 
@@ -37,7 +39,7 @@ export function ClassesAndRooms() {
   const [roomLocation, setRoomLocation] = useState('Khu A - Tầng 1');
   const [savingRoom, setSavingRoom] = useState(false);
 
-  const loadData = async () => {
+  const loadData = React.useCallback(async () => {
     try {
       const [classList, roomList, staffList] = await Promise.all([
         classApi.getAll(),
@@ -52,11 +54,11 @@ export function ClassesAndRooms() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showError]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const openCreateClassModal = () => {
     setEditingClass(null);
@@ -338,14 +340,7 @@ export function ClassesAndRooms() {
                 onChange={e => setClassSport(e.target.value)}
                 className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white"
               >
-                <option value="Bơi lội">Bơi lội</option>
-                <option value="Cầu lông">Cầu lông</option>
-                <option value="Gym & Fitness">Gym & Fitness</option>
-                <option value="Yoga & Pilates">Yoga & Pilates</option>
-                <option value="Bóng đá">Bóng đá</option>
-                <option value="Quần vợt (Tennis)">Quần vợt (Tennis)</option>
-                <option value="Võ thuật & Boxing">Võ thuật & Boxing</option>
-                <option value="Bóng rổ">Bóng rổ</option>
+                {SUPPORTED_SPORTS.map(sport => <option key={sport.id} value={sport.name}>{sport.name}</option>)}
               </select>
             </div>
 

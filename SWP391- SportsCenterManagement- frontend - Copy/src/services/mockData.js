@@ -1,22 +1,12 @@
 // SCMS Sports Center Master Data
 
-export const INITIAL_SPORTS = [
-  { id: 'boi-loi', name: 'Bơi lội', icon: 'pool', venue: 'Bể bơi 4 mùa 50m Olympic', category: 'Sức bền & Tĩnh tâm' },
-  { id: 'bong-da', name: 'Bóng đá', icon: 'sports_soccer', venue: 'Sân cỏ nhân tạo FIFA', category: 'Bóng & Vợt' },
-  { id: 'cau-long', name: 'Cầu lông', icon: 'sports_tennis', venue: 'Sàn thảm Taraflex BWF', category: 'Bóng & Vợt' },
-  { id: 'nhay-hien-dai', name: 'Nhảy hiện đại', icon: 'music_note', venue: 'Phòng studio âm học', category: 'Sức bền & Tĩnh tâm' },
-  { id: 'bong-ro', name: 'Bóng rổ', icon: 'sports_basketball', venue: 'Sàn gỗ phong Bắc Mỹ', category: 'Bóng & Vợt' },
-  { id: 'tennis', name: 'Quần vợt (Tennis)', icon: 'sports_baseball', venue: 'Sân cứng sơn Plexicushion', category: 'Bóng & Vợt' },
-  { id: 'vo-thuat', name: 'Võ thuật & Boxing', icon: 'sports_mma', venue: 'Sàn đấu lồng & Tatami', category: 'Thể thao đối kháng' },
-  { id: 'gym-fitness', name: 'Gym & Fitness', icon: 'fitness_center', venue: 'Hệ máy tập Technogym', category: 'Sức bền & Tĩnh tâm' },
-  { id: 'yoga-pilates', name: 'Yoga & Pilates', icon: 'self_improvement', venue: 'Giàn máy Reformer hiện đại', category: 'Sức bền & Tĩnh tâm' },
-  { id: 'bong-chuyen', name: 'Bóng chuyền', icon: 'sports_volleyball', venue: 'Tiêu chuẩn thi đấu FIVB', category: 'Bóng & Vợt' },
-  { id: 'bong-ban', name: 'Bóng bàn', icon: 'sports_score', venue: 'Bàn thi đấu Double Fish', category: 'Bóng & Vợt' },
-  { id: 'dien-kinh', name: 'Điền kinh', icon: 'directions_run', venue: 'Đường chạy cao su tổng hợp', category: 'Sức bền & Tĩnh tâm' },
-  { id: 'ban-cung', name: 'Bắn cung', icon: 'crisis_alert', venue: 'Trường bắn cự ly 30m - 70m', category: 'Thể thao đối kháng' },
-  { id: 'dap-xe', name: 'Đạp xe trong nhà', icon: 'directions_bike', venue: 'Phòng Spinning cảm ứng lực', category: 'Sức bền & Tĩnh tâm' },
-  { id: 'leo-nui', name: 'Leo núi nhân tạo', icon: 'terrain', venue: 'Tường leo Bouldering & Lead', category: 'Thể thao đối kháng' }
-];
+import { SUPPORTED_SPORTS } from './sportsCatalog.js';
+import { SCMS_FACILITIES } from './facilityCatalog.js';
+
+export const INITIAL_SPORTS = SUPPORTED_SPORTS.map(sport => ({
+  ...sport,
+  venue: SCMS_FACILITIES.find(facility => facility.id === sport.facilityId).name
+}));
 
 export const INITIAL_USERS = [
   {
@@ -61,7 +51,7 @@ export const INITIAL_USERS = [
     fullName: 'Hoàng Minh Tuấn',
     phone: '0987777888',
     role: 'COACH',
-    specialty: 'Cầu lông & Quần vợt',
+    specialty: 'Cầu lông & Pickleball',
     certification: 'BWF Certified & ITF Coach',
     avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
     status: 'ACTIVE',
@@ -117,17 +107,14 @@ export const INITIAL_USERS = [
   }
 ];
 
-export const INITIAL_ROOMS = [
-  { id: 'room-01', name: 'Bể bơi Olympic 50m (Trong nhà)', type: 'Bể bơi', capacity: 40, status: 'AVAILABLE', location: 'Khu A - Tầng 1' },
-  { id: 'room-02', name: 'Sân bóng đá cỏ nhân tạo FIFA', type: 'Sân bóng đá', capacity: 22, status: 'AVAILABLE', location: 'Khu Ngoài trời A' },
-  { id: 'room-03', name: 'Sân cầu lông Taraflex BWF (8 sân)', type: 'Sân cầu lông', capacity: 32, status: 'AVAILABLE', location: 'Khu B - Tầng 2' },
-  { id: 'room-04', name: 'Studio Âm học Nhảy & Aerobic', type: 'Studio vũ đạo', capacity: 25, status: 'AVAILABLE', location: 'Khu C - Tầng 2' },
-  { id: 'room-05', name: 'Sân bóng rổ sàn gỗ phong Bắc Mỹ', type: 'Sân bóng rổ', capacity: 20, status: 'AVAILABLE', location: 'Khu B - Tầng 1' },
-  { id: 'room-06', name: 'Cụm sân Tennis Plexicushion', type: 'Sân Tennis', capacity: 16, status: 'AVAILABLE', location: 'Khu Ngoài trời B' },
-  { id: 'room-07', name: 'Võ đài Octagon Tatami chuyên nghiệp', type: 'Phòng võ thuật', capacity: 18, status: 'AVAILABLE', location: 'Khu C - Tầng 1' },
-  { id: 'room-08', name: 'Khu tập Gym & Technogym Pro 800m²', type: 'Phòng Gym', capacity: 60, status: 'AVAILABLE', location: 'Khu A - Tầng 2' },
-  { id: 'room-09', name: 'Phòng Yoga Zen & Máy Reformer', type: 'Phòng Yoga', capacity: 20, status: 'AVAILABLE', location: 'Khu C - Tầng 3' }
-];
+export const INITIAL_ROOMS = SCMS_FACILITIES.map(facility => ({
+  id: facility.id,
+  name: facility.name,
+  type: facility.categoryName,
+  capacity: Math.max(...facility.capacity.match(/\d+/g).map(Number)),
+  status: 'AVAILABLE',
+  location: facility.location
+}));
 
 export const INITIAL_PACKAGES = [
   {
@@ -168,9 +155,9 @@ export const INITIAL_PACKAGES = [
     name: 'Gói All-Access Olympic Pass',
     durationDays: 365,
     price: 5800000,
-    allowedSports: 15,
-    description: 'Toàn quyền sử dụng 15 bộ môn và 9 sân thi đấu đẳng cấp quốc tế 365 ngày.',
-    features: ['Toàn quyền sử dụng 15 môn thể thao', 'Tủ locker cá nhân cố định cả năm', 'Đo InBody định kỳ hàng tháng', 'Khách mời miễn phí 1 lần/tháng', 'Giảm 20% các giải đấu nội bộ'],
+    allowedSports: SUPPORTED_SPORTS.length,
+    description: 'Toàn quyền sử dụng 9 bộ môn và 9 sân thi đấu đẳng cấp quốc tế 365 ngày.',
+    features: ['Toàn quyền sử dụng 9 môn thể thao', 'Tủ locker cá nhân cố định cả năm', 'Đo InBody định kỳ hàng tháng', 'Khách mời miễn phí 1 lần/tháng', 'Giảm 20% các giải đấu nội bộ'],
     badge: 'VIP OLYMPIC',
     status: 'ACTIVE'
   }
@@ -224,13 +211,13 @@ export const INITIAL_CLASSES = [
   },
   {
     id: 'cls-04',
-    name: 'Lớp Quần Vợt Kỹ Thuật Cơ Bản',
-    sportId: 'tennis',
-    sportName: 'Quần vợt (Tennis)',
+    name: 'Lớp Pickleball Kỹ Thuật Cơ Bản',
+    sportId: 'pickleball',
+    sportName: 'Pickleball',
     coachId: 'usr-coa-02',
     coachName: 'Hoàng Minh Tuấn',
     roomId: 'room-06',
-    roomName: 'Cụm sân Tennis Plexicushion',
+    roomName: 'Cụm Sân Pickleball Ngoài Trời',
     dayOfWeek: 'Thứ 7, Chủ Nhật',
     timeSlot: '07:00 - 09:00',
     capacity: 12,
@@ -252,7 +239,7 @@ export const INITIAL_CLASSES = [
     enrolledCount: 0,
     status: 'OPEN'
   }
-];
+].map(cls => ({ ...cls, roomName: INITIAL_ROOMS.find(room => room.id === cls.roomId).name }));
 
 export const INITIAL_BOOKINGS = [
   {
@@ -308,14 +295,14 @@ export const INITIAL_BOOKINGS = [
     memberId: 'usr-mem-01',
     memberName: 'Phạm Thanh Hội Viên',
     classId: 'cls-04',
-    className: 'Lớp Quần Vợt Kỹ Thuật Cơ Bản',
+    className: 'Lớp Pickleball Kỹ Thuật Cơ Bản',
     timeSlot: '07:00 - 09:00',
     bookingDate: '2026-09-27',
-    roomName: 'Cụm sân Tennis Plexicushion',
+    roomName: 'Cụm Sân Pickleball Ngoài Trời',
     status: 'CONFIRMED',
     createdAt: '2026-09-23 16:45:00'
   }
-];
+].map(booking => ({ ...booking, roomName: INITIAL_CLASSES.find(cls => cls.id === booking.classId).roomName }));
 export const INITIAL_CHECKINS = [];
 export const INITIAL_TRAINING_PLANS = [];
 export const INITIAL_PROGRESS_RECORDS = [];

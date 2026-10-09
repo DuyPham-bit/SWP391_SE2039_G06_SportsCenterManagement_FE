@@ -1,8 +1,9 @@
+import React from 'react';
 import { staffApi } from '../../services/api.js';
-import { useToast } from '../../context/ToastContext.js';
-import { Table, LoadingSpinner } from '../../components/common/Table.js';
-import { Modal } from '../../components/common/Modal.js';
-import { Badge } from '../../components/common/StatCard.js';
+import { useToast } from '../../context/ToastContext.jsx';
+import { Table, LoadingSpinner } from '../../components/common/Table.jsx';
+import { Modal } from '../../components/common/Modal.jsx';
+import { Badge } from '../../components/common/StatCard.jsx';
 
 const { useState, useEffect, useRef } = React;
 
@@ -34,7 +35,7 @@ export function StaffManagement() {
   const [formCertification, setFormCertification] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const loadStaff = async () => {
+  const loadStaff = React.useCallback(async () => {
     try {
       const data = await staffApi.getAll();
       setStaffList(data);
@@ -43,11 +44,11 @@ export function StaffManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showError]);
 
   useEffect(() => {
     loadStaff();
-  }, []);
+  }, [loadStaff]);
 
   // Handle click outside to close dropdown
   useEffect(() => {
@@ -304,7 +305,7 @@ export function StaffManagement() {
       </div>
 
       {/* Role Filter Chips */}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1">Lọc vai trò:</span>
         {['ALL', 'COACH', 'RECEPTIONIST', 'MANAGER'].map(r => (
           <button

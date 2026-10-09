@@ -1,9 +1,10 @@
+import React from 'react';
 import { bookingApi } from '../../services/api.js';
-import { useAuth } from '../../context/AuthContext.js';
-import { useToast } from '../../context/ToastContext.js';
-import { Badge } from '../../components/common/StatCard.js';
-import { LoadingSpinner } from '../../components/common/Table.js';
-import { Modal } from '../../components/common/Modal.js';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
+import { Badge } from '../../components/common/StatCard.jsx';
+import { LoadingSpinner } from '../../components/common/Table.jsx';
+import { Modal } from '../../components/common/Modal.jsx';
 
 const { useState, useEffect } = React;
 
@@ -19,19 +20,21 @@ export function MyBookings() {
   const [bookingToCancel, setBookingToCancel] = useState(null);
   const [cancelling, setCancelling] = useState(false);
 
-  const loadBookings = async () => {
+  const loadBookings = React.useCallback(async () => {
     if (!currentUser) return;
     try {
       const data = await bookingApi.getMemberBookings(currentUser.id);
       setBookings(data);
+    } catch (error) {
+      showError(error.message || 'Không thể tải dữ liệu. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser, showError]);
 
   useEffect(() => {
     loadBookings();
-  }, [currentUser]);
+  }, [loadBookings]);
 
   const openCancelModal = (booking) => {
     setBookingToCancel(booking);
@@ -79,7 +82,7 @@ export function MyBookings() {
               Bạn Chưa Có Lịch Đặt Chỗ Nào
             </h3>
             <p className="text-xs text-slate-500 mt-1 mb-4">
-              Hãy khám phá lịch mở lớp 15 bộ môn và chọn ca rèn luyện yêu thích.
+              Hãy khám phá lịch mở lớp 9 bộ môn và chọn ca rèn luyện yêu thích.
             </p>
             <a
               href="#/member/schedule"

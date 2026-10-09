@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { coachApi } from '../../services/api.js';
-import { useAuth } from '../../context/AuthContext.js';
-import { useToast } from '../../context/ToastContext.js';
-import { LoadingSpinner } from '../../components/common/Table.js';
-import { Badge } from '../../components/common/StatCard.js';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
+import { LoadingSpinner } from '../../components/common/Table.jsx';
+import { Badge } from '../../components/common/StatCard.jsx';
 
 export function AIRecommendation() {
   const { currentUser } = useAuth();
@@ -40,12 +40,14 @@ export function AIRecommendation() {
             break;
           }
         }
-      } finally {
+      } catch (error) {
+      showError(error.message || 'Không thể tải dữ liệu lớp học.');
+    } finally {
         setLoading(false);
       }
     }
     loadData();
-  }, [currentUser?.id]);
+  }, [currentUser?.id, currentUser?.fullName, currentUser?.role, showError]);
 
   // Distinct sports taught by this coach
   const distinctSports = Array.from(new Set(coachClasses.map(c => c.sportName).filter(Boolean)));
@@ -87,7 +89,7 @@ export function AIRecommendation() {
       setFitnessGoal('Tăng dung tích phổi, tối ưu hóa nhịp thở và sức bền sải tay');
     } else if (sport.includes('Gym') || sport.includes('Fitness')) {
       setFitnessGoal('Tăng khối lượng cơ nạc (Hypertrophy), giảm mỡ InBody và tăng sức mạnh cốt lõi');
-    } else if (sport.includes('Cầu lông') || sport.includes('Tennis')) {
+    } else if (sport.includes('Cầu lông') || sport.includes('Pickleball')) {
       setFitnessGoal('Tăng tốc độ bứt tốc, sức bền phản xạ mắt - tay và độ linh hoạt cổ chân');
     } else if (sport.includes('Võ thuật') || sport.includes('Boxing')) {
       setFitnessGoal('Tăng lực phát quyền bộc phát, phản xạ tự vệ và thể lực đối kháng');

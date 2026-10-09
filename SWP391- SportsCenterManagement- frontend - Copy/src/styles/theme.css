@@ -1,4 +1,12 @@
-/* Apex Athletic Arena Custom Theme Styles */
+@import 'tailwindcss';
+
+@theme {
+  --font-inter: 'Inter', system-ui, sans-serif;
+  --font-chivo: 'Chivo', system-ui, sans-serif;
+  --font-lexend: 'Lexend', system-ui, sans-serif;
+}
+
+/* SCMS Sports Center */
 @layer base {
   html, body {
     margin: 0;

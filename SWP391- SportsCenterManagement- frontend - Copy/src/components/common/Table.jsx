@@ -1,3 +1,4 @@
+import React from 'react';
 const { useState } = React;
 
 export function Table({
@@ -18,11 +19,12 @@ export function Table({
     if (typeof val === 'string') {
       return val.toLowerCase().includes(searchTerm.toLowerCase());
     }
-    return true;
+    return String(val ?? '').toLowerCase().includes(searchTerm.toLowerCase());
   });
 
   const totalPages = Math.ceil(filteredData.length / pageSize) || 1;
-  const paginatedData = filteredData.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const activePage = Math.min(currentPage, totalPages);
+  const paginatedData = filteredData.slice((activePage - 1) * pageSize, activePage * pageSize);
 
   return (
     <div className="w-full bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -37,6 +39,7 @@ export function Table({
               <input
                 type="text"
                 placeholder={searchPlaceholder}
+                aria-label={searchPlaceholder}
                 value={searchTerm}
                 onChange={e => {
                   setSearchTerm(e.target.value);
@@ -92,22 +95,24 @@ export function Table({
       {totalPages > 1 && (
         <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/40 flex items-center justify-between text-xs text-slate-500">
           <span>
-            Hiển thị {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, filteredData.length)} trên tổng số {filteredData.length} bản ghi
+            Hiển thị {(activePage - 1) * pageSize + 1} - {Math.min(activePage * pageSize, filteredData.length)} trên tổng số {filteredData.length} bản ghi
           </span>
           <div className="flex items-center gap-1">
             <button
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
+              type="button"
+              onClick={() => setCurrentPage(Math.max(1, activePage - 1))}
+              disabled={activePage === 1}
               className="px-2.5 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Trước
             </button>
             <span className="px-2 font-semibold text-slate-800">
-              Trang {currentPage} / {totalPages}
+              Trang {activePage} / {totalPages}
             </span>
             <button
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
+              type="button"
+              onClick={() => setCurrentPage(Math.min(totalPages, activePage + 1))}
+              disabled={activePage === totalPages}
               className="px-2.5 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Sau

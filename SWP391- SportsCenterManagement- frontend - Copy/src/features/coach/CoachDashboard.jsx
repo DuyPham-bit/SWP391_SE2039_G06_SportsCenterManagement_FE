@@ -1,7 +1,8 @@
+import React from 'react';
 import { classApi } from '../../services/api.js';
-import { useAuth } from '../../context/AuthContext.js';
-import { StatCard, Badge } from '../../components/common/StatCard.js';
-import { LoadingSpinner } from '../../components/common/Table.js';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { StatCard, Badge } from '../../components/common/StatCard.jsx';
+import { LoadingSpinner } from '../../components/common/Table.jsx';
 
 const { useState, useEffect } = React;
 
@@ -13,10 +14,8 @@ export function CoachDashboard() {
   useEffect(() => {
     async function loadData() {
       try {
-        const all = await classApi.getAll();
-        // Filter classes for current coach or show relevant
-        const myClasses = all.filter(c => c.coachId === currentUser?.id || c.coachName?.includes(currentUser?.fullName?.split(' ')[0]));
-        setClasses(myClasses.length > 0 ? myClasses : all.slice(0, 3));
+        const all = await classApi.getForCoach(currentUser?.id, { isManager: currentUser?.role === 'MANAGER' });
+        setClasses(all);
       } catch (e) {
         console.error(e);
       } finally {

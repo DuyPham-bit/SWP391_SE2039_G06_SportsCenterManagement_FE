@@ -1,7 +1,8 @@
+import React from 'react';
 import { classApi } from '../../services/api.js';
-import { useAuth } from '../../context/AuthContext.js';
-import { Badge } from '../../components/common/StatCard.js';
-import { LoadingSpinner } from '../../components/common/Table.js';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { Badge } from '../../components/common/StatCard.jsx';
+import { LoadingSpinner } from '../../components/common/Table.jsx';
 
 const { useState, useEffect } = React;
 
@@ -14,14 +15,14 @@ export function TeachingSchedule() {
   useEffect(() => {
     async function loadSchedule() {
       try {
-        const all = await classApi.getAll();
+        const all = await classApi.getForCoach(currentUser?.id, { isManager: currentUser?.role === 'MANAGER' });
         setClasses(all);
       } finally {
         setLoading(false);
       }
     }
     loadSchedule();
-  }, []);
+  }, [currentUser]);
 
   const filtered = filterDay === 'ALL'
     ? classes

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { coachApi } from '../../services/api.js';
 import { db, DB_KEYS } from '../../services/dbStorage.js';
-import { useAuth } from '../../context/AuthContext.js';
-import { useToast } from '../../context/ToastContext.js';
-import { LoadingSpinner } from '../../components/common/Table.js';
-import { Modal } from '../../components/common/Modal.js';
-import { Badge } from '../../components/common/StatCard.js';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
+import { LoadingSpinner } from '../../components/common/Table.jsx';
+import { Modal } from '../../components/common/Modal.jsx';
+import { Badge } from '../../components/common/StatCard.jsx';
 
 export function WorkoutProgress() {
   const { currentUser } = useAuth();
@@ -27,7 +27,7 @@ export function WorkoutProgress() {
   const [coachFeedback, setCoachFeedback] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const loadData = async () => {
+  const loadData = React.useCallback(async () => {
     try {
       const isManager = currentUser?.role === 'MANAGER';
       const classesData = await coachApi.getCoachClassesAndMembers(
@@ -41,22 +41,24 @@ export function WorkoutProgress() {
       setRecords(allRecords);
 
       // Select initial member if not set
-      if (!selectedMemberCompositeKey) {
+      {
         for (const cls of classesData) {
           if (cls.members && cls.members.length > 0) {
-            setSelectedMemberCompositeKey(`${cls.members[0].id}_${cls.id}`);
+            setSelectedMemberCompositeKey(previous => previous || `${cls.members[0].id}_${cls.id}`);
             break;
           }
         }
       }
+    } catch (error) {
+      showError(error.message || 'Không thể tải dữ liệu. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser, showError]);
 
   useEffect(() => {
     loadData();
-  }, [currentUser?.id]);
+  }, [loadData]);
 
   // Extract distinct sports taught by this coach
   const distinctSports = Array.from(new Set(coachClasses.map(c => c.sportName).filter(Boolean)));

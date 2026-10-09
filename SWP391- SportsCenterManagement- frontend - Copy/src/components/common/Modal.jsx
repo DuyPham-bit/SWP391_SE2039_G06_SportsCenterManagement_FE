@@ -1,4 +1,9 @@
+import { useId } from 'react';
+import { useDialog } from './useDialog.js';
+
 export function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-lg' }) {
+  const titleId = useId();
+  const dialogRef = useDialog(isOpen, onClose);
   if (!isOpen) return null;
 
   return (
@@ -10,13 +15,15 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-lg' 
       />
 
       {/* Modal Dialog */}
-      <div className={`relative bg-white rounded-xl shadow-2xl border border-slate-200 w-full ${maxWidth} overflow-hidden transform transition-all z-10 my-8`}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className={`relative bg-white rounded-xl shadow-2xl border border-slate-200 w-full ${maxWidth} overflow-hidden transform transition-all z-10 my-8`}>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-          <h3 className="font-chivo text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
+          <h3 id={titleId} className="font-chivo text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
             {title}
           </h3>
           <button
+            type="button"
+            aria-label="Đóng hộp thoại"
             onClick={onClose}
             className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
           >

@@ -1,8 +1,9 @@
+import React from 'react';
 import { packageApi } from '../../services/api.js';
-import { useToast } from '../../context/ToastContext.js';
-import { Modal } from '../../components/common/Modal.js';
-import { Badge } from '../../components/common/StatCard.js';
-import { LoadingSpinner } from '../../components/common/Table.js';
+import { useToast } from '../../context/ToastContext.jsx';
+import { Modal } from '../../components/common/Modal.jsx';
+import { Badge } from '../../components/common/StatCard.jsx';
+import { LoadingSpinner } from '../../components/common/Table.jsx';
 
 const { useState, useEffect } = React;
 
@@ -24,7 +25,7 @@ export function PackageManagement() {
   const [badge, setBadge] = useState('TIẾT KIỆM');
   const [saving, setSaving] = useState(false);
 
-  const loadPackages = async () => {
+  const loadPackages = React.useCallback(async () => {
     try {
       const data = await packageApi.getAll();
       setPackages(data);
@@ -33,11 +34,11 @@ export function PackageManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showError]);
 
   useEffect(() => {
     loadPackages();
-  }, []);
+  }, [loadPackages]);
 
   const openCreateModal = () => {
     setEditingPkg(null);
@@ -169,7 +170,7 @@ export function PackageManagement() {
 
               <div className="p-2.5 rounded-lg bg-slate-50 text-xs text-slate-700 font-semibold mb-4 border border-slate-100 flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-red-600 text-[18px]">sports_kabaddi</span>
-                <span>Số môn được tập: {pkg.allowedSports === 15 ? 'Toàn bộ 15 môn' : `${pkg.allowedSports} môn`}</span>
+                <span>Số môn được tập: {pkg.allowedSports >= 9 ? 'Toàn bộ 9 môn' : `${pkg.allowedSports} môn`}</span>
               </div>
 
               <p className="text-xs text-slate-600 mb-4 leading-relaxed">
@@ -268,12 +269,12 @@ export function PackageManagement() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                Số môn được tập (1-15)
+                Số môn được tập (1-9)
               </label>
               <input
                 type="number"
                 min="1"
-                max="15"
+                max="9"
                 value={allowedSports}
                 onChange={e => setAllowedSports(e.target.value)}
                 className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white"

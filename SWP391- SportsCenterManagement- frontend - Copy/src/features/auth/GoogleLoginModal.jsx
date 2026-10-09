@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { useAuth } from '../../context/AuthContext.js';
-import { useToast } from '../../context/ToastContext.js';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
 
 export function GoogleLoginModal({ isOpen, onClose, onSuccess }) {
   const { loginWithGoogle } = useAuth();

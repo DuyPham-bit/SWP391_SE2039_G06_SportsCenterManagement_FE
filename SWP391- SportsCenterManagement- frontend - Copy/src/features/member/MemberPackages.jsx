@@ -1,8 +1,9 @@
+import React from 'react';
 import { packageApi, memberApi } from '../../services/api.js';
-import { useAuth } from '../../context/AuthContext.js';
-import { useToast } from '../../context/ToastContext.js';
-import { Modal } from '../../components/common/Modal.js';
-import { LoadingSpinner } from '../../components/common/Table.js';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
+import { Modal } from '../../components/common/Modal.jsx';
+import { LoadingSpinner } from '../../components/common/Table.jsx';
 
 const { useState, useEffect } = React;
 
@@ -116,7 +117,7 @@ export function MemberPackages() {
                 </div>
 
                 <div className="p-2 rounded-lg bg-slate-50 text-xs text-slate-700 font-semibold mb-3 border border-slate-100">
-                  Môn áp dụng: {pkg.allowedSports === 15 ? 'Toàn quyền 15 môn' : `${pkg.allowedSports} môn tự chọn`}
+                  Môn áp dụng: {pkg.allowedSports >= 9 ? 'Toàn quyền 9 môn' : `${pkg.allowedSports} môn tự chọn`}
                 </div>
 
                 <p className="text-xs text-slate-600 leading-relaxed mb-4">

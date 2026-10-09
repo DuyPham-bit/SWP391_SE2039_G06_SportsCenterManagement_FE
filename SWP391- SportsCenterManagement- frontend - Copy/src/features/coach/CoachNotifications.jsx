@@ -1,9 +1,10 @@
+import React from 'react';
 import { coachApi, classApi } from '../../services/api.js';
 import { db, DB_KEYS } from '../../services/dbStorage.js';
-import { useAuth } from '../../context/AuthContext.js';
-import { useToast } from '../../context/ToastContext.js';
-import { LoadingSpinner } from '../../components/common/Table.js';
-import { Modal } from '../../components/common/Modal.js';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
+import { LoadingSpinner } from '../../components/common/Table.jsx';
+import { Modal } from '../../components/common/Modal.jsx';
 
 const { useState, useEffect } = React;
 
@@ -23,21 +24,23 @@ export function CoachNotifications() {
   const [content, setContent] = useState('');
   const [sending, setSending] = useState(false);
 
-  const loadData = async () => {
+  const loadData = React.useCallback(async () => {
     try {
-      const classList = await classApi.getAll();
+      const classList = await classApi.getForCoach(currentUser?.id, { isManager: currentUser?.role === 'MANAGER' });
       const notifs = db.get(DB_KEYS.NOTIFICATIONS);
       setClasses(classList);
       if (classList.length > 0) setSelectedClassId(classList[0].id);
-      setNotifications(notifs);
+      setNotifications(currentUser?.role === 'MANAGER' ? notifs : notifs.filter(item => item.coachId === currentUser?.id));
+    } catch (error) {
+      showError(error.message || 'Không thể tải thông báo.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser, showError]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const handleSendNotification = async (e) => {
     e.preventDefault();

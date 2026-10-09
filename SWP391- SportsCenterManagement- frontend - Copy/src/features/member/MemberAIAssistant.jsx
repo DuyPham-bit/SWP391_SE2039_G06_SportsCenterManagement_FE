@@ -1,7 +1,8 @@
+import React from 'react';
 import { memberApi } from '../../services/api.js';
-import { useAuth } from '../../context/AuthContext.js';
-import { useToast } from '../../context/ToastContext.js';
-import { LoadingSpinner } from '../../components/common/Table.js';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
+import { LoadingSpinner } from '../../components/common/Table.jsx';
 
 const { useState, useRef, useEffect } = React;
 
@@ -13,7 +14,7 @@ export function MemberAIAssistant() {
     {
       id: 'welcome',
       sender: 'ai',
-      text: `Xin chào ${currentUser?.fullName || 'bạn'}! Tôi là Trợ lý Thể thao AI độc quyền của trung tâm SCMS. Tôi có thể hỗ trợ bạn về kiến thức dinh dưỡng thể thao, tư vấn phục hồi cơ bắp, hướng dẫn các quy chuẩn sử dụng 15 cụm sân Olympic hoặc giải đáp thắc mắc về lịch tập. Bạn muốn hỏi điều gì hôm nay?`,
+      text: `Xin chào ${currentUser?.fullName || 'bạn'}! Tôi là Trợ lý Thể thao AI độc quyền của trung tâm SCMS. Tôi có thể hỗ trợ bạn về kiến thức dinh dưỡng thể thao, tư vấn phục hồi cơ bắp, hướng dẫn các quy chuẩn sử dụng 9 cụm sân Olympic hoặc giải đáp thắc mắc về lịch tập. Bạn muốn hỏi điều gì hôm nay?`,
       time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
     }
   ]);
