@@ -172,13 +172,22 @@ export const SYSTEM_CAPABILITIES = [
 
 // Helper to get active permissions of a role
 export function getPermissionsForRole(role) {
+  const normalized = String(role || '').toUpperCase();
   const allPermissions = db.get(DB_KEYS.PERMISSIONS) || {};
-  return allPermissions[role] || [];
+  const perms = allPermissions[role] || allPermissions[normalized];
+  if (!perms && (normalized === 'SYSTEMADMIN' || normalized === 'ADMIN')) {
+    return allPermissions['MANAGER'] || [
+      'manage_staff', 'manage_packages', 'manage_classes', 'assign_coach',
+      'view_reports', 'manage_roles', 'view_audit_logs'
+    ];
+  }
+  return perms || [];
 }
 
 // Helper to check if a role has a specific capability
 export function hasCapability(role, capId) {
-  if (role === 'MANAGER') return true; // Manager has superuser access
+  const normalized = String(role || '').toUpperCase();
+  if (normalized === 'MANAGER' || normalized === 'ADMIN' || normalized === 'SYSTEMADMIN') return true; // Superuser access
   if (!capId) return true;
   const perms = getPermissionsForRole(role);
   return perms.includes(capId);
@@ -191,14 +200,19 @@ export function getCapabilityById(capId) {
 
 // Helper to get dynamic navigation items for Sidebar based on role's permissions
 export function getDynamicNavItems(role) {
+  const normalized = String(role || '').toUpperCase();
   const perms = getPermissionsForRole(role);
 
-  switch (role) {
+  switch (normalized) {
+    case 'SYSTEMADMIN':
+    case 'ADMIN':
     case 'MANAGER': {
-      // Base manager nav
+      // Base manager & admin nav
+      const isSystemAdmin = normalized === 'SYSTEMADMIN';
+      const isAnyAdmin = normalized === 'ADMIN' || isSystemAdmin;
       const items = [
         { label: 'TỔNG QUAN', isHeader: true },
-        { path: '#/manager/dashboard', icon: 'dashboard', label: 'Bảng Quản Lý' },
+        { path: '#/manager/dashboard', icon: 'dashboard', label: isSystemAdmin ? 'Bảng Quản Trị Hệ Thống' : (isAnyAdmin ? 'Bảng Quản Trị Admin' : 'Bảng Quản Lý') },
         { label: 'VẬN HÀNH & NHÂN SỰ', isHeader: true }
       ];
 

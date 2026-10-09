@@ -7,6 +7,7 @@
     "dev": "vite",
     "start": "vite",
     "build": "vite build",
+    "build:api": "vite build --outDir ../Backend/Backend/SportsCenterManagement.API/wwwroot",
     "preview": "vite preview"
   },
   "keywords": [

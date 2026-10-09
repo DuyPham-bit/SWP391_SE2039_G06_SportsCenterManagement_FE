@@ -1,482 +1,323 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.js';
 import { useToast } from '../../context/ToastContext.js';
+import { SUPPORTED_SPORTS } from '../../services/sportsCatalog.js';
+import { isAsciiPassword, PASSWORD_CHARACTER_ERROR } from '../../services/passwordPolicy.js';
+import { AuthField } from './AuthField.js';
 import { ForgotPasswordModal } from './ForgotPasswordModal.js';
 import { GoogleLoginModal } from './GoogleLoginModal.js';
 
-export function LoginPage() {
-  const { login, register, isAuthenticated, role } = useAuth();
-  const { showSuccess, showError } = useToast();
+const REMEMBERED_EMAIL_KEY = 'SCMS_REMEMBERED_EMAIL';
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const FACILITY_COUNT = new Set(SUPPORTED_SPORTS.map(sport => sport.facilityId)).size;
 
-  const getInitialTab = () => {
-    return window.location.hash === '#/register' ? 'register' : 'login';
+function readRememberedEmail() {
+  try {
+    return localStorage.getItem(REMEMBERED_EMAIL_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+function saveRememberedEmail(email) {
+  try {
+    if (email) localStorage.setItem(REMEMBERED_EMAIL_KEY, email);
+    else localStorage.removeItem(REMEMBERED_EMAIL_KEY);
+  } catch {
+    // Lưu trữ có thể bị tắt; người dùng vẫn đăng nhập bình thường.
+  }
+}
+
+function redirectToRoleDashboard(role) {
+  const normalized = String(role || '').toUpperCase();
+  const routes = {
+    SYSTEMADMIN: '#/manager/dashboard',
+    ADMIN: '#/manager/dashboard',
+    MANAGER: '#/manager/dashboard',
+    RECEPTIONIST: '#/receptionist/dashboard',
+    COACH: '#/coach/dashboard',
+    MEMBER: '#/member/dashboard'
   };
+  window.location.hash = routes[normalized] || '#/';
+}
 
-  const [activeTab, setActiveTab] = useState(getInitialTab); // 'login' | 'register'
+export function LoginPage() {
+  const { login, register, logout, isAuthenticated, role } = useAuth();
+  const { showSuccess } = useToast();
+  const [activeTab, setActiveTab] = useState(() => window.location.hash.split('?')[0] === '#/register' ? 'register' : 'login');
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [showGoogleModal, setShowGoogleModal] = useState(false);
+  const [loginEmail, setLoginEmail] = useState(readRememberedEmail);
+  const [loginPassword, setLoginPassword] = useState('');
+  const [rememberEmail, setRememberEmail] = useState(() => Boolean(readRememberedEmail()));
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [regFullName, setRegFullName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPhone, setRegPhone] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regConfirmPassword, setRegConfirmPassword] = useState('');
+  const [regAgree, setRegAgree] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [formError, setFormError] = useState('');
+  const isRegister = activeTab === 'register';
 
-  // Sync tab with URL hash
+  const clearFormFeedback = () => {
+    setFieldErrors({});
+    setFormError('');
+  };
+
   useEffect(() => {
     const handleHashChange = () => {
-      if (window.location.hash === '#/register') {
-        setActiveTab('register');
-      } else if (window.location.hash === '#/login') {
-        setActiveTab('login');
+      const path = window.location.hash.split('?')[0];
+      if (path === '#/login' || path === '#/register') {
+        setActiveTab(path === '#/register' ? 'register' : 'login');
+        setFieldErrors({});
+        setFormError('');
       }
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
+  useEffect(() => {
+    if (window.location.hash.includes('logout=true')) {
+      logout();
+      window.location.hash = '#/login';
+      return;
+    }
+    if (isAuthenticated) redirectToRoleDashboard(role);
+  }, [isAuthenticated, role, logout]);
+
   const handleTabChange = (tab) => {
+    if (isSubmitting || tab === activeTab) return;
+    clearFormFeedback();
+    setLoginPassword('');
+    setRegPassword('');
+    setRegConfirmPassword('');
+    setRegAgree(false);
     setActiveTab(tab);
     window.location.hash = tab === 'register' ? '#/register' : '#/login';
   };
 
-  // Login form state
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Register form state
-  const [regFullName, setRegFullName] = useState('');
-  const [regEmail, setRegEmail] = useState('');
-  const [regPhone, setRegPhone] = useState('');
-  const [regPassword, setRegPassword] = useState('');
-  const [regConfirmPassword, setRegConfirmPassword] = useState('');
-  const [regAgree, setRegAgree] = useState(true);
-
-  // Redirect to dashboard if already authenticated
-  const redirectToRoleDashboard = (r) => {
-    switch (r) {
-      case 'MANAGER': window.location.hash = '#/manager/dashboard'; break;
-      case 'RECEPTIONIST': window.location.hash = '#/receptionist/dashboard'; break;
-      case 'COACH': window.location.hash = '#/coach/dashboard'; break;
-      case 'MEMBER': window.location.hash = '#/member/dashboard'; break;
-      default: window.location.hash = '#/'; break;
-    }
+  const updateField = (id, value, setter) => {
+    setter(value);
+    setFieldErrors(previous => ({ ...previous, [id]: undefined }));
+    setFormError('');
   };
 
-  const handleLoginSubmit = async (e) => {
-    e.preventDefault();
-    if (!loginEmail.trim() || !loginPassword) {
-      showError('Vui lòng nhập đầy đủ Email và Mật khẩu!');
-      return;
-    }
+  const hasValidationErrors = (errors) => {
+    setFieldErrors(errors);
+    setFormError('');
+    const firstField = Object.keys(errors)[0];
+    if (firstField) document.getElementById(firstField)?.focus();
+    return Boolean(firstField);
+  };
+
+  const handleLoginSubmit = async (event) => {
+    event.preventDefault();
+    if (isSubmitting) return;
+    const email = loginEmail.trim();
+    const errors = {};
+    if (!email) errors['login-email'] = 'Vui lòng nhập email của bạn.';
+    else if (!EMAIL_PATTERN.test(email)) errors['login-email'] = 'Email chưa đúng định dạng.';
+    if (!loginPassword) errors['login-password'] = 'Vui lòng nhập mật khẩu.';
+    else if (!isAsciiPassword(loginPassword)) errors['login-password'] = PASSWORD_CHARACTER_ERROR;
+    if (hasValidationErrors(errors)) return;
 
     setIsSubmitting(true);
     try {
-      const user = await login(loginEmail, loginPassword);
-      showSuccess(`Đăng nhập thành công! Chào mừng ${user.fullName} (${user.role})`);
+      const user = await login(email, loginPassword);
+      saveRememberedEmail(rememberEmail ? email : '');
+      showSuccess('Đăng nhập thành công! Chào mừng ' + user.fullName + '.');
       redirectToRoleDashboard(user.role);
-    } catch (err) {
-      showError(err.message || 'Đăng nhập thất bại!');
+    } catch (error) {
+      setFormError(error.message || 'Đăng nhập thất bại. Vui lòng thử lại.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleRegisterSubmit = async (e) => {
-    e.preventDefault();
-    if (!regFullName.trim() || !regEmail.trim() || !regPassword) {
-      showError('Vui lòng điền đầy đủ các thông tin đăng ký!');
-      return;
+  const handleRegisterSubmit = async (event) => {
+    event.preventDefault();
+    if (isSubmitting) return;
+    const email = regEmail.trim();
+    const phone = regPhone.replace(/[\s().-]/g, '');
+    const errors = {};
+    if (!regFullName.trim()) errors['register-name'] = 'Vui lòng nhập họ và tên.';
+    if (!email) errors['register-email'] = 'Vui lòng nhập email của bạn.';
+    else if (!EMAIL_PATTERN.test(email)) errors['register-email'] = 'Email chưa đúng định dạng.';
+    if (phone && !/^(0\d{9}|\+84\d{9})$/.test(phone)) {
+      errors['register-phone'] = 'Nhập số điện thoại gồm 10 số hoặc dùng đầu số +84.';
     }
-    if (regPassword.length < 6) {
-      showError('Mật khẩu phải dài tối thiểu 6 ký tự!');
-      return;
-    }
-    if (regPassword !== regConfirmPassword) {
-      showError('Mật khẩu xác nhận không khớp với mật khẩu đã nhập!');
-      return;
-    }
-    if (!regAgree) {
-      showError('Vui lòng đồng ý với Điều khoản dịch vụ của SCMS để tiếp tục!');
-      return;
-    }
+    if (!isAsciiPassword(regPassword)) errors['register-password'] = PASSWORD_CHARACTER_ERROR;
+    else if (regPassword.length < 6) errors['register-password'] = 'Mật khẩu cần ít nhất 6 ký tự.';
+    if (!regConfirmPassword) errors['register-confirm'] = 'Vui lòng nhập lại mật khẩu.';
+    else if (!isAsciiPassword(regConfirmPassword)) errors['register-confirm'] = PASSWORD_CHARACTER_ERROR;
+    else if (regPassword !== regConfirmPassword) errors['register-confirm'] = 'Mật khẩu xác nhận chưa khớp.';
+    if (!regAgree) errors['register-agree'] = 'Vui lòng xác nhận thông tin trước khi đăng ký.';
+    if (hasValidationErrors(errors)) return;
 
     setIsSubmitting(true);
     try {
-      const newUser = await register({
-        fullName: regFullName,
-        email: regEmail,
-        phone: regPhone,
-        password: regPassword
-      });
-      showSuccess(`Đăng ký thành viên thành công! Mã hội viên: ${newUser.memberCode}`);
-      redirectToRoleDashboard('MEMBER');
-    } catch (err) {
-      showError(err.message || 'Đăng ký thất bại!');
+      const user = await register({ fullName: regFullName.trim(), email, phone, password: regPassword });
+      showSuccess('Đăng ký thành công! Mã hội viên của bạn: ' + user.memberCode);
+      redirectToRoleDashboard(user.role || 'MEMBER');
+    } catch (error) {
+      setFormError(error.message || 'Đăng ký thất bại. Vui lòng thử lại.');
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const submitButton = (
+    <button type="submit" disabled={isSubmitting} className="w-full min-h-12 px-4 py-3 inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 text-white font-chivo text-sm font-bold hover:bg-red-700 shadow-lg shadow-red-600/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-wait transition-colors">
+      {isSubmitting && <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" aria-hidden="true" />}
+      <span>{isSubmitting ? (isRegister ? 'Đang tạo tài khoản...' : 'Đang đăng nhập...') : (isRegister ? 'Tạo tài khoản hội viên' : 'Đăng nhập')}</span>
+      {!isSubmitting && <span className="material-symbols-outlined text-[19px]" aria-hidden="true">arrow_forward</span>}
+    </button>
+  );
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-inter">
-      {/* Top Simple Header */}
-      <header className="h-16 w-full bg-white border-b border-slate-200 px-6 flex items-center justify-between">
-        <a href="#/" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-red-600 flex items-center justify-center text-white shadow-sm font-chivo font-black text-base">
-            S
-          </div>
-          <div className="flex flex-col">
-            <span className="font-chivo font-black text-sm tracking-tight text-slate-900 leading-none">
-              SCMS
+    <div className="min-h-screen bg-slate-50 flex flex-col font-inter text-slate-900">
+      <header className="h-20 shrink-0 bg-white border-b border-slate-200">
+        <div className="h-full w-full max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-10 flex items-center justify-between gap-4">
+          <a href="#/" aria-label="SCMS Sports Center - Trang chủ" className="flex items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
+            <span className="w-10 h-10 rounded-xl bg-red-600 text-white flex items-center justify-center shadow-sm font-chivo font-black text-xl">S</span>
+            <span className="flex flex-col">
+              <span className="font-chivo font-black text-lg leading-none">SCMS</span>
+              <span className="text-[10px] font-bold text-red-600 tracking-widest uppercase mt-1">Sports Center</span>
             </span>
-            <span className="text-[10px] font-bold text-red-600 tracking-widest uppercase leading-none mt-0.5">
-              Sports Center
-            </span>
-          </div>
-        </a>
-
-        <a
-          href="#/"
-          className="text-xs font-bold text-slate-600 hover:text-red-600 flex items-center gap-1 transition-colors uppercase font-chivo tracking-wider"
-        >
-          <span className="material-symbols-outlined text-[16px]">arrow_back</span>
-          <span>Về Trang Chủ</span>
-        </a>
+          </a>
+          <a href="#/" className="inline-flex items-center gap-1.5 py-2 text-xs sm:text-sm font-semibold text-slate-500 hover:text-red-600 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 transition-colors">
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">arrow_back</span>
+            <span>Về trang chủ</span>
+          </a>
+        </div>
       </header>
 
-      {/* 50/50 SPLIT AUTHENTICATION */}
-      <div className="flex-1 lg:grid lg:grid-cols-2 bg-slate-50">
-        {/* LEFT COLUMN: Sports Imagery & Athletic Motivation */}
-        <div className="hidden lg:flex flex-col justify-between p-12 lg:p-16 relative overflow-hidden bg-slate-950 text-white">
-          <img
-            alt="SCMS Training Facility"
-            className="absolute inset-0 object-cover w-full h-full opacity-40 scale-105"
-            src="https://images.unsplash.com/photo-1540497077202-7c8a3999166f?q=80&w=1920&auto=format&fit=crop"
-          />
-          <div className="bg-gradient-to-t from-slate-950 via-slate-950/70 to-slate-900/60 absolute inset-0" />
-
-          {/* Top Tagline */}
+      <main className="flex-1 w-full max-w-[1440px] mx-auto grid lg:grid-cols-2 gap-8 xl:gap-12 p-4 sm:p-8 lg:p-10">
+        <aside className="hidden lg:flex flex-col justify-between min-h-[640px] p-10 xl:p-12 rounded-3xl relative overflow-hidden bg-slate-950 text-white">
+          <img alt="" className="absolute inset-0 object-cover w-full h-full opacity-60" src="https://images.unsplash.com/photo-1540497077202-7c8a3999166f?q=80&w=1600&auto=format&fit=crop" />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/70 to-slate-900/50" />
           <div className="relative z-10">
-            <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-red-600 text-white font-chivo text-xs font-bold tracking-widest uppercase shadow-md">
-              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-              SCMS ATHLETIC MEMBERSHIP
+            <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/20 text-[11px] font-bold uppercase tracking-widest">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500" aria-hidden="true" />
+              Cộng đồng thể thao SCMS
             </span>
           </div>
-
-          {/* Center Quote */}
-          <div className="relative z-10 my-auto py-10 max-w-xl">
-            <h1 className="font-chivo text-3xl xl:text-4xl 2xl:text-5xl font-black uppercase text-white tracking-tight leading-tight">
-              Ý CHÍ TẠO NÊN NHÀ VÔ ĐỊCH - BỨT PHÁ GIỚI HẠN CÙNG SCMS
-            </h1>
-            <p className="text-sm xl:text-base text-slate-300 mt-6 leading-relaxed">
-              Tham gia cùng hơn 400+ vận động viên và hội viên đang rèn luyện và nâng tầm thể lực mỗi ngày tại khu liên hợp đa năng 15 bộ môn đạt chuẩn thi đấu quốc tế.
+          <div className="relative z-10 py-12">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-400 mb-4">Khỏe hơn mỗi ngày</p>
+            <h2 className="font-chivo text-4xl xl:text-5xl font-black leading-[1.15] tracking-tight">
+              {isRegister ? 'Hành trình mới, phiên bản khỏe hơn.' : 'Tập luyện hôm nay, bứt phá mỗi ngày.'}
+            </h2>
+            <p className="text-sm xl:text-base text-slate-300 mt-5 leading-7 max-w-md">
+              Khám phá {SUPPORTED_SPORTS.length} bộ môn tại {FACILITY_COUNT} khu tập luyện. Chọn môn bạn yêu thích và xây dựng thói quen vận động cùng SCMS.
             </p>
+            <ul className="space-y-4 mt-8 text-sm text-slate-200">
+              {[
+                { icon: 'calendar_month', text: 'Chủ động sắp xếp lịch học và lịch tập' },
+                { icon: 'sports_tennis', text: 'Tìm sân và đặt chỗ cho môn yêu thích' },
+                { icon: 'monitoring', text: 'Theo dõi tiến độ tập luyện của bạn' }
+              ].map(item => (
+                <li key={item.icon} className="flex items-center gap-3">
+                  <span className="w-9 h-9 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-red-400 text-[20px]" aria-hidden="true">{item.icon}</span>
+                  </span>
+                  <span>{item.text}</span>
+                </li>
+              ))}
+            </ul>
           </div>
-
-          {/* Bottom Stats */}
-          <div className="relative z-10 pt-6 border-t border-white/15">
-            <div className="grid grid-cols-3 gap-4 text-white">
-              <div>
-                <div className="text-2xl font-black text-red-500 font-chivo">15</div>
-                <div className="text-[11px] uppercase tracking-wider text-slate-300 font-bold mt-0.5">Môn thể thao</div>
-              </div>
-              <div>
-                <div className="text-2xl font-black text-red-500 font-chivo">9</div>
-                <div className="text-[11px] uppercase tracking-wider text-slate-300 font-bold mt-0.5">Sân tập Olympic</div>
-              </div>
-              <div>
-                <div className="text-2xl font-black text-red-500 font-chivo">100%</div>
-                <div className="text-[11px] uppercase tracking-wider text-slate-300 font-bold mt-0.5">HLV AFC & NASM</div>
-              </div>
+          <div className="relative z-10 border-t border-white/15 pt-6 flex items-end justify-between gap-4">
+            <div className="flex gap-8">
+              <div><div className="font-chivo text-3xl font-black text-white">{SUPPORTED_SPORTS.length}</div><div className="text-xs text-slate-400 mt-1">Bộ môn thể thao</div></div>
+              <div><div className="font-chivo text-3xl font-black text-white">{FACILITY_COUNT}</div><div className="text-xs text-slate-400 mt-1">Khu tập luyện</div></div>
             </div>
+            <a href="#khoa-hoc" className="inline-flex items-center gap-1 text-xs font-semibold text-slate-300 hover:text-white rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
+              Khám phá<span className="material-symbols-outlined text-[17px]" aria-hidden="true">arrow_forward</span>
+            </a>
           </div>
-        </div>
+        </aside>
 
-        {/* RIGHT COLUMN: Authentication Form */}
-        <div className="flex flex-col justify-center items-center p-6 sm:p-10 lg:p-16 bg-slate-50">
-          <div className="max-w-md w-full p-8 bg-white rounded-2xl shadow-xl border border-slate-200/80">
-            {/* Toggle Tabs */}
-            <div className="flex rounded-xl bg-slate-100 p-1 mb-6" role="tablist">
-              <button
-                className={`w-1/2 py-2.5 text-xs font-chivo font-bold uppercase rounded-lg transition-all ${
-                  activeTab === 'login'
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-900'
-                }`}
-                onClick={() => handleTabChange('login')}
-                type="button"
-              >
-                ĐĂNG NHẬP
-              </button>
-              <button
-                className={`w-1/2 py-2.5 text-xs font-chivo font-bold uppercase rounded-lg transition-all ${
-                  activeTab === 'register'
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-900'
-                }`}
-                onClick={() => handleTabChange('register')}
-                type="button"
-              >
-                ĐĂNG KÝ
-              </button>
+        <section aria-labelledby="auth-heading" className="min-w-0 flex flex-col items-center justify-center py-4">
+          <p className="lg:hidden mb-5 text-xs font-semibold text-slate-500">{SUPPORTED_SPORTS.length} bộ môn · {FACILITY_COUNT} khu tập luyện · SCMS Sports</p>
+          <div className="w-full max-w-[520px] p-6 sm:p-8 rounded-3xl bg-white border border-slate-200 shadow-xl shadow-slate-900/5">
+            <div className="flex gap-1 rounded-xl bg-slate-100 p-1 mb-7" role="group" aria-label="Chọn đăng nhập hoặc đăng ký">
+              {[{ id: 'login', label: 'Đăng nhập' }, { id: 'register', label: 'Đăng ký' }].map(tab => (
+                <button key={tab.id} type="button" aria-pressed={activeTab === tab.id} disabled={isSubmitting} onClick={() => handleTabChange(tab.id)} className={'flex-1 min-h-11 rounded-lg text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-60 transition-colors ' + (activeTab === tab.id ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500 hover:text-slate-900')}>
+                  {tab.label}
+                </button>
+              ))}
             </div>
-
-            {/* GOOGLE / GMAIL SIGN-IN BUTTON (Appears for both Login & Register) */}
             <div className="mb-6">
-              <button
-                type="button"
-                onClick={() => setShowGoogleModal(true)}
-                className="w-full h-11 bg-white hover:bg-slate-50 text-slate-700 font-medium rounded-lg border border-slate-300 shadow-sm hover:shadow transition-all text-xs flex items-center justify-center gap-3 active:scale-[0.99]"
-              >
-                {/* Official Google G SVG */}
-                <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.03h3.88c2.27-2.09 3.66-5.17 3.66-9.12z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.03c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.24v3.13C3.26 21.36 7.33 24 12 24z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.28 14.29c-.25-.72-.38-1.49-.38-2.29s.13-1.57.38-2.29V6.58H1.24C.45 8.15 0 9.99 0 12s.45 3.85 1.24 5.42l4.04-3.13z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.24 6.58l4.04 3.13c.95-2.83 3.6-4.96 6.72-4.96z"
-                  />
-                </svg>
-                <span className="font-semibold text-slate-800">
-                  {activeTab === 'login' ? 'Tiếp tục bằng Google / Gmail' : 'Đăng ký nhanh bằng Google / Gmail'}
-                </span>
-              </button>
-
-              {/* Divider */}
-              <div className="relative flex items-center justify-center my-5">
-                <div className="border-t border-slate-200 w-full" />
-                <span className="bg-white px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 absolute">
-                  {activeTab === 'login' ? 'HOẶC ĐĂNG NHẬP VỚI EMAIL' : 'HOẶC ĐIỀN FORM ĐĂNG KÝ'}
-                </span>
-              </div>
+              <h1 id="auth-heading" className="font-chivo text-2xl sm:text-3xl font-black tracking-tight">{isRegister ? 'Gia nhập SCMS' : 'Chào mừng trở lại!'}</h1>
+              <p className="text-sm text-slate-500 mt-2 leading-6">{isRegister ? 'Tạo tài khoản để khám phá khóa học, đặt sân và bắt đầu tập luyện.' : 'Đăng nhập để quản lý lịch tập, đặt sân và theo dõi tiến độ của bạn.'}</p>
             </div>
+            <button type="button" disabled={isSubmitting} onClick={() => setShowGoogleModal(true)} className="w-full min-h-12 px-3 py-2.5 inline-flex items-center justify-center gap-3 border border-slate-300 rounded-xl bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-60 transition-colors">
+              <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.03h3.88c2.27-2.09 3.66-5.17 3.66-9.12z" />
+                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.03c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.24v3.13C3.26 21.36 7.33 24 12 24z" />
+                <path fill="#FBBC05" d="M5.28 14.29c-.25-.72-.38-1.49-.38-2.29s.13-1.57.38-2.29V6.58H1.24C.45 8.15 0 9.99 0 12s.45 3.85 1.24 5.42l4.04-3.13z" />
+                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.24 6.58l4.04 3.13c.95-2.83 3.6-4.96 6.72-4.96z" />
+              </svg>
+              <span>Tiếp tục với Google</span>
+            </button>
+            <div className="flex items-center gap-3 my-6 text-xs text-slate-400">
+              <span className="h-px bg-slate-200 flex-1" /><span>hoặc dùng email</span><span className="h-px bg-slate-200 flex-1" />
+            </div>
+            {formError && <div role="alert" className="mb-5 p-3 rounded-xl border border-red-200 bg-red-50 text-sm text-red-700 leading-6">{formError}</div>}
 
-            {/* TAB 1: LOGIN FORM */}
-            {activeTab === 'login' ? (
-              <div>
-                <div className="mb-5">
-                  <h2 className="text-2xl font-black text-slate-900 tracking-tight font-chivo">
-                    Chào mừng trở lại!
-                  </h2>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Đăng nhập để quản lý lịch tập, đặt chỗ và theo dõi tiến độ thể lực
-                  </p>
-                </div>
-
-                <form onSubmit={handleLoginSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                      Email đăng nhập *
+            {!isRegister ? (
+              <form onSubmit={handleLoginSubmit} noValidate aria-labelledby="auth-heading" aria-busy={isSubmitting}>
+                <fieldset disabled={isSubmitting} className="space-y-5 min-w-0">
+                  <AuthField key="login-email" id="login-email" label="Email" type="email" autoComplete="username" autoCapitalize="none" spellCheck={false} maxLength={150} placeholder="ban@example.com" required value={loginEmail} error={fieldErrors['login-email']} onChange={event => updateField('login-email', event.target.value, setLoginEmail)} />
+                  <AuthField key="login-password" id="login-password" label="Mật khẩu" type="password" autoComplete="current-password" placeholder="Nhập mật khẩu của bạn" required value={loginPassword} error={fieldErrors['login-password']} onChange={event => updateField('login-password', event.target.value, setLoginPassword)} />
+                  <div className="flex flex-wrap items-center justify-between gap-3 text-xs sm:text-sm">
+                    <label className="inline-flex items-center gap-2 text-slate-600 cursor-pointer">
+                      <input type="checkbox" checked={rememberEmail} onChange={event => { setRememberEmail(event.target.checked); if (!event.target.checked) saveRememberedEmail(''); }} className="w-4 h-4 accent-red-600 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500" />
+                      <span>Ghi nhớ email</span>
                     </label>
-                    <input
-                      className="h-11 text-sm px-4 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 w-full text-slate-900 placeholder-slate-400 bg-white"
-                      placeholder="vidu@scms.vn"
-                      type="email"
-                      required
-                      value={loginEmail}
-                      onChange={e => setLoginEmail(e.target.value)}
-                    />
+                    <button type="button" onClick={() => setShowForgotPassword(true)} className="font-semibold text-red-600 hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">Quên mật khẩu?</button>
                   </div>
-
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                      Mật khẩu *
-                    </label>
-                    <input
-                      className="h-11 text-sm px-4 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 w-full text-slate-900 placeholder-slate-400 bg-white"
-                      placeholder="••••••••"
-                      type="password"
-                      required
-                      value={loginPassword}
-                      onChange={e => setLoginPassword(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs pt-1">
-                    <label className="flex items-center gap-2 cursor-pointer select-none text-slate-600">
-                      <input
-                        className="w-4 h-4 rounded text-red-600 focus:ring-red-600 border-slate-300"
-                        type="checkbox"
-                        checked={rememberMe}
-                        onChange={e => setRememberMe(e.target.checked)}
-                      />
-                      <span>Ghi nhớ đăng nhập</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setShowForgotPassword(true)}
-                      className="text-xs text-red-600 font-bold hover:underline"
-                    >
-                      Quên mật khẩu?
-                    </button>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="w-full h-11 bg-red-600 hover:bg-red-700 text-white font-chivo font-bold rounded-lg shadow-md transition-colors text-xs flex items-center justify-center uppercase tracking-wider mt-2"
-                  >
-                    {isSubmitting ? 'Đang xác thực...' : 'ĐĂNG NHẬP VÀO HỆ THỐNG'}
-                  </button>
-                </form>
-
-                {/* Switch to Register */}
-                <div className="mt-6 text-center text-xs text-slate-600">
-                  Chưa có tài khoản SCMS?{' '}
-                  <button
-                    type="button"
-                    onClick={() => handleTabChange('register')}
-                    className="font-bold text-red-600 hover:underline"
-                  >
-                    Đăng ký hội viên ngay
-                  </button>
-                </div>
-              </div>
+                  {submitButton}
+                </fieldset>
+              </form>
             ) : (
-              /* TAB 2: REGISTER FORM */
-              <div>
-                <div className="mb-5">
-                  <h2 className="text-2xl font-black text-slate-900 tracking-tight font-chivo">
-                    Đăng ký thành viên
-                  </h2>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Bắt đầu hành trình bứt phá thể lực chuẩn Olympic tại SCMS
-                  </p>
-                </div>
-
-                <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
+              <form onSubmit={handleRegisterSubmit} noValidate aria-labelledby="auth-heading" aria-busy={isSubmitting}>
+                <fieldset disabled={isSubmitting} className="space-y-4 min-w-0">
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <AuthField key="register-name" id="register-name" label="Họ và tên" autoComplete="name" maxLength={150} placeholder="Nguyễn Văn A" required value={regFullName} error={fieldErrors['register-name']} onChange={event => updateField('register-name', event.target.value, setRegFullName)} />
+                    <AuthField key="register-phone" id="register-phone" label="Số điện thoại" type="tel" autoComplete="tel" maxLength={20} placeholder="Không bắt buộc" value={regPhone} error={fieldErrors['register-phone']} onChange={event => updateField('register-phone', event.target.value, setRegPhone)} />
+                  </div>
+                  <AuthField key="register-email" id="register-email" label="Email" type="email" autoComplete="email" autoCapitalize="none" spellCheck={false} maxLength={150} placeholder="ban@example.com" required value={regEmail} error={fieldErrors['register-email']} onChange={event => updateField('register-email', event.target.value, setRegEmail)} />
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <AuthField key="register-password" id="register-password" label="Mật khẩu" type="password" autoComplete="new-password" minLength={6} maxLength={128} placeholder="Tạo mật khẩu" hint="Tối thiểu 6 ký tự (gồm chữ hoa, thường, số, ký tự đặc biệt)." required value={regPassword} error={fieldErrors['register-password']} onChange={event => updateField('register-password', event.target.value, setRegPassword)} />
+                    <AuthField key="register-confirm" id="register-confirm" label="Nhập lại mật khẩu" type="password" autoComplete="new-password" maxLength={128} placeholder="Xác nhận mật khẩu" required value={regConfirmPassword} error={fieldErrors['register-confirm']} onChange={event => updateField('register-confirm', event.target.value, setRegConfirmPassword)} />
+                  </div>
                   <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                      Họ và tên *
+                    <label htmlFor="register-agree" className="flex items-start gap-2.5 text-xs leading-5 text-slate-600 cursor-pointer">
+                      <input id="register-agree" type="checkbox" required checked={regAgree} aria-invalid={Boolean(fieldErrors['register-agree'])} aria-describedby={fieldErrors['register-agree'] ? 'register-agree-error' : undefined} onChange={event => updateField('register-agree', event.target.checked, setRegAgree)} className="w-4 h-4 shrink-0 mt-0.5 accent-red-600 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500" />
+                      <span>Tôi xác nhận thông tin trên là chính xác và đồng ý tạo tài khoản hội viên SCMS.</span>
                     </label>
-                    <input
-                      className="h-10 text-sm px-4 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 w-full text-slate-900 placeholder-slate-400 bg-white"
-                      placeholder="Nguyễn Văn A"
-                      type="text"
-                      required
-                      value={regFullName}
-                      onChange={e => setRegFullName(e.target.value)}
-                    />
+                    {fieldErrors['register-agree'] && <p id="register-agree-error" className="text-xs text-red-600 leading-5 mt-1.5">{fieldErrors['register-agree']}</p>}
                   </div>
-
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                      Email *
-                    </label>
-                    <input
-                      className="h-10 text-sm px-4 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 w-full text-slate-900 placeholder-slate-400 bg-white"
-                      placeholder="vidu@scms.vn hoặc vidu@gmail.com"
-                      type="email"
-                      required
-                      value={regEmail}
-                      onChange={e => setRegEmail(e.target.value)}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                      Số điện thoại
-                    </label>
-                    <input
-                      className="h-10 text-sm px-4 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 w-full text-slate-900 placeholder-slate-400 bg-white"
-                      placeholder="0912 345 678"
-                      type="tel"
-                      value={regPhone}
-                      onChange={e => setRegPhone(e.target.value)}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                      Mật khẩu *
-                    </label>
-                    <input
-                      className="h-10 text-sm px-4 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 w-full text-slate-900 placeholder-slate-400 bg-white"
-                      placeholder="Tối thiểu 6 ký tự"
-                      type="password"
-                      required
-                      value={regPassword}
-                      onChange={e => setRegPassword(e.target.value)}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                      Xác nhận mật khẩu *
-                    </label>
-                    <input
-                      className="h-10 text-sm px-4 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 w-full text-slate-900 placeholder-slate-400 bg-white"
-                      placeholder="Nhập lại mật khẩu vừa đặt"
-                      type="password"
-                      required
-                      value={regConfirmPassword}
-                      onChange={e => setRegConfirmPassword(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="pt-1">
-                    <label className="flex items-start gap-2 cursor-pointer select-none text-xs text-slate-600 leading-snug">
-                      <input
-                        className="w-4 h-4 rounded text-red-600 focus:ring-red-600 border-slate-300 mt-0.5 shrink-0"
-                        type="checkbox"
-                        checked={regAgree}
-                        onChange={e => setRegAgree(e.target.checked)}
-                      />
-                      <span>Tôi đồng ý với Quy chế hoạt động và Chính sách bảo mật hội viên của SCMS.</span>
-                    </label>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="w-full h-11 bg-red-600 hover:bg-red-700 text-white font-chivo font-bold rounded-lg shadow-md transition-colors text-xs flex items-center justify-center uppercase tracking-wider mt-2"
-                  >
-                    {isSubmitting ? 'Đang tạo tài khoản...' : 'TẠO TÀI KHOẢN HỘI VIÊN'}
-                  </button>
-                </form>
-
-                {/* Switch to Login */}
-                <div className="mt-6 text-center text-xs text-slate-600">
-                  Đã có tài khoản SCMS?{' '}
-                  <button
-                    type="button"
-                    onClick={() => handleTabChange('login')}
-                    className="font-bold text-red-600 hover:underline"
-                  >
-                    Đăng nhập ngay
-                  </button>
-                </div>
-              </div>
+                  {submitButton}
+                </fieldset>
+              </form>
             )}
+            <div className="mt-6 pt-5 border-t border-slate-100 text-center text-sm leading-6 text-slate-500">
+              {isRegister ? 'Đã có tài khoản?' : 'Bạn chưa có tài khoản?'}{' '}
+              <button type="button" disabled={isSubmitting} onClick={() => handleTabChange(isRegister ? 'login' : 'register')} className="font-semibold text-red-600 hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-60">
+                {isRegister ? 'Đăng nhập ngay' : 'Đăng ký hội viên'}
+              </button>
+            </div>
           </div>
-        </div>
-      </div>
+          <p className="text-xs text-slate-500 text-center mt-5 leading-6">Cần hỗ trợ? <a href="tel:0859859367" className="font-semibold text-slate-700 hover:text-red-600 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">0859 859 367</a></p>
+        </section>
+      </main>
 
-      {/* Google Login Modal */}
-      <GoogleLoginModal
-        isOpen={showGoogleModal}
-        onClose={() => setShowGoogleModal(false)}
-        onSuccess={(user) => {
-          redirectToRoleDashboard(user.role);
-        }}
-      />
-
-      {/* Forgot Password Modal */}
-      <ForgotPasswordModal
-        isOpen={showForgotPassword}
-        onClose={() => setShowForgotPassword(false)}
-        onResetSuccess={(resetEmail) => {
-          setLoginEmail(resetEmail);
-          handleTabChange('login');
-        }}
-      />
+      <GoogleLoginModal isOpen={showGoogleModal} onClose={() => setShowGoogleModal(false)} onSuccess={user => redirectToRoleDashboard(user.role)} />
+      <ForgotPasswordModal isOpen={showForgotPassword} onClose={() => setShowForgotPassword(false)} onResetSuccess={email => { setLoginEmail(email); clearFormFeedback(); handleTabChange('login'); }} />
     </div>
   );
 }

@@ -41,9 +41,12 @@ import { ClassScheduleView } from './features/member/ClassScheduleView.js';
 import { MyBookings } from './features/member/MyBookings.js';
 import { MyProgress } from './features/member/MyProgress.js';
 import { MemberAIAssistant } from './features/member/MemberAIAssistant.js';
+import { PaymentResult } from './features/member/PaymentResult.js';
 
 function AppRouter() {
-  const [currentHash, setCurrentHash] = useState(() => window.location.hash || '#/');
+  const [currentHash, setCurrentHash] = useState(() =>
+    window.location.pathname === '/payment-result' ? '#/payment-result' : window.location.hash || '#/'
+  );
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -65,44 +68,44 @@ function AppRouter() {
 
   const path = currentHash.split('?')[0];
 
-  // Helper bọc layout & guard cho role Manager
+  // Helper bọc layout & guard cho role Manager & Admin/SystemAdmin
   const renderManagerRoute = (Component, requiredCapability) => (
     <AppLayout currentPath={path}>
       <ProtectedRoute>
-        <RoleGuard allowedRoles={['MANAGER']} requiredCapability={requiredCapability}>
+        <RoleGuard allowedRoles={['MANAGER', 'ADMIN', 'SYSTEMADMIN']} requiredCapability={requiredCapability}>
           <Component />
         </RoleGuard>
       </ProtectedRoute>
     </AppLayout>
   );
 
-  // Helper bọc layout & guard cho role Receptionist (Manager cũng có quyền xem)
+  // Helper bọc layout & guard cho role Receptionist (Manager & Admin cũng có quyền xem)
   const renderReceptionistRoute = (Component, requiredCapability) => (
     <AppLayout currentPath={path}>
       <ProtectedRoute>
-        <RoleGuard allowedRoles={['RECEPTIONIST', 'MANAGER']} requiredCapability={requiredCapability}>
+        <RoleGuard allowedRoles={['RECEPTIONIST', 'MANAGER', 'ADMIN', 'SYSTEMADMIN']} requiredCapability={requiredCapability}>
           <Component />
         </RoleGuard>
       </ProtectedRoute>
     </AppLayout>
   );
 
-  // Helper bọc layout & guard cho role Coach (Manager cũng có quyền xem)
+  // Helper bọc layout & guard cho role Coach (Manager & Admin cũng có quyền xem)
   const renderCoachRoute = (Component, requiredCapability) => (
     <AppLayout currentPath={path}>
       <ProtectedRoute>
-        <RoleGuard allowedRoles={['COACH', 'MANAGER']} requiredCapability={requiredCapability}>
+        <RoleGuard allowedRoles={['COACH', 'MANAGER', 'ADMIN', 'SYSTEMADMIN']} requiredCapability={requiredCapability}>
           <Component />
         </RoleGuard>
       </ProtectedRoute>
     </AppLayout>
   );
 
-  // Helper bọc layout & guard cho role Member (Manager cũng có quyền xem)
+  // Helper bọc layout & guard cho role Member (Manager & Admin cũng có quyền xem)
   const renderMemberRoute = (Component, requiredCapability) => (
     <AppLayout currentPath={path}>
       <ProtectedRoute>
-        <RoleGuard allowedRoles={['MEMBER', 'MANAGER']} requiredCapability={requiredCapability}>
+        <RoleGuard allowedRoles={['MEMBER', 'MANAGER', 'ADMIN', 'SYSTEMADMIN']} requiredCapability={requiredCapability}>
           <Component />
         </RoleGuard>
       </ProtectedRoute>
@@ -116,7 +119,8 @@ function AppRouter() {
     path.startsWith('#/coach') ||
     path.startsWith('#/member') ||
     path === '#/login' ||
-    path === '#/register';
+    path === '#/register' ||
+    path === '#/payment-result';
 
   if (!isDashboardOrAuth) {
     return <LandingPage />;
@@ -128,6 +132,8 @@ function AppRouter() {
     case '#/login':
     case '#/register':
       return <LoginPage />;
+    case '#/payment-result':
+      return <PaymentResult />;
 
     // MANAGER ROUTES (8 chức năng)
     case '#/manager/dashboard':

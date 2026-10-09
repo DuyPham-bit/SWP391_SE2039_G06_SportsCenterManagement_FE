@@ -1,10 +1,12 @@
 import { reportApi, systemApi } from '../../services/api.js';
 import { StatCard, Badge } from '../../components/common/StatCard.js';
 import { LoadingSpinner } from '../../components/common/Table.js';
+import { useToast } from '../../context/ToastContext.js';
 
 const { useState, useEffect } = React;
 
 export function ManagerDashboard() {
+  const { showError } = useToast();
   const [metrics, setMetrics] = useState(null);
   const [recentLogs, setRecentLogs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -19,7 +21,7 @@ export function ManagerDashboard() {
         setMetrics(overview);
         setRecentLogs(logs.slice(0, 6));
       } catch (e) {
-        console.error(e);
+        showError(e.message || 'Không thể tải số liệu tổng quan từ backend.');
       } finally {
         setLoading(false);
       }
@@ -70,7 +72,7 @@ export function ManagerDashboard() {
           value={metrics?.totalMembers || 0}
           subtitle={`Đang kích hoạt: ${metrics?.activeMembers}`}
           icon="group"
-          trend="+12% tháng này"
+          trend=""
           color="red"
         />
         <StatCard
@@ -78,23 +80,23 @@ export function ManagerDashboard() {
           value={`${(metrics?.monthlyRevenue || 0).toLocaleString()}đ`}
           subtitle="Doanh số gói tập"
           icon="payments"
-          trend={metrics?.revenueGrowth}
+          trend={metrics?.revenueGrowth || ''}
           color="slate"
         />
         <StatCard
           title="Tỷ Lệ Lấp Đầy Sân"
           value={`${metrics?.occupancyRate || 0}%`}
-          subtitle={`Đang mở: ${metrics?.totalClasses} lớp học`}
+          subtitle={`Ca học trong kỳ: ${metrics?.totalClasses}`}
           icon="pie_chart"
-          trend="Chuẩn Olympic"
+          trend=""
           color="slate"
         />
         <StatCard
           title="Check-in Hôm Nay"
-          value={metrics?.todayCheckins || 0}
+          value={metrics?.todayCheckins ?? '—'}
           subtitle="Lượt quét thẻ vào sân"
           icon="fact_check"
-          trend="Trực tiếp"
+          trend=""
           color="red"
         />
       </div>
@@ -178,25 +180,6 @@ export function ManagerDashboard() {
             </a>
           </div>
 
-          {/* Package Distribution Bar */}
-          <div className="pt-4 border-t border-slate-100">
-            <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-2">
-              <span>Tỷ lệ phân bổ Gói tập hội viên</span>
-              <span className="text-red-600">100% Olympic</span>
-            </div>
-            <div className="h-3 rounded-full bg-slate-100 overflow-hidden flex">
-              <div style={{ width: '35%' }} className="bg-red-600" title="All-Access 35%" />
-              <div style={{ width: '40%' }} className="bg-slate-900" title="Pro 40%" />
-              <div style={{ width: '15%' }} className="bg-amber-500" title="Elite 15%" />
-              <div style={{ width: '10%' }} className="bg-slate-400" title="Basic 10%" />
-            </div>
-            <div className="flex flex-wrap gap-4 mt-2 text-[10px] text-slate-500 font-medium">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-red-600" /> All-Access Olympic (35%)</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-slate-900" /> Pro Bứt Phá (40%)</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-amber-500" /> Elite (15%)</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-slate-400" /> Basic (10%)</span>
-            </div>
-          </div>
         </div>
 
         {/* Live Audit Log Feed */}

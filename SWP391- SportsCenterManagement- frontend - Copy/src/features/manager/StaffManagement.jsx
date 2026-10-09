@@ -467,35 +467,34 @@ export function StaffManagement() {
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
                   2. Chọn vai trò muốn trao cho tài khoản này *
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
-                    { role: 'COACH', label: 'Huấn luyện viên', icon: 'sports', desc: 'Dạy lớp, điểm danh, giáo án' },
-                    { role: 'RECEPTIONIST', label: 'Lễ tân quầy', icon: 'badge', desc: 'Check-in, thu ngân, tra cứu' },
-                    { role: 'MANAGER', label: 'Quản lý', icon: 'shield_person', desc: 'Toàn quyền vận hành' }
+                    { role: 'COACH', label: 'Huấn luyện viên', icon: 'sports', desc: 'Dạy lớp thể thao, điểm danh ca học, tạo giáo án' },
+                    { role: 'RECEPTIONIST', label: 'Lễ tân quầy', icon: 'badge', desc: 'Quét thẻ check-in, thu ngân gói tập, tra cứu hội viên' }
                   ].map(item => (
                     <button
                       key={item.role}
                       type="button"
                       onClick={() => handleRoleChange(item.role)}
-                      className={`p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between ${
+                      className={`p-3.5 rounded-xl border-2 text-left transition-all flex flex-col justify-between ${
                         formRole === item.role
                           ? 'border-red-600 bg-red-50/60 shadow-xs ring-1 ring-red-600'
                           : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
                       }`}
                     >
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className={`material-symbols-outlined text-[22px] ${formRole === item.role ? 'text-red-600' : 'text-slate-500'}`}>
-                          {item.icon}
-                        </span>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${formRole === item.role ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                          <span className="material-symbols-outlined text-[22px]">{item.icon}</span>
+                        </div>
                         {formRole === item.role && (
-                          <span className="material-symbols-outlined text-[18px] text-red-600">check_circle</span>
+                          <span className="material-symbols-outlined text-[20px] text-red-600">check_circle</span>
                         )}
                       </div>
                       <div>
-                        <div className={`text-xs font-bold font-chivo uppercase ${formRole === item.role ? 'text-red-700' : 'text-slate-800'}`}>
-                          {item.label}
+                        <div className={`text-xs font-bold font-chivo uppercase ${formRole === item.role ? 'text-red-700' : 'text-slate-900'}`}>
+                          {item.label} ({item.role})
                         </div>
-                        <div className="text-[10px] text-slate-500 leading-tight mt-0.5">{item.desc}</div>
+                        <div className="text-[11px] text-slate-500 leading-snug mt-1">{item.desc}</div>
                       </div>
                     </button>
                   ))}
@@ -595,7 +594,7 @@ export function StaffManagement() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                    Vai trò hệ thống *
+                    Vai trò nhân viên *
                   </label>
                   <select
                     value={formRole}
@@ -604,7 +603,6 @@ export function StaffManagement() {
                   >
                     <option value="COACH">Huấn luyện viên (COACH)</option>
                     <option value="RECEPTIONIST">Lễ tân (RECEPTIONIST)</option>
-                    <option value="MANAGER">Quản lý (MANAGER)</option>
                   </select>
                 </div>
 

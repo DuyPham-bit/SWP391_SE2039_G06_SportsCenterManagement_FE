@@ -24,6 +24,8 @@ export function MyBookings() {
     try {
       const data = await bookingApi.getMemberBookings(currentUser.id);
       setBookings(data);
+    } catch (error) {
+      showError(error.message || 'Không thể tải danh sách đặt chỗ.');
     } finally {
       setLoading(false);
     }

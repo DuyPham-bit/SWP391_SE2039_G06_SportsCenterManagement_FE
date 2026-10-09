@@ -1,6 +1,8 @@
 import { authApi } from '../../services/api.js';
 import { useToast } from '../../context/ToastContext.js';
 import { Modal } from '../../components/common/Modal.js';
+import { PasswordInput } from './PasswordInput.js';
+import { isAsciiPassword, PASSWORD_CHARACTER_ERROR } from '../../services/passwordPolicy.js';
 
 const { useState } = React;
 
@@ -13,19 +15,28 @@ export function ForgotPasswordModal({ isOpen, onClose, onResetSuccess }) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [developmentOtp, setDevelopmentOtp] = useState(null);
 
-  const handleRequestOtp = (e) => {
+  const handleRequestOtp = async (e) => {
     e.preventDefault();
     if (!email.trim()) {
       showError('Vui lòng nhập email đăng ký tài khoản!');
       return;
     }
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const result = await authApi.requestPasswordReset(email);
+      setDevelopmentOtp(result.developmentOtp || null);
       setLoading(false);
       setStep(2);
-      showInfo('Mã xác thực OTP đã được gửi đến email của bạn!');
-    }, 600);
+      showInfo(result.developmentOtp
+        ? `Mã OTP môi trường Development: ${result.developmentOtp}`
+        : 'Nếu email tồn tại, mã xác thực đã được gửi đến địa chỉ đăng ký.');
+    } catch (err) {
+      showError(err.message || 'Không thể yêu cầu mã xác thực.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleResetPassword = async (e) => {
@@ -34,8 +45,12 @@ export function ForgotPasswordModal({ isOpen, onClose, onResetSuccess }) {
       showError('Vui lòng nhập mã OTP!');
       return;
     }
+    if (!isAsciiPassword(newPassword) || !isAsciiPassword(confirmPassword)) {
+      showError(PASSWORD_CHARACTER_ERROR);
+      return;
+    }
     if (newPassword.length < 6) {
-      showError('Mật khẩu mới phải từ 6 ký tự trở lên!');
+      showError('Mật khẩu mới phải có ít nhất 6 ký tự!');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -55,6 +70,7 @@ export function ForgotPasswordModal({ isOpen, onClose, onResetSuccess }) {
       setOtp('');
       setNewPassword('');
       setConfirmPassword('');
+      setDevelopmentOtp(null);
     } catch (err) {
       showError(err.message || 'Khôi phục mật khẩu thất bại!');
     } finally {
@@ -104,7 +120,10 @@ export function ForgotPasswordModal({ isOpen, onClose, onResetSuccess }) {
       ) : (
         <form onSubmit={handleResetPassword} className="space-y-4">
           <div className="p-3 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs">
-            Mã OTP đã gửi đến <strong>{email}</strong>. Vui lòng nhập mã để xác nhận.
+            {developmentOtp
+              ? <>Mã OTP môi trường Development: <strong>{developmentOtp}</strong></>
+              : <>Nếu email tồn tại, mã OTP đã được gửi đến <strong>{email}</strong>.</>}
+            {' '}Vui lòng nhập mã để xác nhận.
           </div>
 
           <div>
@@ -122,11 +141,12 @@ export function ForgotPasswordModal({ isOpen, onClose, onResetSuccess }) {
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+            <label htmlFor="reset-new-password" className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
               Mật khẩu mới *
             </label>
-            <input
-              type="password"
+            <PasswordInput
+              id="reset-new-password"
+              autoComplete="new-password"
               required
               placeholder="Tối thiểu 6 ký tự"
               value={newPassword}
@@ -136,11 +156,12 @@ export function ForgotPasswordModal({ isOpen, onClose, onResetSuccess }) {
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+            <label htmlFor="reset-confirm-password" className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
               Nhập lại mật khẩu mới *
             </label>
-            <input
-              type="password"
+            <PasswordInput
+              id="reset-confirm-password"
+              autoComplete="new-password"
               required
               placeholder="Khớp với mật khẩu mới ở trên"
               value={confirmPassword}

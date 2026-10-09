@@ -1,10 +1,12 @@
 import { systemApi } from '../../services/api.js';
 import { Table, LoadingSpinner } from '../../components/common/Table.js';
 import { Badge } from '../../components/common/StatCard.js';
+import { useToast } from '../../context/ToastContext.js';
 
 const { useState, useEffect } = React;
 
 export function AuditLogs() {
+  const { showError } = useToast();
   const [logs, setLogs] = useState([]);
   const [actionFilter, setActionFilter] = useState('ALL');
   const [loading, setLoading] = useState(true);
@@ -14,7 +16,7 @@ export function AuditLogs() {
       const data = await systemApi.getAuditLogs();
       setLogs(data);
     } catch (e) {
-      console.error(e);
+      showError(e.message || 'Không thể tải nhật ký từ backend.');
     } finally {
       setLoading(false);
     }

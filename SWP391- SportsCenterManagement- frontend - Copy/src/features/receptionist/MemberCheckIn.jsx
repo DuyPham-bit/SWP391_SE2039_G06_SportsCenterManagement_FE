@@ -1,5 +1,4 @@
 import { receptionApi } from '../../services/api.js';
-import { db, DB_KEYS } from '../../services/dbStorage.js';
 import { useToast } from '../../context/ToastContext.js';
 import { Badge } from '../../components/common/StatCard.js';
 
@@ -16,25 +15,28 @@ export function MemberCheckIn() {
   const [processing, setProcessing] = useState(false);
 
   const loadData = async () => {
-    const users = db.get(DB_KEYS.USERS).filter(u => u.role === 'MEMBER');
-    const history = await receptionApi.getCheckInHistory();
-    setMembers(users);
-    setCheckIns(history);
+    try {
+      const history = await receptionApi.getCheckInHistory();
+      setCheckIns(history || []);
+    } catch {
+      // Bỏ qua lỗi kết nối ban đầu
+    }
   };
 
   useEffect(() => {
     loadData();
+    const hash = window.location.hash || '';
+    const match = hash.match(/[?&]query=([^&]+)/);
+    if (match && match[1]) {
+      setIdentifier(decodeURIComponent(match[1]));
+    }
   }, []);
 
   const handleExecuteCheckIn = async (memberToScan) => {
-    const target = memberToScan || members.find(m =>
-      (m.memberCode && m.memberCode.toLowerCase() === identifier.trim().toLowerCase()) ||
-      (m.phone && m.phone === identifier.trim()) ||
-      (m.email && m.email.toLowerCase() === identifier.trim().toLowerCase())
-    );
+    const term = (memberToScan?.memberCode || memberToScan?.id || identifier || '').toString().trim();
 
-    if (!target) {
-      setCheckInError(`Không tìm thấy hội viên nào có mã/SĐT: "${identifier}"`);
+    if (!term) {
+      setCheckInError('Vui lòng quét thẻ hoặc nhập mã hội viên / Số điện thoại / Email.');
       setLastCheckIn(null);
       return;
     }
@@ -42,11 +44,11 @@ export function MemberCheckIn() {
     setProcessing(true);
     setCheckInError(null);
     try {
-      const result = await receptionApi.checkInMember(target.id, 'Lê Thị Thu Thảo');
-      setLastCheckIn({ ...result, member: target });
-      showSuccess(`Check-in thành công: ${target.fullName} (${target.memberCode})`);
+      const result = await receptionApi.checkInMember(term);
+      setLastCheckIn(result);
+      showSuccess(`Check-in thành công: ${result.memberName} (${result.memberCode})`);
       setIdentifier('');
-      loadData();
+      await loadData();
     } catch (err) {
       setCheckInError(err.message);
       setLastCheckIn(null);
@@ -81,7 +83,7 @@ export function MemberCheckIn() {
                 ĐẦU ĐỌC THẺ THỜI GIAN THỰC (CỔNG SỐ 01)
               </span>
             </div>
-            <Badge variant="success" size="sm">ONLINE 24/7</Badge>
+            <Badge variant="success" size="sm">HỆ THỐNG TRỰC TUYẾN</Badge>
           </div>
 
           {/* Scanner Input Box */}

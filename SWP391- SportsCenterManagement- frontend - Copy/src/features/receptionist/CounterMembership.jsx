@@ -1,8 +1,8 @@
 import { receptionApi, packageApi } from '../../services/api.js';
-import { db, DB_KEYS } from '../../services/dbStorage.js';
 import { useToast } from '../../context/ToastContext.js';
 import { LoadingSpinner } from '../../components/common/Table.js';
 import { Badge } from '../../components/common/StatCard.js';
+import { createIdempotencyKey } from '../../services/http.js';
 
 const { useState, useEffect } = React;
 
@@ -13,25 +13,39 @@ export function CounterMembership() {
   const [members, setMembers] = useState([]);
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  const [memberSearchLoading, setMemberSearchLoading] = useState(false);
 
   // Selections
   const [selectedMember, setSelectedMember] = useState(null);
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState('TIỀN MẶT');
+  const [posApprovalCode, setPosApprovalCode] = useState('');
   const [processing, setProcessing] = useState(false);
   const [receiptData, setReceiptData] = useState(null);
+  const [checkoutAttempt, setCheckoutAttempt] = useState({ fingerprint: '', key: '' });
+  const [pendingInvoice, setPendingInvoice] = useState(null);
 
   useEffect(() => {
     async function loadInitial() {
       try {
-        const users = db.get(DB_KEYS.USERS).filter(u => u.role === 'MEMBER');
         const pkgs = await packageApi.getAll();
-        setMembers(users);
+        setMembers([]);
         setPackages(pkgs);
-        if (users.length > 0) setSelectedMember(users[0]);
         if (pkgs.length > 0) setSelectedPackage(pkgs[0]);
+
+        const hash = window.location.hash || '';
+        const match = hash.match(/[?&]query=([^&]+)/);
+        if (match && match[1]) {
+          const q = decodeURIComponent(match[1]);
+          setMemberSearchQuery(q);
+          const results = await receptionApi.lookupMember(q);
+          setMembers(results);
+          if (results.length > 0) setSelectedMember(results[0]);
+        }
       } catch (e) {
         console.error(e);
+        showError(e.message || 'Không thể tải hội viên hoặc gói tập từ backend.');
       } finally {
         setLoading(false);
       }
@@ -39,21 +53,73 @@ export function CounterMembership() {
     loadInitial();
   }, []);
 
-  const handleProcessPayment = async () => {
+  const handleSearchMembers = async event => {
+    event.preventDefault();
+    if (memberSearchQuery.trim().length < 2) {
+      showError('Nhập ít nhất 2 ký tự để tìm hội viên.');
+      return;
+    }
+    setMemberSearchLoading(true);
+    try {
+      const results = await receptionApi.lookupMember(memberSearchQuery);
+      setMembers(results);
+      setSelectedMember(results.length === 1 ? results[0] : null);
+      if (results.length === 0) showError('Không tìm thấy hội viên phù hợp.');
+    } catch (error) {
+      showError(error.message || 'Không thể tìm hội viên.');
+    } finally {
+      setMemberSearchLoading(false);
+    }
+  };
+
+  const handleProcessPayment = async (overrideCancelPending = false) => {
     if (!selectedMember || !selectedPackage) return;
+    const fingerprint = [selectedMember.id, selectedPackage.id, paymentMethod, posApprovalCode.trim(), overrideCancelPending].join(':');
+    const idempotencyKey = checkoutAttempt.fingerprint === fingerprint && checkoutAttempt.key
+      ? checkoutAttempt.key
+      : createIdempotencyKey();
+    setCheckoutAttempt({ fingerprint, key: idempotencyKey });
     setProcessing(true);
     try {
       const result = await receptionApi.registerCounterPackage({
         memberId: selectedMember.id,
         packageId: selectedPackage.id,
-        paymentMethod
+        paymentMethod,
+        amountReceived: selectedPackage.price,
+        posApprovalCode,
+        idempotencyKey,
+        cancelPendingIfAny: overrideCancelPending
       });
       setReceiptData(result);
+      setPendingInvoice(null);
+      setCheckoutAttempt({ fingerprint: '', key: '' });
       showSuccess(`Kích hoạt gói tập thành công! Mã giao dịch: ${result.transactionRef}`);
       setStep(4);
     } catch (err) {
+      const match = err.message && err.message.match(/SC-[A-Za-z0-9-]+/);
+      if (match) {
+        setPendingInvoice(match[0]);
+      }
       showError(err.message || 'Lỗi thanh toán tại quầy!');
     } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleCancelPendingAndRetry = async (invNumber) => {
+    setProcessing(true);
+    try {
+      showSuccess(`Đang hủy hóa đơn ${invNumber}...`);
+      await receptionApi.cancelPendingInvoice({
+        invoiceNumber: invNumber,
+        memberId: selectedMember?.id,
+        packageId: selectedPackage?.id
+      });
+      setPendingInvoice(null);
+      showSuccess('Đã hủy hóa đơn chờ. Đang tiến hành thanh toán và kích hoạt thẻ mới...');
+      await handleProcessPayment(true);
+    } catch (err) {
+      showError(err.message || 'Lỗi khi hủy hóa đơn chờ!');
       setProcessing(false);
     }
   };
@@ -105,6 +171,18 @@ export function CounterMembership() {
             Chọn Hội Viên Cần Đăng Ký / Gia Hạn
           </h2>
 
+          <form onSubmit={handleSearchMembers} className="flex gap-2">
+            <input
+              value={memberSearchQuery}
+              onChange={event => setMemberSearchQuery(event.target.value)}
+              placeholder="Tìm theo tên, email, SĐT hoặc mã hội viên"
+              className="min-w-0 flex-1 px-3 py-2 rounded-lg border border-slate-300 text-sm"
+            />
+            <button type="submit" disabled={memberSearchLoading} className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">
+              {memberSearchLoading ? 'Đang tìm...' : 'Tìm hội viên'}
+            </button>
+          </form>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {members.map(m => (
               <div
@@ -136,6 +214,7 @@ export function CounterMembership() {
               </div>
             ))}
           </div>
+          {members.length === 0 && <p className="text-xs text-slate-500">Nhập từ khóa để tìm hội viên từ backend.</p>}
 
           <div className="flex justify-end pt-4 border-t border-slate-100">
             <button
@@ -244,7 +323,7 @@ export function CounterMembership() {
               Hình thức thu tiền *
             </label>
             <div className="grid grid-cols-3 gap-3">
-              {['TIỀN MẶT', 'CHUYỂN KHOẢN VIETQR', 'THẺ POS'].map(m => (
+              {['TIỀN MẶT', 'THẺ POS'].map(m => (
                 <button
                   key={m}
                   type="button"
@@ -261,7 +340,61 @@ export function CounterMembership() {
                 </button>
               ))}
             </div>
+            {paymentMethod === 'THẺ POS' && (
+              <label className="block mt-3 text-xs font-bold text-slate-700">
+                Mã chuẩn chi POS *
+                <input
+                  required
+                  value={posApprovalCode}
+                  onChange={event => setPosApprovalCode(event.target.value)}
+                  maxLength={100}
+                  className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-normal"
+                  placeholder="Nhập mã chuẩn chi từ máy POS"
+                />
+              </label>
+            )}
           </div>
+
+          {/* Pending Invoice Warning & Cancel Option */}
+          {pendingInvoice && (
+            <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 space-y-3 animate-in fade-in">
+              <div className="flex items-start gap-3">
+                <span className="material-symbols-outlined text-amber-600 text-[24px] mt-0.5 shrink-0">
+                  pending_actions
+                </span>
+                <div className="flex-1 text-xs space-y-1">
+                  <div className="font-chivo font-black text-amber-900 uppercase tracking-wide">
+                    Hóa Đơn Chờ Thanh Toán Đã Tồn Tại
+                  </div>
+                  <p className="text-amber-800">
+                    Hội viên đã có hóa đơn chờ: <span className="font-mono font-bold text-amber-950 bg-amber-100 px-1.5 py-0.5 rounded">{pendingInvoice}</span>
+                  </p>
+                  <p className="text-[11px] text-amber-700">
+                    Bạn có thể bấm nút bên dưới để hủy đơn chờ này và kích hoạt thanh toán mới ngay tại bàn.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-amber-200">
+                <button
+                  type="button"
+                  disabled={processing}
+                  onClick={() => handleCancelPendingAndRetry(pendingInvoice)}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-chivo text-xs font-black uppercase tracking-wider rounded-xl shadow-md transition-colors flex items-center gap-1.5"
+                >
+                  <span className="material-symbols-outlined text-[16px]">cancel</span>
+                  <span>Hủy Hóa Đơn Chờ & Kích Hoạt Ngay</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPendingInvoice(null)}
+                  className="px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100 rounded-lg transition-colors"
+                >
+                  Đóng cảnh báo
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-between items-center pt-4 border-t border-slate-100">
             <button
@@ -328,18 +461,26 @@ export function CounterMembership() {
             </div>
           </div>
 
-          <div className="flex justify-center gap-3 pt-2">
+          <div className="flex flex-wrap justify-center gap-3 pt-2">
             <button
               onClick={() => { setStep(1); setReceiptData(null); }}
-              className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-chivo text-xs font-bold uppercase tracking-wider rounded-lg shadow transition-colors"
+              className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-chivo text-xs font-bold uppercase tracking-wider rounded-lg shadow transition-colors"
             >
               Thực Hiện Giao Dịch Mới
             </button>
             <a
-              href="#/receptionist/check-in"
-              className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-chivo text-xs font-bold uppercase tracking-wider rounded-lg shadow transition-colors"
+              href={`#/receptionist/lookup?query=${encodeURIComponent(receiptData.member.memberCode)}`}
+              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-chivo text-xs font-bold uppercase tracking-wider rounded-lg shadow transition-colors flex items-center gap-1.5"
             >
-              Đi Đến Cổng Check-in
+              <span className="material-symbols-outlined text-[16px]">person_search</span>
+              <span>Kiểm Tra Thẻ Đã Gia Hạn</span>
+            </a>
+            <a
+              href={`#/receptionist/check-in?query=${encodeURIComponent(receiptData.member.memberCode)}`}
+              className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-chivo text-xs font-bold uppercase tracking-wider rounded-lg shadow transition-colors flex items-center gap-1.5"
+            >
+              <span className="material-symbols-outlined text-[16px]">how_to_reg</span>
+              <span>Đi Đến Cổng Check-in</span>
             </a>
           </div>
         </div>

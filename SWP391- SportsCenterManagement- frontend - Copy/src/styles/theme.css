@@ -88,3 +88,11 @@
     linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
 }
+
+/* Trang chủ SCMS (#/) - Toàn bộ góc vuông sắc nét, không bo tròn */
+.landing-page-root,
+.landing-page-root *,
+.landing-page-root *::before,
+.landing-page-root *::after {
+  border-radius: 0 !important;
+}

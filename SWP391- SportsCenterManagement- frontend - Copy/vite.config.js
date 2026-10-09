@@ -53,8 +53,14 @@ export default defineConfig({
     react()
   ],
   server: {
-    port: 3003,
+    port: 3004,
     host: 'localhost',
+    proxy: {
+      '/api': {
+        target: 'http://localhost:54162',
+        changeOrigin: true
+      }
+    },
     open: false
   },
   resolve: {

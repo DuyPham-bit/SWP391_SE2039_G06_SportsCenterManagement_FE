@@ -2,6 +2,8 @@ import { useAuth } from '../../context/AuthContext.js';
 import { useToast } from '../../context/ToastContext.js';
 import { Modal } from '../../components/common/Modal.js';
 import { Badge } from '../../components/common/StatCard.js';
+import { PasswordInput } from './PasswordInput.js';
+import { isAsciiPassword, PASSWORD_CHARACTER_ERROR } from '../../services/passwordPolicy.js';
 
 const { useState } = React;
 
@@ -43,6 +45,10 @@ export function ProfileModal({ isOpen, onClose }) {
     e.preventDefault();
     if (!currentPassword) {
       showError('Vui lòng nhập mật khẩu hiện tại!');
+      return;
+    }
+    if (![currentPassword, newPassword, confirmPassword].every(isAsciiPassword)) {
+      showError(PASSWORD_CHARACTER_ERROR);
       return;
     }
     if (newPassword.length < 6) {
@@ -182,15 +188,16 @@ export function ProfileModal({ isOpen, onClose }) {
         <form onSubmit={handleChangePassword} className="space-y-4">
           <div className="p-3 rounded-lg bg-blue-50 text-blue-800 text-xs flex items-start gap-2">
             <span className="material-symbols-outlined text-[18px] shrink-0 mt-0.5">shield</span>
-            <span>Mật khẩu phải dài tối thiểu 6 ký tự để đảm bảo an toàn cho tài khoản thể thao của bạn.</span>
+            <span>Mật khẩu phải dài tối thiểu 6 ký tự (gồm chữ hoa, thường, số và ký tự đặc biệt) để tương thích với chính sách bảo mật của backend.</span>
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+            <label htmlFor="profile-current-password" className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
               Mật khẩu hiện tại *
             </label>
-            <input
-              type="password"
+            <PasswordInput
+              id="profile-current-password"
+              autoComplete="current-password"
               required
               placeholder="Nhập mật khẩu đang dùng (Mặc định: password123)"
               value={currentPassword}
@@ -200,11 +207,12 @@ export function ProfileModal({ isOpen, onClose }) {
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+            <label htmlFor="profile-new-password" className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
               Mật khẩu mới *
             </label>
-            <input
-              type="password"
+            <PasswordInput
+              id="profile-new-password"
+              autoComplete="new-password"
               required
               placeholder="Tối thiểu 6 ký tự"
               value={newPassword}
@@ -214,11 +222,12 @@ export function ProfileModal({ isOpen, onClose }) {
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+            <label htmlFor="profile-confirm-password" className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
               Xác nhận mật khẩu mới *
             </label>
-            <input
-              type="password"
+            <PasswordInput
+              id="profile-confirm-password"
+              autoComplete="new-password"
               required
               placeholder="Nhập lại mật khẩu mới"
               value={confirmPassword}

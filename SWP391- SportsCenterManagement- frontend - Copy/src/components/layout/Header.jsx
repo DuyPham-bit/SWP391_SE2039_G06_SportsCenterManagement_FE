@@ -8,7 +8,10 @@ export function Header({ onOpenProfile, onToggleSidebar }) {
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   const getRoleLabel = (r) => {
-    switch (r) {
+    const normalized = String(r || '').toUpperCase();
+    switch (normalized) {
+      case 'SYSTEMADMIN': return 'Quản trị hệ thống (System Admin)';
+      case 'ADMIN': return 'Quản trị viên (Admin)';
       case 'MANAGER': return 'Quản lý (Manager)';
       case 'RECEPTIONIST': return 'Lễ tân (Receptionist)';
       case 'COACH': return 'Huấn luyện viên (Coach)';

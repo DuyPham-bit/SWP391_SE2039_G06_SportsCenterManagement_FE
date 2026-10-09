@@ -1,7 +1,7 @@
 import { receptionApi } from '../../services/api.js';
-import { Badge } from '../../components/common/StatCard.js';
+import { Badge } from '../../components/common/StatCard.jsx';
 
-const { useState } = React;
+const { useState, useEffect } = React;
 
 export function MemberLookup() {
   const [query, setQuery] = useState('');
@@ -9,14 +9,30 @@ export function MemberLookup() {
   const [selectedMember, setSelectedMember] = useState(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [loadingSubs, setLoadingSubs] = useState(false);
 
-  const handleSearch = async (e) => {
-    e?.preventDefault();
-    if (!query.trim()) return;
+  // Auto-search if query parameter exists in URL
+  useEffect(() => {
+    const hash = window.location.hash || '';
+    const match = hash.match(/[?&]query=([^&]+)/);
+    if (match && match[1]) {
+      const q = decodeURIComponent(match[1]);
+      setQuery(q);
+      executeSearch(q);
+    }
+  }, []);
 
+  const executeSearch = async (searchTerm) => {
+    if (!searchTerm || searchTerm.trim().length < 2) {
+      setSearchError('Nhập ít nhất 2 ký tự để tìm hội viên.');
+      return;
+    }
     setSearching(true);
+    setSearchError('');
     try {
-      const data = await receptionApi.lookupMember(query);
+      const data = await receptionApi.lookupMember(searchTerm.trim());
       setResults(data);
       setHasSearched(true);
       if (data.length === 1) {
@@ -24,10 +40,46 @@ export function MemberLookup() {
       } else {
         setSelectedMember(null);
       }
+    } catch (error) {
+      setResults([]);
+      setSelectedMember(null);
+      setHasSearched(true);
+      setSearchError(error.message || 'Không thể tra cứu hội viên.');
     } finally {
       setSearching(false);
     }
   };
+
+  const handleSearch = (e) => {
+    e?.preventDefault();
+    executeSearch(query);
+  };
+
+  // Load subscriptions whenever selectedMember changes
+  useEffect(() => {
+    if (!selectedMember?.id) {
+      setSubscriptions([]);
+      return;
+    }
+
+    let isMounted = true;
+    setLoadingSubs(true);
+    receptionApi.getMemberSubscriptions(selectedMember.id)
+      .then(data => {
+        if (isMounted) {
+          const list = Array.isArray(data) ? data : (data?.items || []);
+          setSubscriptions(list);
+        }
+      })
+      .catch(() => {
+        if (isMounted) setSubscriptions([]);
+      })
+      .finally(() => {
+        if (isMounted) setLoadingSubs(false);
+      });
+
+    return () => { isMounted = false; };
+  }, [selectedMember?.id]);
 
   return (
     <div className="space-y-6">
@@ -40,7 +92,7 @@ export function MemberLookup() {
           Tra Cứu Hồ Sơ Hội Viên Tại Quầy
         </h1>
         <p className="text-xs text-slate-500 mt-0.5">
-          Nhập mã thẻ hội viên, số điện thoại hoặc email để kiểm tra tình trạng thẻ và gói tập.
+          Nhập mã thẻ hội viên, số điện thoại hoặc email để kiểm tra tình trạng thẻ và gói tập đã gia hạn.
         </p>
       </div>
 
@@ -67,31 +119,7 @@ export function MemberLookup() {
         </button>
       </form>
 
-      {/* Quick Search Suggestions */}
-      <div className="flex items-center gap-2 text-xs text-slate-500">
-        <span>Gợi ý tra nhanh:</span>
-        <button
-          type="button"
-          onClick={() => { setQuery('MEM-8899'); setTimeout(() => { setSearching(true); receptionApi.lookupMember('MEM-8899').then(d => { setResults(d); setSelectedMember(d[0]); setHasSearched(true); setSearching(false); }); }, 100); }}
-          className="px-2 py-1 rounded bg-white border border-slate-200 text-red-600 font-bold hover:bg-slate-50"
-        >
-          MEM-8899 (Phạm Hội Viên)
-        </button>
-        <button
-          type="button"
-          onClick={() => { setQuery('MEM-5521'); setTimeout(() => { setSearching(true); receptionApi.lookupMember('MEM-5521').then(d => { setResults(d); setSelectedMember(d[0]); setHasSearched(true); setSearching(false); }); }, 100); }}
-          className="px-2 py-1 rounded bg-white border border-slate-200 text-red-600 font-bold hover:bg-slate-50"
-        >
-          MEM-5521 (Nguyễn Văn A)
-        </button>
-        <button
-          type="button"
-          onClick={() => { setQuery('MEM-3312'); setTimeout(() => { setSearching(true); receptionApi.lookupMember('MEM-3312').then(d => { setResults(d); setSelectedMember(d[0]); setHasSearched(true); setSearching(false); }); }, 100); }}
-          className="px-2 py-1 rounded bg-white border border-slate-200 text-amber-600 font-bold hover:bg-slate-50"
-        >
-          MEM-3312 (Gói Hết Hạn)
-        </button>
-      </div>
+      {searchError && <p role="alert" className="text-sm text-red-700">{searchError}</p>}
 
       {/* Results Section */}
       {hasSearched && (
@@ -159,7 +187,9 @@ export function MemberLookup() {
                       </div>
                     </div>
 
-                    <Badge variant={selectedMember.packageStatus}>{selectedMember.packageStatus}</Badge>
+                    <Badge variant={selectedMember.packageStatus} size="md">
+                      {selectedMember.packageStatus === 'ACTIVE' ? 'ĐÃ GIA HẠN / ACTIVE' : selectedMember.packageStatus}
+                    </Badge>
                   </div>
 
                   {/* Membership Card Information */}
@@ -185,17 +215,81 @@ export function MemberLookup() {
                       </div>
                       <div>
                         <span className="text-slate-400 block text-[10px] uppercase">Trạng Thái Thẻ</span>
-                        <span className={`font-bold text-sm ${selectedMember.packageStatus === 'ACTIVE' ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {selectedMember.packageStatus === 'ACTIVE' ? 'Hợp lệ - Cho phép vào sân' : 'Hết hạn - Cần gia hạn'}
-                        </span>
+                        {selectedMember.packageStatus === 'ACTIVE' ? (
+                          <span className="font-bold text-sm text-emerald-400 flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[16px]">verified</span>
+                            Hợp lệ - Đã gia hạn / Cho phép vào sân
+                          </span>
+                        ) : selectedMember.packageStatus === 'PENDING' ? (
+                          <span className="font-bold text-sm text-amber-400 flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[16px]">schedule</span>
+                            Chờ thanh toán kích hoạt
+                          </span>
+                        ) : (
+                          <span className="font-bold text-sm text-red-400 flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[16px]">error</span>
+                            Hết hạn - Cần gia hạn
+                          </span>
+                        )}
                       </div>
                     </div>
+                  </div>
+
+                  {/* Subscriptions History Table */}
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-chivo text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-slate-400 text-[18px]">history</span>
+                        <span>Lịch Sử Gói Tập & Gia Hạn ({subscriptions.length})</span>
+                      </h3>
+                    </div>
+
+                    {loadingSubs ? (
+                      <div className="p-4 text-center text-xs text-slate-400">Đang tải lịch sử gói tập...</div>
+                    ) : subscriptions.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-slate-400 border border-dashed rounded-xl">
+                        Hội viên chưa có lịch sử đăng ký gói tập nào.
+                      </div>
+                    ) : (
+                      <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase border-b border-slate-200">
+                            <tr>
+                              <th className="py-2.5 px-3">Gói Tập</th>
+                              <th className="py-2.5 px-3">Thời Hạn</th>
+                              <th className="py-2.5 px-3">Hạn Đến</th>
+                              <th className="py-2.5 px-3">Giá Tiền</th>
+                              <th className="py-2.5 px-3">Trạng Thái</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {subscriptions.map(sub => (
+                              <tr key={sub.subscriptionId} className="hover:bg-slate-50/50">
+                                <td className="py-2 px-3 font-semibold text-slate-900">{sub.packageName}</td>
+                                <td className="py-2 px-3 text-slate-600">
+                                  {sub.startDate ? `${sub.startDate} → ${sub.endDate}` : `${sub.durationDays} ngày`}
+                                </td>
+                                <td className="py-2 px-3 font-medium text-slate-700">
+                                  {sub.endDate || '—'}
+                                </td>
+                                <td className="py-2 px-3 font-mono font-bold text-red-600">
+                                  {sub.price?.toLocaleString()}đ
+                                </td>
+                                <td className="py-2 px-3">
+                                  <Badge variant={sub.status} size="sm">{sub.status}</Badge>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
 
                   {/* Action Shortcuts for Receptionist */}
                   <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-slate-100">
                     <a
-                      href="#/receptionist/counter-register"
+                      href={`#/receptionist/counter-register?query=${encodeURIComponent(selectedMember.memberCode || selectedMember.phone || '')}`}
                       className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-chivo text-xs font-bold uppercase tracking-wider rounded-lg shadow-md transition-colors flex items-center gap-2"
                     >
                       <span className="material-symbols-outlined text-[18px]">point_of_sale</span>
@@ -203,7 +297,7 @@ export function MemberLookup() {
                     </a>
 
                     <a
-                      href="#/receptionist/check-in"
+                      href={`#/receptionist/check-in?query=${encodeURIComponent(selectedMember.memberCode || selectedMember.phone || '')}`}
                       className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-chivo text-xs font-bold uppercase tracking-wider rounded-lg shadow-md transition-colors flex items-center gap-2"
                     >
                       <span className="material-symbols-outlined text-[18px]">how_to_reg</span>

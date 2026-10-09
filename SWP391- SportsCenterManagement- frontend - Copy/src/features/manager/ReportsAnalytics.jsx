@@ -6,7 +6,7 @@ import { useToast } from '../../context/ToastContext.js';
 const { useState, useEffect } = React;
 
 export function ReportsAnalytics() {
-  const { showSuccess } = useToast();
+  const { showError } = useToast();
   const [metrics, setMetrics] = useState(null);
   const [period, setPeriod] = useState('MONTH');
   const [loading, setLoading] = useState(true);
@@ -14,22 +14,26 @@ export function ReportsAnalytics() {
   useEffect(() => {
     async function fetchMetrics() {
       try {
-        const data = await reportApi.getOverview();
+        const data = await reportApi.getOverview(period);
         setMetrics(data);
       } catch (e) {
-        console.error(e);
+        showError(e.message || 'Không thể tải báo cáo từ backend.');
       } finally {
         setLoading(false);
       }
     }
     fetchMetrics();
-  }, []);
+  }, [period]);
 
   const handleExport = () => {
-    showSuccess('Đã xuất file báo cáo phân tích SCMS Analytics thành công (scms-report-2026.csv)!');
+    showError('Backend hiện chưa có API xuất báo cáo.');
   };
 
   if (loading) return <LoadingSpinner text="Đang trích xuất báo cáo phân tích..." />;
+
+  const revenuePeriods = metrics?.revenuePeriods || [];
+  const maxRevenue = Math.max(1, ...revenuePeriods.map(item => Number(item.net || 0)));
+  const utilizationBySport = metrics?.utilizationBySport || [];
 
   return (
     <div className="space-y-6">
@@ -59,13 +63,13 @@ export function ReportsAnalytics() {
               onClick={() => setPeriod('QUARTER')}
               className={`px-3 py-1 rounded font-chivo uppercase ${period === 'QUARTER' ? 'bg-slate-900 text-white' : 'text-slate-600'}`}
             >
-              Quý 3
+              Quý này
             </button>
             <button
               onClick={() => setPeriod('YEAR')}
               className={`px-3 py-1 rounded font-chivo uppercase ${period === 'YEAR' ? 'bg-slate-900 text-white' : 'text-slate-600'}`}
             >
-              Năm 2026
+              Năm Này
             </button>
           </div>
 
@@ -83,10 +87,10 @@ export function ReportsAnalytics() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Doanh Thu Gói Tập"
-          value="148.500.000đ"
-          subtitle="Tăng trưởng so với tháng trước"
+          value={`${Number(metrics?.monthlyRevenue || 0).toLocaleString()}đ`}
+          subtitle="Doanh thu thuần theo kỳ đã chọn"
           icon="attach_money"
-          trend="+18.4%"
+          trend={metrics?.revenueGrowth || '—'}
           color="red"
         />
         <StatCard
@@ -94,130 +98,65 @@ export function ReportsAnalytics() {
           value={metrics?.activeMembers || 0}
           subtitle={`Tổng số hội viên: ${metrics?.totalMembers}`}
           icon="group"
-          trend="85% Tỷ lệ giữ chân"
+          trend=""
           color="slate"
         />
         <StatCard
           title="Lượt Đặt Sân / Lớp"
           value={metrics?.totalBookings || 0}
-          subtitle="Tổng số booking xác nhận"
+          subtitle="Theo thống kê lớp của backend"
           icon="event_seat"
-          trend="Chuẩn Olympic"
+          trend=""
           color="slate"
         />
         <StatCard
           title="Lượt Check-in Vào Cổng"
-          value={metrics?.todayCheckins || 0}
-          subtitle="Ghi nhận qua cổng quét thẻ"
+          value={metrics?.todayCheckins ?? '—'}
+          subtitle="Backend chưa có API check-in"
           icon="fingerprint"
-          trend="24/7"
+          trend=""
           color="red"
         />
       </div>
 
-      {/* Visual Analytics Sections */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Package Revenue Contribution */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-chivo text-sm font-black text-slate-900 uppercase tracking-wide">
-              Cơ Cấu Doanh Thu Gói Tập
-            </h2>
-            <span className="text-xs font-bold text-red-600">Tổng: 148.5Tr</span>
+            <h2 className="font-chivo text-sm font-black text-slate-900 uppercase tracking-wide">Doanh Thu Theo Ngày</h2>
+            <span className="text-xs font-bold text-red-600">{Number(metrics?.monthlyRevenue || 0).toLocaleString()}đ</span>
           </div>
-
           <div className="space-y-3 pt-2">
-            <div>
-              <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
-                <span>Gói All-Access Olympic Pass (5.800.000đ)</span>
-                <span className="font-bold">69.600.000đ (47%)</span>
+            {revenuePeriods.length === 0 ? <p className="text-xs text-slate-500">Backend chưa có dữ liệu trong kỳ này.</p> : revenuePeriods.map(item => (
+              <div key={item.periodStart}>
+                <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
+                  <span>{item.periodStart}</span>
+                  <span>{Number(item.net || 0).toLocaleString()}đ</span>
+                </div>
+                <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="h-full bg-red-600 rounded-full" style={{ width: `${Math.max(0, Math.min(100, Number(item.net || 0) / maxRevenue * 100))}%` }} />
+                </div>
               </div>
-              <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                <div className="h-full bg-red-600 rounded-full" style={{ width: '47%' }} />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
-                <span>Gói Pro Bứt Phá (1.800.000đ)</span>
-                <span className="font-bold">48.600.000đ (33%)</span>
-              </div>
-              <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                <div className="h-full bg-slate-900 rounded-full" style={{ width: '33%' }} />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
-                <span>Gói Elite Chuyên Nghiệp (3.200.000đ)</span>
-                <span className="font-bold">22.400.000đ (15%)</span>
-              </div>
-              <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                <div className="h-full bg-amber-500 rounded-full" style={{ width: '15%' }} />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
-                <span>Gói Basic Thể Thao (650.000đ)</span>
-                <span className="font-bold">7.900.000đ (5%)</span>
-              </div>
-              <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                <div className="h-full bg-slate-400 rounded-full" style={{ width: '5%' }} />
-              </div>
-            </div>
+            ))}
           </div>
         </div>
 
-        {/* Court & Facility Utilization */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-chivo text-sm font-black text-slate-900 uppercase tracking-wide">
-              Hiệu Suất Sử Dụng 9 Cụm Sân
-            </h2>
-            <span className="text-xs font-bold text-emerald-600">TB: {metrics?.occupancyRate}%</span>
+            <h2 className="font-chivo text-sm font-black text-slate-900 uppercase tracking-wide">Tỷ Lệ Đặt Chỗ Theo Môn</h2>
+            <span className="text-xs font-bold text-emerald-600">TB: {metrics?.occupancyRate ?? 0}%</span>
           </div>
-
           <div className="space-y-3 pt-2">
-            <div>
-              <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
-                <span>Bể bơi Olympic 50m trong nhà</span>
-                <span className="font-bold text-red-600">92% lấp đầy</span>
+            {utilizationBySport.length === 0 ? <p className="text-xs text-slate-500">Chưa có ca học được lên lịch trong kỳ này.</p> : utilizationBySport.map(item => (
+              <div key={item.name}>
+                <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
+                  <span>{item.name}</span>
+                  <span>{item.booked}/{item.capacity} chỗ ({item.percentage}%)</span>
+                </div>
+                <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="h-full bg-slate-900 rounded-full" style={{ width: `${Math.max(0, Math.min(100, item.percentage))}%` }} />
+                </div>
               </div>
-              <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                <div className="h-full bg-red-600 rounded-full" style={{ width: '92%' }} />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
-                <span>Sân cầu lông Taraflex BWF (8 sân)</span>
-                <span className="font-bold text-slate-900">88% lấp đầy</span>
-              </div>
-              <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                <div className="h-full bg-slate-900 rounded-full" style={{ width: '88%' }} />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
-                <span>Khu tập Gym & Technogym Pro 800m²</span>
-                <span className="font-bold text-slate-900">85% lấp đầy</span>
-              </div>
-              <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                <div className="h-full bg-slate-900 rounded-full" style={{ width: '85%' }} />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
-                <span>Cụm sân Tennis Plexicushion</span>
-                <span className="font-bold text-slate-700">75% lấp đầy</span>
-              </div>
-              <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                <div className="h-full bg-slate-400 rounded-full" style={{ width: '75%' }} />
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </div>

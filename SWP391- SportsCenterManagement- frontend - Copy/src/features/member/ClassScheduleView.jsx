@@ -37,6 +37,8 @@ export function ClassScheduleView() {
           .map(b => b.classId)
       );
       setBookedClassIds(confirmedIds);
+    } catch (error) {
+      showError(error.message || 'Không thể tải lịch lớp từ backend.');
     } finally {
       setLoading(false);
     }

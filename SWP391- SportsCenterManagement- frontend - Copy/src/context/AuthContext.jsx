@@ -1,5 +1,5 @@
 import { authApi } from '../services/api.js';
-import { db, DB_KEYS } from '../services/dbStorage.js';
+import { getApiToken } from '../services/http.js';
 
 const { createContext, useContext, useState, useEffect } = React;
 
@@ -10,6 +10,10 @@ const SESSION_KEY = 'SCMS_AUTH_SESSION';
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(() => {
     try {
+      if (!getApiToken()) {
+        localStorage.removeItem(SESSION_KEY);
+        return null;
+      }
       const saved = localStorage.getItem(SESSION_KEY);
       if (saved) return JSON.parse(saved);
       // Default to null so user starts at Landing page / Login
@@ -29,14 +33,17 @@ export function AuthProvider({ children }) {
     }
   }, [currentUser]);
 
-  // Refresh user data from DB storage
-  const refreshUser = () => {
+  useEffect(() => {
+    const handleExpiredSession = () => setCurrentUser(null);
+    window.addEventListener('scms:session-expired', handleExpiredSession);
+    return () => window.removeEventListener('scms:session-expired', handleExpiredSession);
+  }, []);
+
+  const refreshUser = async () => {
     if (!currentUser) return;
-    const users = db.get(DB_KEYS.USERS);
-    const fresh = users.find(u => u.id === currentUser.id);
-    if (fresh) {
-      setCurrentUser(fresh);
-    }
+    const fresh = await authApi.getCurrentUser();
+    if (fresh) setCurrentUser(fresh);
+    return fresh;
   };
 
   const login = async (email, password) => {
@@ -73,9 +80,7 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
-    if (currentUser) {
-      db.logAudit(currentUser.fullName, currentUser.role, 'LOGOUT', `Đăng xuất khỏi hệ thống`);
-    }
+    authApi.logout();
     setCurrentUser(null);
   };
 
@@ -88,8 +93,9 @@ export function AuthProvider({ children }) {
 
   const changePassword = async (currentPassword, newPassword) => {
     if (!currentUser) return;
-    await authApi.changePassword(currentUser.id, currentPassword, newPassword);
-    refreshUser();
+    const updated = await authApi.changePassword(currentUser.id, currentPassword, newPassword);
+    setCurrentUser(updated);
+    return updated;
   };
 
   const value = {
