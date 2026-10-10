@@ -1,0 +1,10 @@
+2026-10-11: Xem SYNCHRONIZATION_FIX_REPORT.md de biet cac loi FE-BE da sua, test moi va chuc nang Backend chua co. Gói ZIP mới không bao gồm node_modules, bin, obj; phải npm ci / dotnet restore trước khi chạy.
+
+SCMS integrated project - 2026-10-10
+Includes modified FE, BE, JWT HS256 integration, Postman collections and test reports.
+Read INTEGRATION_TEST_REPORT.md for setup, verified scope and remaining gaps.
+Frontend: npm ci; copy .env.example to .env.local; npm run dev -- --port 3003.
+Backend: configure ConnectionStrings__SportsCenter and a private Jwt__Key (at least 32 bytes), then dotnet restore and dotnet run --project SportsCenterManagement.API --no-launch-profile --urls http://localhost:54162 from Backend.
+Use Development environment to enable Swagger. Keep Database__SeedDemoData=false for existing databases.
+SQL Server database is NOT embedded in this source archive. The verified database is the existing local SQL Server LocalDB SportsCenterManagement on the original machine. Configure your SQL connection when moving to another machine; EF migrations are included.
+Secrets, local .env files, dependencies, build outputs and Git metadata are excluded. No production payment was performed.

@@ -1,0 +1,472 @@
+{
+  "info": {
+    "name": "SCMS - Real Member Integration (development only)",
+    "description": "Real API and SQL tests. Creates uniquely named test members and PendingPayment subscriptions, leaves test records for audit. No gateway or production payment. Password/token generated and held only during collection execution; never export populated runtime variables.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{integrationToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.collectionVariables.get('testUsername')) {",
+          " const id = Date.now().toString();",
+          " pm.collectionVariables.set('testUsername', 'postman' + id);",
+          " pm.collectionVariables.set('testEmail', 'postman' + id + '@example.invalid');",
+          " pm.collectionVariables.set('testFullName', 'SCMS Postman ' + id);",
+          " pm.collectionVariables.set('testPassword', 'Scms!' + pm.variables.replaceIn('{{$guid}}') + 'A1');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/health",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Health: expected 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Anonymous profile rejected",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/profile/me",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Anonymous profile rejected: expected 401', () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Centers",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/catalog/centers",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Centers: expected 200', () => pm.response.to.have.status(200));",
+              "const centers = pm.response.json(); pm.expect(centers.length).to.be.above(0); pm.collectionVariables.set('testCenterId', centers[0].id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Register test member",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/register",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"username\": \"{{testUsername}}\", \"email\": \"{{testEmail}}\", \"password\": \"{{testPassword}}\", \"fullName\": \"{{testFullName}}\", \"centerId\": \"{{testCenterId}}\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Register test member: expected 201', () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set('testMemberId', pm.response.json().memberId);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Login test member",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/login",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"email\": \"{{testEmail}}\", \"password\": \"{{testPassword}}\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Login test member: expected 200', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('integrationToken', pm.response.json().accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Profile",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/profile/me"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Profile: expected 200', () => pm.response.to.have.status(200));",
+              "pm.test('Real registered profile', () => pm.expect(pm.response.json().email).to.eql(pm.collectionVariables.get('testEmail')));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Update profile",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/profile/me",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"fullName\": \"{{testFullName}} verified\", \"phone\": null}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Update profile: expected 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Verify profile persistence",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/profile/me"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Verify profile persistence: expected 200', () => pm.response.to.have.status(200));",
+              "pm.test('GET confirms persisted update', () => pm.expect(pm.response.json().fullName).to.eql(pm.collectionVariables.get('testFullName') + ' verified'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Packages",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/centers/{{testCenterId}}/membership-packages"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Packages: expected 200', () => pm.response.to.have.status(200));",
+              "const packages = pm.response.json(); pm.expect(packages.length).to.be.above(0); pm.collectionVariables.set('testPackageId', packages[0].id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create pending subscription",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/members/me/subscriptions",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"packageId\": \"{{testPackageId}}\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Create pending subscription: expected 201', () => pm.response.to.have.status(201));",
+              "const p=pm.response.json(); pm.collectionVariables.set('testSubscriptionId', p.subscriptionId); pm.collectionVariables.set('testInvoiceNumber', p.invoiceNumber);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Verify pending subscription",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/members/{{testMemberId}}/subscriptions"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Verify pending subscription: expected 200', () => pm.response.to.have.status(200));",
+              "pm.test('PendingPayment persisted, never auto-active', () => pm.expect(pm.response.json().some(s => s.subscriptionId === Number(pm.collectionVariables.get('testSubscriptionId')) && s.status === 'PendingPayment')).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Invoice persisted",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/invoices/{{testInvoiceNumber}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Invoice persisted: expected 200', () => pm.response.to.have.status(200));",
+              "pm.test('Invoice remains unpaid', () => pm.expect(pm.response.json().amountPaid).to.eql(0));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Member forbidden staff",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/centers/{{testCenterId}}/staff"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Member forbidden staff: expected 403', () => pm.response.to.have.status(403));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sessions",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/class-sessions"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Sessions: expected 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Bookings",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/members/me/session-bookings"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Bookings: expected 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
