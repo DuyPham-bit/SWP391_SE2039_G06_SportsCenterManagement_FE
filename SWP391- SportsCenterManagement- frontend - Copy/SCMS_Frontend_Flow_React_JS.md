@@ -606,7 +606,7 @@ Mọi tương tác từ Component đều đi qua các đối tượng API chuyê
 - `bookingApi`: `getMemberBookings`, `bookClass` (kiểm tra hạn gói và công suất), `cancelBooking`.
 - `receptionApi`: `lookupMember`, `registerCounterPackage` (sinh mã `TXN-xxxxxx`), `checkInMember`, `getCheckInHistory`.
 - `coachApi`: `getCoachClassesAndMembers`, `createTrainingPlan`, `recordWorkoutProgress`, `takeAttendance`, `sendNotification`, `getAIRecommendation`.
-- `memberApi`: `subscribeOnline` (sinh mã `ONL-xxxxxx`), `getMyProgress`, `getMyPlans`, `askAI`.
+- `memberApi`: `subscribeOnline` (sinh mã `ONL-xxxxxx`), `getMyProgress`, `getMyPlans`.
 - `reportApi`: `getOverview` (tính toán công suất phòng, doanh thu, cơ cấu gói).
 - `systemApi`: `getAuditLogs`, `getPermissions`, `updatePermissions`, `resetAllData`.
 
@@ -668,7 +668,7 @@ Hệ thống hiển thị thông báo góc trên bên phải màn hình qua hook
 | **UC-43** | Đặt chỗ lớp học thể thao | `src/features/member/ClassScheduleView.jsx` | `#/member/schedule` (Modal) | `bookingApi.bookClass` | **Hoàn thành 100%** |
 | **UC-44** | Hủy đặt chỗ lớp học | `src/features/member/MyBookings.jsx` | `#/member/bookings` | `bookingApi.cancelBooking` | **Hoàn thành 100%** |
 | **UC-45** | Xem tiến độ & nhận xét HLV | `src/features/member/MyProgress.jsx` | `#/member/progress` | `memberApi.getMyProgress` | **Hoàn thành 100%** |
-| **UC-46** | Trợ lý Thể thao AI (Chatbot) | `src/features/member/MemberAIAssistant.jsx` | `#/member/ai-assistant` | `memberApi.askAI` | **Hoàn thành 100%** |
+| **UC-46** | Trợ lý Thể thao AI (Chatbot) | `src/features/member/MemberAIAssistant.jsx` | `#/member/ai-assistant` | `Client AI Engine (Độc lập)` | **Hoàn thành 100%** |
 | **LANDING**| Giới thiệu trung tâm & sân bãi | `src/features/landing/LandingPage.jsx` | `#/` | `mockData.INITIAL_SPORTS` | **Hoàn thành 100%** |
 
 ---

@@ -537,10 +537,6 @@ export const memberApi = {
 
   async getMyPlans() {
     throw new Error('Backend hiện chưa có API giáo án tập luyện của hội viên.');
-  },
-
-  async askAI() {
-    throw new Error('Backend hiện chưa có API trợ lý AI.');
   }
 };
 
