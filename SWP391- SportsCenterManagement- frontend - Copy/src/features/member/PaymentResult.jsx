@@ -24,6 +24,11 @@ export function PaymentResult() {
   const isPayOsReturn = new URLSearchParams(window.location.search).has('orderCode');
   const cancelled = new URLSearchParams(window.location.search).get('cancel') === 'true';
 
+  const handleBackToPackages = () => {
+    const origin = window.location.port === '54162' ? 'http://localhost:3004' : window.location.origin;
+    window.location.assign(`${origin}/#/member/packages`);
+  };
+
   return (
     <main className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
       <section className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
@@ -46,9 +51,13 @@ export function PaymentResult() {
                 : 'Không có dữ liệu phản hồi thanh toán để xác nhận.'}
           </p>
         )}
-        <a href="#/member/packages" className="mt-6 inline-flex rounded-lg bg-red-600 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-red-700">
+        <button
+          type="button"
+          onClick={handleBackToPackages}
+          className="mt-6 inline-flex rounded-lg bg-red-600 px-6 py-2.5 text-xs font-bold uppercase tracking-wider text-white hover:bg-red-700 shadow-md transition-all cursor-pointer"
+        >
           Quay lại gói tập
-        </a>
+        </button>
       </section>
     </main>
   );

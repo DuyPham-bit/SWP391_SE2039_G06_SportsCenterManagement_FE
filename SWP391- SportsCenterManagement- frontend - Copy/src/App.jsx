@@ -44,9 +44,16 @@ import { MemberAIAssistant } from './features/member/MemberAIAssistant.js';
 import { PaymentResult } from './features/member/PaymentResult.js';
 
 function AppRouter() {
-  const [currentHash, setCurrentHash] = useState(() =>
-    window.location.pathname === '/payment-result' ? '#/payment-result' : window.location.hash || '#/'
-  );
+  const [currentHash, setCurrentHash] = useState(() => {
+    const hash = window.location.hash || '';
+    if (hash && hash !== '#/' && hash !== '#/payment-result') {
+      return hash;
+    }
+    if (window.location.pathname === '/payment-result') {
+      return '#/payment-result';
+    }
+    return hash || '#/';
+  });
 
   useEffect(() => {
     const handleHashChange = () => {
