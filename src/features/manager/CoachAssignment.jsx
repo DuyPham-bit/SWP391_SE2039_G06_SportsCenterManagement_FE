@@ -1,4 +1,4 @@
-import { classApi, staffApi } from '../../services/api.js';
+import { classApi } from '../../services/api.js';
 import { useToast } from '../../context/ToastContext.js';
 import { Modal } from '../../components/common/Modal.js';
 import { Badge } from '../../components/common/StatCard.js';
@@ -11,6 +11,7 @@ export function CoachAssignment() {
   const [classes, setClasses] = useState([]);
   const [coaches, setCoaches] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   // Assign Modal
   const [modalOpen, setModalOpen] = useState(false);
@@ -19,6 +20,7 @@ export function CoachAssignment() {
   const [assigning, setAssigning] = useState(false);
 
   const loadData = async () => {
+    setError('');
     try {
       const [classList, staffList] = await Promise.all([
         classApi.getManagementClasses(),
@@ -27,7 +29,7 @@ export function CoachAssignment() {
       setClasses(classList);
       setCoaches(staffList);
     } catch (e) {
-      showError('Lỗi tải dữ liệu phân công HLV');
+      setError(e.message || 'Lỗi tải dữ liệu phân công HLV');
     } finally {
       setLoading(false);
     }
@@ -64,6 +66,7 @@ export function CoachAssignment() {
   };
 
   if (loading) return <LoadingSpinner text="Đang tải dữ liệu phân công HLV..." />;
+  if (error) return <div role="alert" className="p-5 bg-red-50 rounded-xl space-y-3"><p>{error}</p><button onClick={() => { setLoading(true); loadData(); }}>Thử lại</button></div>;
 
   return (
     <div className="space-y-6">
@@ -89,7 +92,7 @@ export function CoachAssignment() {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <Badge variant="primary" size="sm">{cls.sportName}</Badge>
-                  <span className="text-xs text-slate-500 font-bold">{cls.dayOfWeek}</span>
+                  <span className="text-xs text-slate-500 font-bold">{cls.status}</span>
                 </div>
 
                 <h3 className="font-chivo text-base font-bold text-slate-900 leading-tight">
@@ -97,7 +100,7 @@ export function CoachAssignment() {
                 </h3>
                 <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
                   <span className="material-symbols-outlined text-[16px] text-slate-400">schedule</span>
-                  <span>{cls.timeSlot} • {cls.roomName}</span>
+                  <span>{cls.durationMinutes} phút/buổi · {cls.roomName || 'Chưa chọn phòng'}</span>
                 </p>
 
                 {/* Current Coach Box */}
@@ -130,6 +133,7 @@ export function CoachAssignment() {
 
                 <button
                   onClick={() => openAssignModal(cls)}
+                  disabled={['Cancelled', 'Completed'].includes(cls.status) || !coaches.length}
                   className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-chivo text-xs font-bold uppercase tracking-wider transition-colors shadow-sm flex items-center gap-1"
                 >
                   <span className="material-symbols-outlined text-[16px]">swap_horiz</span>
@@ -142,6 +146,8 @@ export function CoachAssignment() {
       </div>
 
       {/* Assignment Modal */}
+      {!classes.length && <p>Chưa có lớp học để phân công.</p>}
+      {!coaches.length && <p>Chưa có huấn luyện viên đang hoạt động trong trung tâm.</p>}
       <Modal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
@@ -152,7 +158,7 @@ export function CoachAssignment() {
             <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
               <div className="font-bold text-slate-900 text-sm">{selectedClass.name}</div>
               <div className="text-slate-600">Môn: <strong>{selectedClass.sportName}</strong> • Sân: <strong>{selectedClass.roomName}</strong></div>
-              <div className="text-red-600 font-bold">Lịch học: {selectedClass.dayOfWeek} ({selectedClass.timeSlot})</div>
+              <a href="#/manager/classes-rooms" className="text-red-600 font-bold">Xem lịch học trong quản lý lớp</a>
             </div>
 
             <div>
@@ -166,7 +172,7 @@ export function CoachAssignment() {
               >
                 {coaches.map(c => (
                   <option key={c.id} value={c.id}>
-                    {c.fullName} ({c.specialty} - {c.certification || 'Chứng chỉ Quốc tế'})
+                    {c.fullName} ({c.specialization || 'Chưa có chuyên môn'}{c.certification ? ` · ${c.certification}` : ''})
                   </option>
                 ))}
               </select>

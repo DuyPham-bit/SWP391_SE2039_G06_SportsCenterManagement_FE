@@ -8,6 +8,8 @@
 
 ## 0. Cài Đặt và Chạy Frontend
 
+Đối chiếu 9 nhóm chức năng Member, thay đổi dashboard, lịch sử điểm danh, thông báo và bằng chứng kiểm thử: [member-feature-audit.md](./docs/member-feature-audit.md). Hai route mới: `#/member/attendance`, `#/member/notifications`. Cần chạy backend cùng phiên bản để nhận dữ liệu phòng/HLV/điểm danh và thông báo đổi/hủy lịch.
+
 Mã nguồn frontend hiện được lưu trong thư mục:
 
 ```text
@@ -80,7 +82,7 @@ Frontend của Hệ thống Quản lý Trung tâm Thể thao SCMS chịu trách 
                                                (#/manager/*) (#/receptionist/*)  (#/coach/*)    (#/member/*)
                                                     │                │                │               │
                                                     ▼                ▼                ▼               ▼
-                                               8 Màn hình       4 Màn hình       8 Màn hình      6 Màn hình
+                                               8 Màn hình       4 Màn hình       8 Màn hình      8 Màn hình
 ```
 
 ---
@@ -123,9 +125,10 @@ src/
 │   │
 │   ├── manager/                        # Phân hệ Quản trị viên (8 chức năng)
 │   │   ├── ManagerDashboard.jsx        # Bảng điều khiển KPI tổng thể, biểu đồ doanh thu & công suất
+│   │   ├── MemberManagement.jsx        # Danh sách, tạo/sửa, khóa/mở thành viên và lịch sử gói
 │   │   ├── StaffManagement.jsx         # Quản lý nhân viên (HLV, Lễ tân): Tạo mới, sửa, bật/khóa
 │   │   ├── PackageManagement.jsx       # Quản lý gói tập hội viên: Cấu hình giá, số môn, thời hạn
-│   │   ├── ClassesAndRooms.jsx         # Quản lý lớp học & quản lý 9 cụm sân thể thao tiêu chuẩn
+│   │   ├── ClassesAndRooms.jsx         # Quản lý lớp, bộ môn, phòng và lịch học
 │   │   ├── CoachAssignment.jsx         # Phân công HLV cho lớp học có kiểm tra xung đột thời gian
 │   │   ├── ReportsAnalytics.jsx        # Báo cáo thống kê, doanh thu, tăng trưởng & cơ cấu gói tập
 │   │   ├── RolesPermissions.jsx        # Ma trận phân quyền động (SYSTEM_CAPABILITIES)
@@ -147,12 +150,14 @@ src/
 │   │   ├── CoachNotifications.jsx      # Gửi bài tập về nhà và thông báo tới học viên
 │   │   └── AIRecommendation.jsx        # Trợ lý AI gợi ý giáo án thể thao chuyên biệt theo môn
 │   │
-│   └── member/                         # Phân hệ Hội viên (6 chức năng)
+│   └── member/                         # Phân hệ Hội viên (8 màn hình)
 │       ├── MemberDashboard.jsx         # Bảng thông tin cá nhân, thẻ hội viên số, đếm ngược ca học
 │       ├── MemberPackages.jsx          # Danh mục gói tập và thanh toán trực tuyến (VNPAY, MoMo)
 │       ├── ClassScheduleView.jsx       # Tra cứu lịch 15 môn thể thao và đặt chỗ lớp học
 │       ├── MyBookings.jsx              # Quản lý các lớp đã đặt, lịch sử và hủy đặt chỗ
 │       ├── MyProgress.jsx              # Xem giáo án được giao, chỉ số rèn luyện và nhận xét của HLV
+│       ├── MyAttendance.jsx            # Lịch sử điểm danh và ghi chú HLV theo buổi
+│       ├── MemberNotifications.jsx     # Thông báo đã/chưa đọc, nhắc lịch và hạn gói
 │       └── MemberAIAssistant.jsx       # Chatbot Trợ lý Thể thao AI tương tác hỏi đáp 24/7
 │
 └── services/
@@ -356,21 +361,26 @@ Codebase thực tế áp dụng hệ thống bảo vệ 3 lớp rất chặt ch�
 
 ## 7. Phân hệ Quản Lý (Manager Frontend Flow)
 
-Gồm 8 màn hình chức năng chuyên sâu với đầy đủ hành vi nghiệp vụ:
+Gồm 9 màn hình. Đối chiếu yêu cầu và bằng chứng kiểm thử tại [manager-feature-audit.md](docs/manager-feature-audit.md).
 
 ### 7.1 Bảng Điều Khiển Tổng Quan (Manager Dashboard)
 - Route: `#/manager/dashboard` | Component: `ManagerDashboard.jsx`
-- Hiển thị 4 thẻ KPI động: Tổng hội viên, Doanh thu tháng, Công suất khai thác 9 sân tập, Đội ngũ HLV.
-- Biểu đồ tăng trưởng doanh thu 6 tháng gần nhất.
-- Bảng tỷ lệ lấp đầy sân tập và phân bổ doanh số theo từng gói cước.
+- Hiển thị tổng thành viên (kể cả người chưa mua gói), doanh thu tháng, đăng ký lớp hiện tại và check-in hôm nay.
+- Lối tắt tới đủ 7 nhóm nghiệp vụ và các thao tác gần đây; hiển thị lỗi và thử lại khi API không tải được dữ liệu.
+
+### 7.1.1 Quản lý thành viên
+- Route: `#/manager/members` | Component: `MemberManagement.jsx`
+- Danh sách phân trang tại server, tìm kiếm theo tên/mã thẻ/email/điện thoại.
+- Tạo tài khoản với mật khẩu được nhập rõ ràng, sửa hồ sơ, khóa/mở tài khoản có xác nhận và xem lịch sử gói đã đăng ký.
+- API kiểm tra Manager được gán vào trung tâm; Receptionist vẫn cần từ khóa để tra cứu.
 
 ### 7.2 UC-10 Quản Lý Nhân Sự (Staff Management)
 - Route: `#/manager/staff` | Component: `StaffManagement.jsx` | Capability: `manage_staff`
 - **Chức năng:**
   - Tra cứu nhân viên theo họ tên, email, lọc theo vai trò (COACH, RECEPTIONIST) hoặc trạng thái (ACTIVE, INACTIVE).
-  - Thêm mới nhân viên: Điền họ tên, email, SĐT, vai trò, chuyên môn, bằng cấp quốc tế (AFC, NASM, BWF).
+  - Bổ nhiệm tài khoản thành viên có sẵn thành HLV hoặc lễ tân, giữ thông tin đăng nhập và lịch sử thành viên.
   - Chỉnh sửa thông tin nhân sự.
-  - Bật/Khóa trạng thái tài khoản nhân viên (Toggle Status) có xác nhận an toàn.
+  - Bật/khóa trạng thái tài khoản nhân viên.
   - Ghi nhận Audit Log hành động tự động.
 
 ### 7.3 UC-11 Quản Lý Gói Tập Hội Viên (Package Management)
@@ -382,10 +392,9 @@ Gồm 8 màn hình chức năng chuyên sâu với đầy đủ hành vi nghiệ
 
 ### 7.4 UC-12 Quản Lý Lớp Học & Sân Bãi (Classes & Rooms)
 - Route: `#/manager/classes-rooms` | Component: `ClassesAndRooms.jsx` | Capability: `manage_classes`
-- **Giao diện tab đôi:**
-  - **Tab Lớp Học:** Danh sách các lớp học theo 15 môn thể thao. Mở lớp mới: Chọn môn, chọn cụm sân, thời gian ca học, thứ trong tuần, sức chứa tối đa.
-    - *Ràng buộc Frontend:* Kiểm tra sức chứa lớp không được vượt quá sức chứa tối đa của sân bãi đã chọn.
-  - **Tab Sân Bãi (9 Cụm Sân Olympic):** Quản lý thông tin sân, sức chứa, vị trí phân khu, tình trạng sẵn sàng.
+- Ba tab lấy dữ liệu API: lớp học, phòng tập và bộ môn.
+- Tạo/sửa/công bố/hủy lớp; thêm/sửa/hủy lịch theo thứ, khung giờ và khoảng ngày. Server kiểm tra xung đột, sức chứa và chỗ đã đặt.
+- Tạo/sửa phòng tập; tạo/sửa/ngừng bộ môn riêng trung tâm. Bộ môn dùng chung chỉ đọc; bộ môn đang có lớp mở không thể ngừng sử dụng.
 
 ### 7.5 UC-13 Phân Công Huấn Luyện Viên (Coach Assignment)
 - Route: `#/manager/coach-assignment` | Component: `CoachAssignment.jsx` | Capability: `assign_coach`
@@ -396,24 +405,24 @@ Gồm 8 màn hình chức năng chuyên sâu với đầy đủ hành vi nghiệ
 ### 7.6 UC-14 Báo Cáo Thống Kê & Doanh Thu (Reports & Analytics)
 - Route: `#/manager/reports` | Component: `ReportsAnalytics.jsx` | Capability: `view_reports`
 - **Chức năng:**
-  - Thống kê doanh thu theo thời gian, tỷ lệ chuyển đổi gói tập.
-  - Tỷ lệ học viên hoàn thành ca học, thống kê số lượng hội viên mới hàng tháng.
-  - Phân tích hiệu suất khai thác của từng cụm sân bãi.
+  - Chọn tháng/quý/năm hiện tại hoặc khoảng ngày tối đa 367 ngày, nhóm theo ngày/tháng.
+  - Doanh thu thuần, thành viên mới và sự kiện đăng ký lớp trong kỳ; tổng thành viên, gói hiệu lực và trạng thái đăng ký hiện tại được ghi nhãn riêng.
+  - Tỷ lệ đặt chỗ theo bộ môn và xuất CSV Unicode cùng dữ liệu đang xem.
 
 ### 7.7 UC-15 Cấu Hình Vai Trò & Ma Trận Phân Quyền (Roles & Permissions)
 - Route: `#/manager/roles-permissions` | Component: `RolesPermissions.jsx` | Capability: `manage_roles`
 - **Chức năng:**
   - Chọn vai trò mục tiêu: RECEPTIONIST, COACH, MEMBER.
-  - Hiển thị toàn bộ 15+ System Capabilities kèm Icon, nhóm nghiệp vụ và mô tả.
+  - Hiển thị chức năng và quyền dữ liệu khả dụng trong phạm vi từng vai trò.
   - Bật/Tắt checkbox cấp quyền trực quan.
-  - Nút *"Cấp Toàn Bộ Quyền"* và nút *"Khôi Phục Mặc Định"*.
-  - Bấm *"Lưu Thay Đổi Phân Quyền"* -> Cập nhật vào DB và kích hoạt đồng bộ Sidebar toàn hệ thống.
+  - Lưu vào DB theo trung tâm. API áp dụng từ request tiếp theo; menu của người dùng được tải lại khi đăng nhập lại.
 
 ### 7.8 UC-16 Nhật Ký Thao Tác Hệ Thống (Audit Logs)
 - Route: `#/manager/audit-logs` | Component: `AuditLogs.jsx` | Capability: `view_audit_logs`
 - **Chức năng:**
   - Theo dõi mọi hành vi trọng yếu: Đăng nhập, đăng ký, tạo nhân viên, phân công HLV, tạo giáo án, check-in, hủy đặt lớp, thay đổi quyền hạn.
-  - Bộ lọc tìm kiếm nhanh theo Người thực hiện, Hành động hoặc Từ khóa chi tiết.
+  - Phân trang server để xem hơn 50 bản ghi; tìm/lọc trong trang đang xem, mở chi tiết giá trị trước/sau và hiển thị giờ Việt Nam.
+  - Phân công/gỡ HLV và thay đổi bộ môn được ghi nhật ký cùng transaction của thao tác.
 
 ---
 
@@ -509,18 +518,19 @@ Gồm 8 màn hình hỗ trợ toàn diện công tác huấn luyện:
 
 ## 10. Phân hệ Hội Viên (Member Frontend Flow)
 
-Gồm 6 màn hình đáp ứng trọn vẹn hành trình rèn luyện của hội viên:
+Gồm 8 màn hình, cùng luồng đăng ký tài khoản và chỉnh sửa hồ sơ dùng chung:
 
 ### 10.1 Trang Cá Nhân Hội Viên (Member Dashboard)
 - Route: `#/member/dashboard` | Component: `MemberDashboard.jsx`
-- Hiển thị Thẻ Hội Viên Điện Tử kèm mã QR định danh, trạng thái gói tập và ngày hết hạn.
-- Đếm ngược ca học tiếp theo đã đăng ký, lối tắt đặt chỗ nhanh và xem tiến độ thể lực.
+- Hiển thị mã hội viên, trạng thái gói tập và ngày hết hạn; có nút cập nhật hồ sơ.
+- Lọc và sắp xếp ca sắp tới, hiển thị HLV/chuyên môn/phòng, tóm tắt giáo án/nhận xét và thông báo.
+- Nhắc buổi trong 24 giờ, gói còn tối đa 7 ngày hoặc chưa còn hiệu lực; cảnh báo buổi trung tâm hủy. Không hiển thị chỉ số mẫu khi chưa có dữ liệu.
 
 ### 10.2 UC-41 Mua & Gia Hạn Gói Tập Trực Tuyến (Member Packages)
-- Route: `#/member/packages` | Component: `MemberPackages.jsx` | Capability: `manage_packages`
+- Route: `#/member/packages` | Component: `MemberPackages.jsx` | Đăng nhập vai trò Member
 - Xem danh sách các gói cước đang mở bán.
-- Bấm *"Đăng Ký Ngay"* -> Mở Checkout Modal -> Chọn phương thức thanh toán điện tử (VNPAY, MoMo, Thẻ tín dụng).
-- Xác nhận -> Sinh mã giao dịch trực tuyến `ONL-xxxxxx` -> Kích hoạt trạng thái ACTIVE cho gói cước của hội viên.
+- Mở Checkout Modal, chọn VNPay, MoMo hoặc PayOS/VietQR và chuyển tới URL thanh toán do backend trả về.
+- Gói được kích hoạt sau khi backend xác minh thanh toán. Cổng cần cấu hình riêng; FE không tự tạo giao dịch hoặc kích hoạt gói.
 
 ### 10.3 UC-42 & UC-43 Tra Cứu Lịch & Đặt Chỗ Lớp Học (Class Schedule & Booking)
 - Route: `#/member/schedule` | Component: `ClassScheduleView.jsx` | Capability: `book_class`
@@ -529,27 +539,35 @@ Gồm 6 màn hình đáp ứng trọn vẹn hành trình rèn luyện của hộ
   - Lọc theo từng môn thể thao yêu thích.
   - Bấm *"Đặt Chỗ"* -> Kiểm tra ràng buộc:
     - *Gói tập chưa kích hoạt/hết hạn:* Báo lỗi, yêu cầu mua gói.
-    - *Lớp học đã đầy (FULL):* Báo lỗi, không cho đặt vượt số lượng.
+    - *Lớp học đã đầy (FULL):* Vào danh sách chờ nếu buổi học cho phép; không đặt vượt số lượng.
     - *Đã đặt chỗ lớp này trước đó:* Ngăn chặn trùng lặp.
   - Xác nhận đặt chỗ thành công -> Số lượng học viên của lớp tự động tăng lên 1.
 
 ### 10.4 UC-44 Quản Lý & Hủy Lớp Đã Đặt (My Bookings)
 - Route: `#/member/bookings` | Component: `MyBookings.jsx` | Capability: `book_class`
 - Xem danh sách các lớp đã xác nhận (CONFIRMED) hoặc đã hủy (CANCELLED).
-- Bấm *"Hủy Đặt Chỗ"* -> Mở modal xác nhận -> Giải phóng chỗ học -> Số lượng đăng ký của lớp tự động giảm đi 1, giúp hội viên khác có thể đăng ký.
+- Hiển thị HLV/phòng và trạng thái buổi hiện tại. Nút hủy chỉ hiện khi có quyền `cancel_booking` và buổi chưa bắt đầu, chưa bị hủy.
+- Hủy trước ít nhất 2 giờ giải phóng chỗ; hủy muộn dưới 2 giờ vẫn được tính sử dụng buổi. Backend xác nhận kết quả thao tác.
 
 ### 10.5 UC-45 Theo Dõi Tiến Độ & Giáo Án (My Progress)
-- Route: `#/member/progress` | Component: `MyProgress.jsx`
+- Route: `#/member/progress` | Component: `MyProgress.jsx` | Capability: `view_my_progress`
 - Xem danh sách giáo án được HLV phân công riêng cho mình.
-- Theo dõi biểu đồ cân nặng, lượng mỡ, khối lượng cơ bắp và những lời nhận xét chi tiết của HLV sau mỗi buổi rèn luyện.
+- Xem chỉ số cân nặng, lượng mỡ, khối lượng cơ, lịch sử kết quả và nhận xét HLV từ API. Chỉ số chưa đo được ghi rõ; không suy diễn mức thể lực lý tưởng.
 
 ### 10.6 UC-46 Trợ Lý Thể Thao AI Hội Viên (Member AI Assistant)
 - Route: `#/member/ai-assistant` | Component: `MemberAIAssistant.jsx` | Capability: `ask_ai_assistant`
-- Giao diện trò chuyện tương tác thông minh 24/7.
-- Hỗ trợ giải đáp các câu hỏi về:
-  - Chế độ dinh dưỡng trước và sau tập (Protein, Carbs, bù nước điện giải).
-  - Biện pháp xử lý đau mỏi cơ sau tập (DOMS), phục hồi chấn thương nhẹ.
-  - Giờ mở cửa và thông số kỹ thuật 9 cụm sân tiêu chuẩn Olympic của SCMS.
+- Gửi câu hỏi về lịch tập, bài tập, gói thành viên và dịch vụ trung tâm tới backend Gemini, giữ conversation ID do server cấp.
+- Cần cấu hình AI; khi API lỗi, hiển thị lỗi thực. Xác nhận giờ học ở lịch cá nhân và trao đổi bài tập với HLV trước khi áp dụng.
+
+### 10.7 Lịch Sử Điểm Danh
+- Route: `#/member/attendance` | Component: `MyAttendance.jsx` | Capability: `book_class`
+- Xem bản ghi có mặt/đi muộn/vắng mặt/vắng có phép, giờ điểm danh và ghi chú HLV. Buổi đã diễn ra chưa có bản ghi hiển thị "Chưa điểm danh".
+- Lọc theo trạng thái và khoảng ngày; chỉ xem dữ liệu hội viên đang đăng nhập.
+
+### 10.8 Thông Báo Của Tôi
+- Route: `#/member/notifications` | Component: `MemberNotifications.jsx`
+- Nhận thông báo HLV, đổi phòng và hủy lịch/lớp. Trạng thái đã đọc lưu server; hỗ trợ lọc chưa đọc và tự làm mới mỗi phút khi trang hiển thị.
+- Hiển thị nhắc lịch/hạn gói trong ứng dụng, không bao gồm email/SMS/web push nền.
 
 ---
 
@@ -564,6 +582,7 @@ Toàn bộ ứng dụng sử dụng cơ chế Hash Routing mượt mà, không y
 | `#/register` | `LoginPage.jsx` (Tab Register) | Tất cả (Public / Guest) | Không yêu cầu |
 | **QUẢN LÝ (MANAGER)** | | | |
 | `#/manager/dashboard` | `ManagerDashboard.jsx` | MANAGER | Mặc định vai trò |
+| `#/manager/members` | `MemberManagement.jsx` | MANAGER | API kiểm tra quyền trung tâm |
 | `#/manager/staff` | `StaffManagement.jsx` | MANAGER | `manage_staff` |
 | `#/manager/packages` | `PackageManagement.jsx` | MANAGER | `manage_packages` |
 | `#/manager/classes-rooms` | `ClassesAndRooms.jsx` | MANAGER | `manage_classes` |
@@ -587,10 +606,12 @@ Toàn bộ ứng dụng sử dụng cơ chế Hash Routing mượt mà, không y
 | `#/coach/ai-recommendation` | `AIRecommendation.jsx` | COACH, MANAGER | `get_ai_recommendation` |
 | **HỘI VIÊN (MEMBER)** | | | |
 | `#/member/dashboard` | `MemberDashboard.jsx` | MEMBER, MANAGER | Mặc định vai trò |
-| `#/member/packages` | `MemberPackages.jsx` | MEMBER, MANAGER | `manage_packages` |
+| `#/member/packages` | `MemberPackages.jsx` | MEMBER, MANAGER | Mặc định vai trò |
 | `#/member/schedule` | `ClassScheduleView.jsx` | MEMBER, MANAGER | `book_class` |
 | `#/member/bookings` | `MyBookings.jsx` | MEMBER, MANAGER | `book_class` |
-| `#/member/progress` | `MyProgress.jsx` | MEMBER, MANAGER | Mặc định vai trò |
+| `#/member/progress` | `MyProgress.jsx` | MEMBER, MANAGER | `view_my_progress` |
+| `#/member/attendance` | `MyAttendance.jsx` | MEMBER, MANAGER | `book_class` |
+| `#/member/notifications` | `MemberNotifications.jsx` | MEMBER, MANAGER | Mặc định vai trò |
 | `#/member/ai-assistant` | `MemberAIAssistant.jsx` | MEMBER, MANAGER | `ask_ai_assistant` |
 
 > **Lưu ý đặc quyền:** Quản trị viên (`MANAGER`) sở hữu quyền Superuser, có thể xem và kiểm tra thử tất cả các màn hình của Lễ tân, Huấn luyện viên và Hội viên để phục vụ công tác giám sát hệ thống.
@@ -653,6 +674,7 @@ Hệ thống hiển thị thông báo góc trên bên phải màn hình qua hook
 | **UC-03** | Xem hồ sơ & Đổi mật khẩu | `src/features/auth/ProfileModal.jsx` | Modal tại Header | `authApi.changePassword` | **Có giao diện và service** |
 | **UC-04** | Khôi phục mật khẩu (OTP) | `src/features/auth/ForgotPasswordModal.jsx`| Modal tại `#/login` | `authApi.resetPassword` | **Có giao diện và service** |
 | **UC-10** | Quản lý tài khoản nhân viên | `src/features/manager/StaffManagement.jsx` | `#/manager/staff` | `staffApi` | **Có giao diện và service** |
+| **Manager** | Quản lý thành viên | `src/features/manager/MemberManagement.jsx` | `#/manager/members` | `memberApi`, `receptionApi` | **Có giao diện và service** |
 | **UC-11** | Quản lý gói cước hội viên | `src/features/manager/PackageManagement.jsx` | `#/manager/packages` | `packageApi` | **Có giao diện và service** |
 | **UC-12** | Quản lý lớp học & sân bãi | `src/features/manager/ClassesAndRooms.jsx` | `#/manager/classes-rooms` | `classApi`, `roomApi` | **Có giao diện và service** |
 | **UC-13** | Phân công HLV & Tránh xung đột | `src/features/manager/CoachAssignment.jsx` | `#/manager/coach-assignment` | `classApi.assignCoach` | **Có giao diện và service** |
@@ -662,8 +684,8 @@ Hệ thống hiển thị thông báo góc trên bên phải màn hình qua hook
 | **UC-20** | Tra cứu hồ sơ hội viên | `src/features/receptionist/MemberLookup.jsx`| `#/receptionist/lookup` | `receptionApi.lookupMember`| **Có giao diện và service** |
 | **UC-21** | Thu ngân & Gia hạn tại quầy | `src/features/receptionist/CounterMembership.jsx`| `#/receptionist/counter-register`| `receptionApi.registerCounterPackage`| **Có giao diện và service** |
 | **UC-22** | Check-in quét thẻ vào sân | `src/features/receptionist/MemberCheckIn.jsx`| `#/receptionist/check-in` | `receptionApi.checkInMember` | **Có giao diện và service** |
-| **UC-30** | Lịch giảng dạy của HLV | `src/features/coach/TeachingSchedule.jsx` | `#/coach/schedule` | `coachApi.getCoachClassesAndMembers` | **Có giao diện và service** |
-| **UC-31** | Quản lý học viên trong lớp | `src/features/coach/ClassMembers.jsx` | `#/coach/members` | `coachApi.getClassMembers` | **Có giao diện và service** |
+| **UC-30** | Lịch giảng dạy của HLV | `src/features/coach/TeachingSchedule.jsx` | `#/coach/schedule` | `classApi.getTeachingSchedule` | **Có giao diện và service** |
+| **UC-31** | Quản lý học viên trong lớp | `src/features/coach/ClassMembers.jsx` | `#/coach/members` | `coachApi.getMembersForClass` | **Có giao diện và service** |
 | **UC-32** | Soạn giáo án huấn luyện | `src/features/coach/TrainingPlan.jsx` | `#/coach/training-plan` | `coachApi.createTrainingPlan` | **Có giao diện và service** |
 | **UC-33** | Ghi nhận tiến độ & InBody | `src/features/coach/WorkoutProgress.jsx` | `#/coach/progress` | `coachApi.recordWorkoutProgress` | **Có giao diện và service** |
 | **UC-34** | Điểm danh học viên ca học | `src/features/coach/Attendance.jsx` | `#/coach/attendance` | `coachApi.takeAttendance` | **Có giao diện và service** |
@@ -683,3 +705,5 @@ Hệ thống hiển thị thông báo góc trên bên phải màn hình qua hook
 ## 15. Tài liệu tham chiếu
 
 Bảng trên dùng để tra cứu màn hình/service, không thay thế bằng chứng chạy kiểm thử. Trạng thái triển khai, cấu hình còn thiếu và lệnh kiểm tra được ghi trong [tài liệu tích hợp API/JWT](../Backend/Backend/docs/requirements/api-jwt-integration.md).
+
+Đối chiếu yêu cầu và bằng chứng cho 8 nhóm chức năng Coach: [coach-feature-audit.md](docs/coach-feature-audit.md). Kết quả mới có thể gắn với buổi học đã kết thúc; ngữ cảnh AI lấy hồ sơ và tối đa 10 kết quả gần nhất từ server. Không cần migration database.

@@ -3,6 +3,8 @@ import { useAuth } from '../../context/AuthContext.js';
 import { useToast } from '../../context/ToastContext.js';
 import { LoadingSpinner } from '../../components/common/Table.js';
 import { Modal } from '../../components/common/Modal.js';
+import { CoachError } from './CoachShared.js';
+import { coachDate } from './coachOverview.js';
 
 const { useState, useEffect } = React;
 
@@ -14,13 +16,14 @@ export function TrainingPlan() {
   const [selectedFilterClass, setSelectedFilterClass] = useState('ALL');
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   // Modal State
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedClassId, setSelectedClassId] = useState('');
   const [title, setTitle] = useState('');
   const [goal, setGoal] = useState('');
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(coachDate());
   const [endDate, setEndDate] = useState('');
   const [exercises, setExercises] = useState([
     { name: 'Khởi động xoay khớp & chạy nhẹ', sets: '2', reps: '5 phút', note: 'Làm nóng toàn thân' },
@@ -29,6 +32,7 @@ export function TrainingPlan() {
   const [saving, setSaving] = useState(false);
 
   const loadData = async () => {
+    setLoading(true); setError('');
     try {
       const isManager = currentUser?.role === 'MANAGER';
       const classesData = await coachApi.getCoachClassesAndMembers(
@@ -45,8 +49,7 @@ export function TrainingPlan() {
         setSelectedClassId(classesData[0].id);
       }
     } catch (e) {
-      console.error(e);
-      showError('Không thể tải danh sách lớp học hoặc giáo án');
+      setError(e.message);
     } finally {
       setLoading(false);
     }
@@ -63,7 +66,7 @@ export function TrainingPlan() {
   const handleOpenCreateModal = () => {
     setTitle('');
     setGoal('');
-    setStartDate(new Date().toISOString().split('T')[0]);
+    setStartDate(coachDate());
     setEndDate('');
     setExercises([
       { name: 'Khởi động xoay khớp & chạy nhẹ', sets: '2', reps: '5 phút', note: 'Làm nóng toàn thân' },
@@ -88,7 +91,7 @@ export function TrainingPlan() {
 
   const handleExerciseChange = (idx, field, val) => {
     const next = [...exercises];
-    next[idx][field] = val;
+    next[idx] = { ...next[idx], [field]: val };
     setExercises(next);
   };
 
@@ -103,6 +106,9 @@ export function TrainingPlan() {
       return;
     }
 
+    if (!exercises.length || exercises.some(ex => !ex.name.trim()) || (endDate && endDate < startDate)) {
+      showError('Nhập ít nhất một bài tập có tên và khoảng ngày hợp lệ.'); return;
+    }
     const currentClass = coachClasses.find(c => c.id === selectedClassId);
 
     setSaving(true);
@@ -140,7 +146,7 @@ export function TrainingPlan() {
       showSuccess('Đã xóa giáo án thành công!');
       loadData();
     } catch (err) {
-      showError('Không thể xóa giáo án');
+      showError(err.message || 'Không thể xóa giáo án');
     }
   };
 
@@ -180,6 +186,7 @@ export function TrainingPlan() {
       </div>
 
       {/* Class Filter Chips */}
+      <CoachError message={error} retry={loadData} />
       {coachClasses.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1">Lọc theo lớp học:</span>
@@ -194,7 +201,7 @@ export function TrainingPlan() {
             Tất cả lớp ({plans.length})
           </button>
           {coachClasses.map(c => {
-            const count = plans.filter(p => p.classId === c.id || c.members?.some(m => m.id === p.memberId)).length;
+            const count = plans.filter(p => p.classId === c.id).length;
             return (
               <button
                 key={c.id}
@@ -337,16 +344,6 @@ export function TrainingPlan() {
             )}
             {activeModalClass && (
               <div className="text-xs text-slate-600 mt-2 flex flex-wrap items-center gap-3 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                <span className="flex items-center gap-1 font-medium">
-                  <span className="material-symbols-outlined text-[15px] text-slate-400">schedule</span>
-                  <span>{activeModalClass.dayOfWeek} • {activeModalClass.timeSlot}</span>
-                </span>
-                <span className="text-slate-300">|</span>
-                <span className="flex items-center gap-1 font-medium">
-                  <span className="material-symbols-outlined text-[15px] text-slate-400">location_on</span>
-                  <span>{activeModalClass.roomName}</span>
-                </span>
-                <span className="text-slate-300">|</span>
                 <span className="text-emerald-700 font-bold flex items-center gap-1">
                   <span className="material-symbols-outlined text-[15px]">group</span>
                   <span>Giáo án sẽ áp dụng đồng loạt cho học viên trong lớp</span>

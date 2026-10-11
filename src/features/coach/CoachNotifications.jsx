@@ -3,6 +3,8 @@ import { useAuth } from '../../context/AuthContext.js';
 import { useToast } from '../../context/ToastContext.js';
 import { LoadingSpinner } from '../../components/common/Table.js';
 import { Modal } from '../../components/common/Modal.js';
+import { CoachError } from './CoachShared.js';
+import { formatMemberDateTime } from '../member/memberOverview.js';
 
 const { useState, useEffect } = React;
 
@@ -13,6 +15,7 @@ export function CoachNotifications() {
   const [notifications, setNotifications] = useState([]);
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   // Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -23,13 +26,14 @@ export function CoachNotifications() {
   const [sending, setSending] = useState(false);
 
   const loadData = async () => {
+    setLoading(true); setError('');
     try {
       const [classList, notifs] = await Promise.all([coachApi.getCoachClassesAndMembers(), coachApi.getNotifications()]);
       setClasses(classList);
       if (classList.length > 0) setSelectedClassId(classList[0].id);
       setNotifications(notifs);
     } catch (error) {
-      showError(error.message);
+      setError(error.message);
     } finally {
       setLoading(false);
     }
@@ -95,6 +99,7 @@ export function CoachNotifications() {
 
         <button
           onClick={() => setModalOpen(true)}
+          disabled={!classes.length || Boolean(error)}
           className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-chivo text-xs font-bold uppercase tracking-wider rounded-lg shadow-md transition-all flex items-center gap-2 self-start sm:self-auto"
         >
           <span className="material-symbols-outlined text-[18px]">send</span>
@@ -103,6 +108,7 @@ export function CoachNotifications() {
       </div>
 
       {/* Notifications Cards Feed */}
+      <CoachError message={error} retry={loadData} />
       <div className="space-y-4">
         {notifications.length === 0 ? (
           <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 max-w-xl mx-auto">
@@ -125,11 +131,11 @@ export function CoachNotifications() {
                   <div>
                     <h3 className="font-chivo text-base font-bold text-slate-900">{notif.title}</h3>
                     <div className="text-[11px] text-slate-500">
-                      Gửi tới: <strong className="text-red-600">{notif.target}</strong> • Người gửi: {notif.coachName}
+                      Gửi tới: <strong className="text-red-600">{notif.target}</strong> • {notif.recipientCount} người nhận
                     </div>
                   </div>
                 </div>
-                <span className="text-xs text-slate-400 font-semibold">{notif.createdAt}</span>
+                <span className="text-xs text-slate-400 font-semibold">{formatMemberDateTime(notif.createdAt)}</span>
               </div>
 
               <p className="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-line">
@@ -182,7 +188,7 @@ export function CoachNotifications() {
               >
                 {classes.map(cls => (
                   <option key={cls.id} value={cls.id}>
-                    {cls.name} ({cls.timeSlot})
+                    {cls.name} ({cls.sportName})
                   </option>
                 ))}
               </select>

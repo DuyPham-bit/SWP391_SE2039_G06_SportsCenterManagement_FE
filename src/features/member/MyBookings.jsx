@@ -4,6 +4,7 @@ import { useToast } from '../../context/ToastContext.js';
 import { Badge } from '../../components/common/StatCard.js';
 import { LoadingSpinner } from '../../components/common/Table.js';
 import { Modal } from '../../components/common/Modal.js';
+import { BOOKING_LABELS, formatMemberDate, formatMemberDateTime, isUpcomingBooking } from './memberOverview.js';
 
 const { useState, useEffect } = React;
 
@@ -14,6 +15,7 @@ export function MyBookings() {
   const [bookings, setBookings] = useState([]);
   const [waitlist, setWaitlist] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   // Cancel Modal
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
@@ -22,11 +24,13 @@ export function MyBookings() {
 
   const loadBookings = async () => {
     if (!currentUser) return;
+    setError('');
     try {
       const [data, waiting] = await Promise.all([bookingApi.getMemberBookings(currentUser.id), bookingApi.getWaitlist()]);
       setBookings(data);
       setWaitlist(waiting);
     } catch (error) {
+      setError(error.message || 'Không thể tải danh sách đặt chỗ.');
       showError(error.message || 'Không thể tải danh sách đặt chỗ.');
     } finally {
       setLoading(false);
@@ -58,6 +62,7 @@ export function MyBookings() {
   };
 
   if (loading) return <LoadingSpinner text="Đang tải danh sách lớp đã đặt..." />;
+  if (error) return <div role="alert" className="p-4 bg-red-50 text-red-700 rounded-xl space-y-3"><p>{error}</p><button type="button" onClick={loadBookings} className="text-sm font-bold underline">Tải lại lịch học</button></div>;
 
   return (
     <div className="space-y-6">
@@ -103,7 +108,7 @@ export function MyBookings() {
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-mono text-xs text-slate-400 font-semibold">{b.id}</span>
-                    <Badge variant={b.status}>{b.status}</Badge>
+                    <Badge variant={b.status}>{b.sessionStatus === 'CANCELLED' ? 'Buổi học bị hủy' : BOOKING_LABELS[b.status] || b.status}</Badge>
                   </div>
 
                   <h3 className="font-chivo text-base font-bold text-slate-900 leading-tight">
@@ -113,19 +118,23 @@ export function MyBookings() {
                   <div className="mt-3 p-3 rounded-xl bg-slate-50 border border-slate-100 space-y-1.5 text-xs text-slate-700">
                     <div className="flex items-center gap-2">
                       <span className="material-symbols-outlined text-red-600 text-[18px]">calendar_month</span>
-                      <span className="font-bold">{b.bookingDate}</span>
+                      <span className="font-bold">{formatMemberDate(b.bookingDate)}</span>
                       <span>({b.timeSlot})</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="material-symbols-outlined text-slate-400 text-[18px]">stadium</span>
                       <span>{b.roomName}</span>
                     </div>
+                    <div className="flex items-start gap-2">
+                      <span className="material-symbols-outlined text-slate-400 text-[18px]">sports</span>
+                      <span>HLV: <strong>{b.coachName}</strong>{b.coachSpecialization && <span className="block text-slate-500">Chuyên môn: {b.coachSpecialization}</span>}</span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-                  <span className="text-slate-400">Đăng ký lúc: {b.createdAt}</span>
-                  {b.status === 'CONFIRMED' && (
+                <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className="text-slate-400">Đăng ký lúc: {formatMemberDateTime(b.createdAt)}</span>
+                  {currentUser?.capabilities?.includes('cancel_booking') && isUpcomingBooking(b) && (
                     <button
                       onClick={() => openCancelModal(b)}
                       className="px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold font-chivo uppercase tracking-wider transition-colors flex items-center gap-1"

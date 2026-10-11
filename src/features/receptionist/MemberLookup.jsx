@@ -2,6 +2,8 @@ import { receptionApi } from '../../services/api.js';
 import { Badge } from '../../components/common/StatCard.jsx';
 import { Modal } from '../../components/common/Modal.jsx';
 import { useToast } from '../../context/ToastContext.js';
+import { CounterError } from './ReceptionistShared.jsx';
+import { formatMemberDate } from '../member/memberOverview.js';
 
 const { useState, useEffect } = React;
 
@@ -15,6 +17,8 @@ export function MemberLookup() {
   const [searchError, setSearchError] = useState('');
   const [subscriptions, setSubscriptions] = useState([]);
   const [loadingSubs, setLoadingSubs] = useState(false);
+  const [subsError, setSubsError] = useState('');
+  const [subsVersion, setSubsVersion] = useState(0);
 
   // Modal Register Member At Counter
   const [registerModalOpen, setRegisterModalOpen] = useState(false);
@@ -78,6 +82,7 @@ export function MemberLookup() {
 
     let isMounted = true;
     setLoadingSubs(true);
+    setSubscriptions([]); setSubsError('');
     receptionApi.getMemberSubscriptions(selectedMember.id)
       .then(data => {
         if (isMounted) {
@@ -85,15 +90,15 @@ export function MemberLookup() {
           setSubscriptions(list);
         }
       })
-      .catch(() => {
-        if (isMounted) setSubscriptions([]);
+      .catch(error => {
+        if (isMounted) setSubsError(error.message || 'Không thể tải lịch sử gói tập.');
       })
       .finally(() => {
         if (isMounted) setLoadingSubs(false);
       });
 
     return () => { isMounted = false; };
-  }, [selectedMember?.id]);
+  }, [selectedMember?.id, subsVersion]);
 
   const handleRegisterMember = async (e) => {
     e.preventDefault();
@@ -289,7 +294,8 @@ export function MemberLookup() {
                     <div className="grid grid-cols-2 gap-4 pt-3 border-t border-white/10 text-xs">
                       <div>
                         <span className="text-slate-400 block text-[10px] uppercase">Hạn Sử Dụng</span>
-                        <span className="font-bold text-white text-sm">{selectedMember.packageExpiry || 'Không khả dụng'}</span>
+                        <span classNameName="font-bold text-white text-sm">{formatMemberDate(selectedMember.packageExpiry)}</span>
+                        <span className="block text-slate-400 mt-1">Bắt đầu: {formatMemberDate(selectedMember.packageStartDate)}</span>
                       </div>
                       <div>
                         <span className="text-slate-400 block text-[10px] uppercase">Trạng Thái Thẻ</span>
@@ -298,7 +304,7 @@ export function MemberLookup() {
                             <span className="material-symbols-outlined text-[16px]">verified</span>
                             Hợp lệ - Đã gia hạn / Cho phép vào sân
                           </span>
-                        ) : selectedMember.packageStatus === 'PENDING' ? (
+                        ) : selectedMember.packageStatus === 'SCHEDULED' ? <span className="font-bold text-sm text-amber-400">Chưa đến ngày hiệu lực</span> : selectedMember.packageStatus === 'PENDING' ? (
                           <span className="font-bold text-sm text-amber-400 flex items-center gap-1">
                             <span className="material-symbols-outlined text-[16px]">schedule</span>
                             Chờ thanh toán kích hoạt
@@ -306,7 +312,7 @@ export function MemberLookup() {
                         ) : (
                           <span className="font-bold text-sm text-red-400 flex items-center gap-1">
                             <span className="material-symbols-outlined text-[16px]">error</span>
-                            Hết hạn - Cần gia hạn
+                            Chưa có gói hợp lệ - Kiểm tra lịch sử gói
                           </span>
                         )}
                       </div>
@@ -324,12 +330,12 @@ export function MemberLookup() {
 
                     {loadingSubs ? (
                       <div className="p-4 text-center text-xs text-slate-400">Đang tải lịch sử gói tập...</div>
-                    ) : subscriptions.length === 0 ? (
+                    ) : subsError ? <CounterError message={subsError} retry={() => setSubsVersion(v => v + 1)} /> : subscriptions.length === 0 ? (
                       <div className="p-4 text-center text-xs text-slate-400 border border-dashed rounded-xl">
                         Hội viên chưa có lịch sử đăng ký gói tập nào.
                       </div>
                     ) : (
-                      <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+                      <div className="border border-slate-200 rounded-xl overflow-x-auto shadow-xs">
                         <table className="w-full text-left border-collapse text-xs">
                           <thead className="bg-slate-50 text-[11px] font-bold text-slate-600 uppercase border-b border-slate-200">
                             <tr>
@@ -366,6 +372,7 @@ export function MemberLookup() {
 
                   {/* Action Shortcuts for Receptionist */}
                   <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-slate-100">
+                    {[['bookings', 'Đặt / Hủy lớp'], ['invoices', 'Hóa đơn'], ['support', 'Yêu cầu hỗ trợ']].map(([route, label]) => <a key={route} className="rounded-lg border px-4 py-2 text-sm font-bold" href={`#/receptionist/${route}?query=${encodeURIComponent(selectedMember.memberCode)}`}>{label}</a>)}
                     <a
                       href={`#/receptionist/counter-register?query=${encodeURIComponent(selectedMember.memberCode || selectedMember.phone || '')}`}
                       className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-chivo text-xs font-bold uppercase tracking-wider rounded-lg shadow-md transition-colors flex items-center gap-2"

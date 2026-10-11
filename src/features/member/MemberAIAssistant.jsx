@@ -11,7 +11,7 @@ export function MemberAIAssistant() {
   const getInitialMessage = () => ({
     id: 'welcome',
     sender: 'ai',
-    text: `Xin chào ${currentUser?.fullName || 'bạn'}! Bạn muốn tìm hiểu về tập luyện hay dinh dưỡng?`,
+    text: `Xin chào ${currentUser?.fullName || 'bạn'}! Bạn muốn hỏi về lịch tập, bài tập, gói thành viên hay dịch vụ của trung tâm?`,
     time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
   });
 
@@ -92,10 +92,10 @@ export function MemberAIAssistant() {
             SCMS AI FITNESS ASSISTANT
           </span>
           <h1 className="font-chivo text-2xl font-black mt-1">
-            Trợ Lý Thể Thao & Dinh Dưỡng AI
+            Trợ Lý AI Hội Viên
           </h1>
           <p className="text-xs text-red-100 max-w-xl mt-1">
-            Hỏi về tập luyện và dinh dưỡng. Gợi ý AI cần được HLV xem xét trước khi áp dụng.
+            Hỏi về lịch tập, bài tập và dịch vụ trung tâm. Kiểm tra lịch cá nhân để xác nhận giờ học; gợi ý bài tập cần được HLV xem xét trước khi áp dụng.
           </p>
         </div>
 
@@ -184,7 +184,8 @@ export function MemberAIAssistant() {
         >
           <input
             type="text"
-            placeholder="Nhập nội dung tin nhắn hoặc câu hỏi để thử nghiệm / đo đạc..."
+            aria-label="Câu hỏi cho trợ lý AI"
+            placeholder="Hỏi về lịch tập, bài tập hoặc dịch vụ trung tâm..."
             value={inputQuestion}
             onChange={(e) => setInputQuestion(e.target.value)}
             disabled={isAsking}

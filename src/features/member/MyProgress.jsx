@@ -1,6 +1,7 @@
 import { memberApi } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.js';
 import { LoadingSpinner } from '../../components/common/Table.js';
+import { formatMeasurement, formatMemberDate, getLatestProgress } from './memberOverview.js';
 
 const { useState, useEffect } = React;
 
@@ -33,7 +34,7 @@ export function MyProgress() {
   if (loading) return <LoadingSpinner text="Đang tải dữ liệu tiến độ cá nhân..." />;
   if (error) return <div role="alert" className="p-4 bg-red-50 text-red-700 rounded-xl">{error}</div>;
 
-  const latestRecord = records[0];
+  const latestRecord = getLatestProgress(records);
 
   const isPending = records.length === 0 && plans.length === 0;
 
@@ -68,8 +69,8 @@ export function MyProgress() {
           <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
             <div>
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Cân Nặng Hiện Tại</span>
-              <div className="font-chivo text-3xl font-black text-slate-900 mt-1">{latestRecord.weight} kg</div>
-              <span className="text-[11px] text-emerald-600 font-bold">Chỉ số lý tưởng</span>
+              <div className="font-chivo text-3xl font-black text-slate-900 mt-1">{formatMeasurement(latestRecord.weight, 'kg')}</div>
+              <span className="text-[11px] text-slate-500">Ghi nhận ngày {formatMemberDate(latestRecord.date)}</span>
             </div>
             <div className="w-12 h-12 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
               <span className="material-symbols-outlined text-[26px]">monitor_weight</span>
@@ -79,8 +80,8 @@ export function MyProgress() {
           <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
             <div>
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Tỷ Lệ Mỡ Cơ Thể</span>
-              <div className="font-chivo text-3xl font-black text-red-600 mt-1">{latestRecord.bodyFat}%</div>
-              <span className="text-[11px] text-red-600 font-bold">Chuẩn vận động viên</span>
+              <div className="font-chivo text-3xl font-black text-red-600 mt-1">{formatMeasurement(latestRecord.bodyFat, '%')}</div>
+              <span className="text-[11px] text-slate-500">Theo đánh giá của HLV</span>
             </div>
             <div className="w-12 h-12 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
               <span className="material-symbols-outlined text-[26px]">vital_signs</span>
@@ -90,8 +91,8 @@ export function MyProgress() {
           <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
             <div>
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Khối Lượng Cơ Bắp</span>
-              <div className="font-chivo text-3xl font-black text-emerald-600 mt-1">{latestRecord.muscleMass} kg</div>
-              <span className="text-[11px] text-emerald-600 font-bold">Tăng trưởng +0.7kg</span>
+              <div className="font-chivo text-3xl font-black text-emerald-600 mt-1">{formatMeasurement(latestRecord.muscleMass, 'kg')}</div>
+              <span className="text-[11px] text-slate-500">Theo đánh giá của HLV</span>
             </div>
             <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <span className="material-symbols-outlined text-[26px]">fitness_center</span>
@@ -108,17 +109,18 @@ export function MyProgress() {
               <span className="material-symbols-outlined text-red-600">fitness_center</span>
               Giáo Án Huấn Luyện Được Chỉ Định
             </h2>
-            <span className="text-xs font-bold text-emerald-600">Đang áp dụng</span>
+            <span className="text-xs text-slate-500">{plans.length} giáo án</span>
           </div>
 
           <div className="space-y-4">
             {plans.map(p => (
               <div key={p.id} className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="font-chivo text-base font-bold text-slate-900">{p.title}</h3>
                   <span className="text-xs text-slate-500 font-semibold">HLV phụ trách: {p.coachName}</span>
                 </div>
                 <p className="text-xs text-slate-600 italic">Mục tiêu: "{p.goal}"</p>
+                <p className="text-xs text-slate-500">Lớp: {p.className || 'Chưa có thông tin'} · Từ {formatMemberDate(p.startDate)}{p.endDate && ` đến ${formatMemberDate(p.endDate)}`}</p>
 
                 <div className="space-y-2 pt-2 border-t border-slate-200">
                   <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
@@ -153,7 +155,7 @@ export function MyProgress() {
           ) : (
             records.map(rec => (
               <div key={rec.id} className="p-4 rounded-xl border border-slate-100 bg-slate-50 space-y-3">
-                <div className="flex items-center justify-between text-xs pb-2 border-b border-slate-200">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs pb-2 border-b border-slate-200">
                   <span className="font-chivo font-bold text-slate-900">Buổi kiểm tra ngày {rec.date}</span>
                   <span className="text-slate-500">Người đánh giá: <strong>{rec.coachName}</strong></span>
                 </div>

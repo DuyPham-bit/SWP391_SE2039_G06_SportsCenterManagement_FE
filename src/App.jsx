@@ -11,6 +11,7 @@ import { LoginPage } from './features/auth/LoginPage.js';
 // Manager Pages
 import { ManagerDashboard } from './features/manager/ManagerDashboard.js';
 import { StaffManagement } from './features/manager/StaffManagement.js';
+import { MemberManagement } from './features/manager/MemberManagement.jsx';
 import { PackageManagement } from './features/manager/PackageManagement.js';
 import { ClassesAndRooms } from './features/manager/ClassesAndRooms.js';
 import { CoachAssignment } from './features/manager/CoachAssignment.js';
@@ -25,6 +26,8 @@ import { CounterMembership } from './features/receptionist/CounterMembership.js'
 import { MemberCheckIn } from './features/receptionist/MemberCheckIn.js';
 
 import { CounterBooking } from './features/receptionist/CounterBooking.jsx';
+import { CounterInvoices } from './features/receptionist/CounterInvoices.jsx';
+import { SupportRequests } from './features/receptionist/SupportRequests.jsx';
 
 // Coach Pages
 import { CoachDashboard } from './features/coach/CoachDashboard.js';
@@ -42,6 +45,8 @@ import { MemberPackages } from './features/member/MemberPackages.js';
 import { ClassScheduleView } from './features/member/ClassScheduleView.js';
 import { MyBookings } from './features/member/MyBookings.js';
 import { MyProgress } from './features/member/MyProgress.js';
+import { MyAttendance } from './features/member/MyAttendance.jsx';
+import { MemberNotifications } from './features/member/MemberNotifications.jsx';
 import { MemberAIAssistant } from './features/member/MemberAIAssistant.js';
 import { PaymentResult } from './features/member/PaymentResult.js';
 
@@ -153,6 +158,8 @@ function AppRouter() {
     // MANAGER ROUTES (8 chức năng)
     case '#/manager/dashboard':
       return renderManagerRoute(ManagerDashboard);
+    case '#/manager/members':
+      return renderManagerRoute(MemberManagement, 'lookup_member');
     case '#/manager/staff':
       return renderManagerRoute(StaffManagement, 'manage_staff');
     case '#/manager/packages':
@@ -179,6 +186,10 @@ function AppRouter() {
       return renderReceptionistRoute(CounterBooking, 'lookup_member');
     case '#/receptionist/check-in':
       return renderReceptionistRoute(MemberCheckIn, 'checkin_member');
+    case '#/receptionist/invoices':
+      return renderReceptionistRoute(CounterInvoices, 'register_counter_package');
+    case '#/receptionist/support':
+      return renderReceptionistRoute(SupportRequests, 'lookup_member');
 
     // COACH ROUTES (8 chức năng)
     case '#/coach/dashboard':
@@ -198,7 +209,7 @@ function AppRouter() {
     case '#/coach/ai-recommendation':
       return renderCoachRoute(AIRecommendation, 'get_ai_recommendation');
 
-    // MEMBER ROUTES (6 chức năng)
+    // MEMBER ROUTES
     case '#/member/dashboard':
       return renderMemberRoute(MemberDashboard);
     case '#/member/packages':
@@ -208,7 +219,11 @@ function AppRouter() {
     case '#/member/bookings':
       return renderMemberRoute(MyBookings, 'book_class');
     case '#/member/progress':
-      return renderMemberRoute(MyProgress);
+      return renderMemberRoute(MyProgress, 'view_my_progress');
+    case '#/member/attendance':
+      return renderMemberRoute(MyAttendance, 'book_class');
+    case '#/member/notifications':
+      return renderMemberRoute(MemberNotifications);
     case '#/member/ai-assistant':
       return renderMemberRoute(MemberAIAssistant, 'ask_ai_assistant');
 

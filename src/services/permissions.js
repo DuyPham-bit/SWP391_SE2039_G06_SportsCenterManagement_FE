@@ -24,7 +24,7 @@ export const SYSTEM_CAPABILITIES = [
   {
     id: 'manage_classes',
     label: 'Quản lý Lớp & Sân',
-    desc: 'Tạo lớp học mới và quản lý 9 cụm sân tiêu chuẩn Olympic',
+    desc: 'Quản lý lớp học, bộ môn, phòng tập và lịch hoạt động',
     path: '#/manager/classes-rooms',
     icon: 'sports_score',
     category: 'VẬN HÀNH & NHÂN SỰ',
@@ -211,9 +211,10 @@ export function getDynamicNavItems(role) {
         { label: 'VẬN HÀNH & NHÂN SỰ', isHeader: true }
       ];
 
+      if (normalized === 'MANAGER') items.push({ path: '#/manager/members', icon: 'group', label: 'Quản Lý Thành Viên' });
       if (perms.includes('manage_staff')) items.push({ path: '#/manager/staff', icon: 'badge', label: 'Quản Lý Nhân Viên' });
       if (perms.includes('manage_packages')) items.push({ path: '#/manager/packages', icon: 'card_membership', label: 'Gói Tập Hội Viên' });
-      if (perms.includes('manage_classes')) items.push({ path: '#/manager/classes-rooms', icon: 'sports_score', label: 'Lớp Học & Sân Bãi' });
+      if (perms.includes('manage_classes')) items.push({ path: '#/manager/classes-rooms', icon: 'sports_score', label: 'Lớp, Bộ Môn & Phòng' });
       if (perms.includes('assign_coach')) items.push({ path: '#/manager/coach-assignment', icon: 'assignment_ind', label: 'Phân Công HLV' });
 
       items.push({ label: 'BÁO CÁO & BẢO MẬT', isHeader: true });
@@ -234,8 +235,12 @@ export function getDynamicNavItems(role) {
       if (perms.includes('lookup_member')) {
         items.push({ path: '#/receptionist/lookup', icon: 'person_search', label: 'Tra Cứu Hội Viên' });
         items.push({ path: '#/receptionist/bookings', icon: 'event_available', label: 'Đặt / Hủy Lớp Tại Quầy' });
+        items.push({ path: '#/receptionist/support', icon: 'support_agent', label: 'Yêu Cầu Hỗ Trợ' });
       }
-      if (perms.includes('register_counter_package')) items.push({ path: '#/receptionist/counter-register', icon: 'point_of_sale', label: 'ĐK / Gia Hạn Tại Quầy' });
+      if (perms.includes('register_counter_package')) {
+        items.push({ path: '#/receptionist/counter-register', icon: 'point_of_sale', label: 'ĐK / Gia Hạn Tại Quầy' });
+        items.push({ path: '#/receptionist/invoices', icon: 'receipt_long', label: 'Hóa Đơn & Thu Tiền' });
+      }
       if (perms.includes('checkin_member')) items.push({ path: '#/receptionist/check-in', icon: 'qr_code_scanner', label: 'Check-in Vào Sân' });
 
       // Add extra granted permissions if assigned by Manager
@@ -312,10 +317,12 @@ export function getDynamicNavItems(role) {
         items.push({ label: 'LỊCH HỌC & ĐẶT CHỖ', isHeader: true });
         items.push({ path: '#/member/schedule', icon: 'event_available', label: 'Lịch Lớp Thể Thao' });
         items.push({ path: '#/member/bookings', icon: 'bookmark_check', label: 'Lớp Đã Đặt & Hủy' });
+        items.push({ path: '#/member/attendance', icon: 'fact_check', label: 'Lịch Sử Điểm Danh' });
       }
 
       items.push({ label: 'RÈN LUYỆN & HỖ TRỢ', isHeader: true });
-      items.push({ path: '#/member/progress', icon: 'stacked_line_chart', label: 'Tiến Độ & Nhận Xét' });
+      if (perms.includes('view_my_progress')) items.push({ path: '#/member/progress', icon: 'stacked_line_chart', label: 'Giáo Án, Tiến Độ & Nhận Xét' });
+      items.push({ path: '#/member/notifications', icon: 'notifications', label: 'Thông Báo Của Tôi' });
 
       if (perms.includes('ask_ai_assistant')) {
         items.push({ path: '#/member/ai-assistant', icon: 'smart_toy', label: 'Trợ Lý Thể Thao AI' });

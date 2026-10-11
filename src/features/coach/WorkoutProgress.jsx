@@ -1,495 +1,114 @@
 import React, { useState, useEffect } from 'react';
 import { coachApi } from '../../services/api.js';
-import { useAuth } from '../../context/AuthContext.js';
 import { useToast } from '../../context/ToastContext.js';
-import { LoadingSpinner } from '../../components/common/Table.js';
 import { Modal } from '../../components/common/Modal.js';
-import { Badge } from '../../components/common/StatCard.js';
+import { CoachError, CoachPeriod, coachInput, useTeachingSessions } from './CoachShared.js';
+import { canRecordSession, metricChanges } from './coachOverview.js';
+
+const metrics = { weight: ['Cân nặng', 'kg', 1, 500], bodyFat: ['Tỷ lệ mỡ', '%', 0, 100], muscleMass: ['Khối cơ', 'kg', 0, 500] };
 
 export function WorkoutProgress() {
-  const { currentUser } = useAuth();
   const { showSuccess, showError } = useToast();
-
-  const [coachClasses, setCoachClasses] = useState([]);
-  const [selectedSport, setSelectedSport] = useState('ALL');
-  const [selectedClassId, setSelectedClassId] = useState('ALL');
-  const [selectedMemberCompositeKey, setSelectedMemberCompositeKey] = useState(''); // memberId_classId
+  const [classes, setClasses] = useState([]);
   const [records, setRecords] = useState([]);
+  const [classId, setClassId] = useState('');
+  const [memberId, setMemberId] = useState('');
+  const [sessionId, setSessionId] = useState('');
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-
-  // Modal State
-  const [modalOpen, setModalOpen] = useState(false);
-  const [weight, setWeight] = useState(68.5);
-  const [bodyFat, setBodyFat] = useState(14.5);
-  const [muscleMass, setMuscleMass] = useState(34.0);
-  const [workoutResult, setWorkoutResult] = useState('');
-  const [coachFeedback, setCoachFeedback] = useState('');
+  const [modal, setModal] = useState(false);
   const [saving, setSaving] = useState(false);
-
-  const loadData = async () => {
+  const [form, setForm] = useState({ weight: '', bodyFat: '', muscleMass: '', workoutResult: '', coachFeedback: '' });
+  const schedule = useTeachingSessions(0);
+  const load = async () => {
+    setLoading(true); setError('');
     try {
-      const isManager = currentUser?.role === 'MANAGER';
-      const classesData = await coachApi.getCoachClassesAndMembers(
-        currentUser?.id,
-        currentUser?.fullName,
-        isManager
-      );
-      setCoachClasses(classesData);
-
-      const allRecords = await coachApi.getProgress();
-      setRecords(allRecords);
-
-      // Select initial member if not set
-      if (!selectedMemberCompositeKey) {
-        for (const cls of classesData) {
-          if (cls.members && cls.members.length > 0) {
-            setSelectedMemberCompositeKey(`${cls.members[0].id}_${cls.id}`);
-            break;
-          }
-        }
-      }
-    } catch (error) {
-      showError(error.message);
-    } finally {
-      setLoading(false);
-    }
+      const [catalog, progress] = await Promise.all([coachApi.getCoachClassesAndMembers(), coachApi.getProgress()]);
+      setClasses(catalog); setRecords(progress);
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
   };
-
-  useEffect(() => {
-    loadData();
-  }, [currentUser?.id]);
-
-  // Extract distinct sports taught by this coach
-  const distinctSports = Array.from(new Set(coachClasses.map(c => c.sportName).filter(Boolean)));
-
-  // Filter classes according to selected sport
-  const filteredClasses = selectedSport === 'ALL'
-    ? coachClasses
-    : coachClasses.filter(c => c.sportName === selectedSport);
-
-  // Filter classes according to selected class ID
-  const activeClassList = selectedClassId === 'ALL'
-    ? filteredClasses
-    : filteredClasses.filter(c => c.id === selectedClassId);
-
-  // Flatten enrolled members across the active classes (organized by class & sport)
-  const classMemberPairs = [];
-  activeClassList.forEach(cls => {
-    (cls.members || []).forEach(m => {
-      classMemberPairs.push({
-        ...m,
-        classId: cls.id,
-        className: cls.name,
-        sportName: cls.sportName,
-        timeSlot: cls.timeSlot,
-        dayOfWeek: cls.dayOfWeek,
-        roomName: cls.roomName,
-        compositeKey: `${m.id}_${cls.id}`
-      });
-    });
-  });
-
-  // Find currently selected member pair
-  const currentPair = classMemberPairs.find(p => p.compositeKey === selectedMemberCompositeKey)
-    || classMemberPairs[0]
-    || null;
-
-  const selectedMemberId = currentPair ? currentPair.id : '';
-  const memberRecords = records.filter(r => r.memberId === selectedMemberId);
-
-  const handleSaveProgress = async (e) => {
+  useEffect(() => { load(); }, []);
+  const selectedClass = classes.find(c => c.id === Number(classId)) || classes[0];
+  const member = selectedClass?.members?.find(m => m.id === Number(memberId)) || selectedClass?.members?.[0];
+  const history = records.filter(r => r.memberId === member?.id && r.classId === selectedClass?.id);
+  const sessions = schedule.sessions.filter(s => s.classId === selectedClass?.id && canRecordSession(s));
+  const session = sessions.find(s => s.id === Number(sessionId)) || sessions[sessions.length - 1];
+  const change = (key, value) => setForm(prev => ({ ...prev, [key]: value }));
+  const open = () => {
+    setForm({ weight: '', bodyFat: '', muscleMass: '', workoutResult: '', coachFeedback: '' });
+    setModal(true);
+  };
+  const save = async e => {
     e.preventDefault();
-    if (!currentPair) {
-      showError('Vui lòng chọn học viên!');
-      return;
-    }
-    if (!workoutResult.trim()) {
-      showError('Vui lòng nhập kết quả bài tập thực tế!');
-      return;
-    }
-
+    if (!member || !session || saving) return;
     setSaving(true);
     try {
       await coachApi.recordWorkoutProgress({
-        memberId: currentPair.id,
-        memberName: currentPair.fullName,
-        classId: currentPair.classId,
-        className: currentPair.className,
-        sportName: currentPair.sportName,
-        weight: Number(weight),
-        bodyFat: Number(bodyFat),
-        muscleMass: Number(muscleMass),
-        workoutResult: workoutResult.trim(),
-        coachFeedback: coachFeedback.trim(),
-        coachName: currentUser?.fullName || 'HLV Huấn luyện'
+        classId: selectedClass.id, memberId: member.id, sessionId: session.id,
+        ...form,
+        weight: form.weight === '' ? null : Number(form.weight),
+        bodyFat: form.bodyFat === '' ? null : Number(form.bodyFat),
+        muscleMass: form.muscleMass === '' ? null : Number(form.muscleMass)
       });
-      showSuccess(`Ghi nhận tiến độ cho ${currentPair.fullName} (${currentPair.className}) thành công!`);
-      setModalOpen(false);
-      setWorkoutResult('');
-      setCoachFeedback('');
-      loadData();
-    } catch (err) {
-      showError(err.message || 'Lỗi lưu tiến độ');
-    } finally {
-      setSaving(false);
-    }
+      showSuccess('Đã lưu kết quả và nhận xét cho buổi tập.');
+      setModal(false); await load();
+    } catch (err) { showError(err.message); }
+    finally { setSaving(false); }
   };
-
-  if (loading) return <LoadingSpinner text="Đang tải danh sách học viên theo lớp phụ trách..." />;
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <span className="font-chivo text-xs font-bold uppercase tracking-wider text-red-600">
-            RECORD WORKOUT PROGRESS • ASSIGNED CLASSES ONLY
-          </span>
-          <h1 className="font-chivo text-2xl font-black text-slate-900 tracking-tight">
-            Ghi Nhận Chỉ Số & Tiến Độ Tập Luyện
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Quản lý và ghi nhận chỉ số InBody cho học viên trong các lớp học bạn được phân công giảng dạy. Sắp xếp khoa học theo từng môn và từng lớp học.
-          </p>
-        </div>
-
-        <button
-          onClick={() => {
-            if (!currentPair) {
-              showError('Chưa có học viên nào được chọn!');
-              return;
-            }
-            setModalOpen(true);
-          }}
-          disabled={!currentPair}
-          className="px-4 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white font-chivo text-xs font-bold uppercase tracking-wider rounded-lg shadow-md transition-all flex items-center gap-2 self-start sm:self-auto"
-        >
-          <span className="material-symbols-outlined text-[18px]">add_chart</span>
-          <span>Ghi Chỉ Số Mới</span>
-        </button>
+  return <div className="space-y-5">
+    <h1 className="text-2xl font-black">Kết Quả & Tiến Độ Tập Luyện</h1>
+    <p className="text-sm text-slate-500">Ghi kết quả theo buổi đã kết thúc; theo dõi chỉ số và nhận xét trong từng lớp.</p>
+    <CoachError message={error} retry={load} />
+    {loading ? <p>Đang tải lớp và kết quả...</p> : !error && <>
+      <div className="grid sm:grid-cols-2 gap-4 p-4 bg-white border rounded-xl">
+        <label className="text-xs font-bold">Lớp phụ trách<select aria-label="Lớp theo dõi tiến độ" className={coachInput} value={selectedClass?.id || ''} onChange={e => { setClassId(e.target.value); setMemberId(''); setSessionId(''); }}>
+          {!classes.length && <option value="">Chưa được phân công lớp</option>}{classes.map(c => <option key={c.id} value={c.id}>[{c.sportName}] {c.name}</option>)}
+        </select></label>
+        <label className="text-xs font-bold">Học viên<select aria-label="Học viên theo dõi tiến độ" className={coachInput} value={member?.id || ''} onChange={e => setMemberId(e.target.value)}>
+          {!selectedClass?.members?.length && <option value="">Chưa có học viên</option>}{selectedClass?.members?.map(m => <option key={m.id} value={m.id}>{m.fullName} · {m.memberCode}</option>)}
+        </select></label>
       </div>
-
-      {/* Sport & Class Organization Bar */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-        {/* Tier 1: Sport Filter Chips */}
-        <div className="flex flex-wrap items-center gap-2 pb-3 border-b border-slate-100">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-500 mr-1 flex items-center gap-1">
-            <span className="material-symbols-outlined text-[16px] text-red-600">sports</span>
-            <span>Môn phụ trách:</span>
-          </span>
-          <button
-            onClick={() => { setSelectedSport('ALL'); setSelectedClassId('ALL'); }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold font-chivo uppercase tracking-wider transition-all ${
-              selectedSport === 'ALL'
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            Tất cả môn ({coachClasses.length} lớp)
-          </button>
-          {distinctSports.map(sport => {
-            const count = coachClasses.filter(c => c.sportName === sport).length;
-            return (
-              <button
-                key={sport}
-                onClick={() => { setSelectedSport(sport); setSelectedClassId('ALL'); }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold font-chivo uppercase tracking-wider transition-all ${
-                  selectedSport === sport
-                    ? 'bg-red-600 text-white shadow-sm'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {sport} ({count})
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Tier 2: Class Selection & Member Selector */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-          {/* Class Filter */}
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
-              1. Lọc theo lớp học ({activeClassList.length} lớp):
-            </label>
-            <select
-              value={selectedClassId}
-              onChange={e => setSelectedClassId(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))}
-              className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white font-semibold text-slate-900"
-            >
-              <option value="ALL">-- Tất cả các lớp được phân công --</option>
-              {filteredClasses.map(cls => (
-                <option key={cls.id} value={cls.id}>
-                  [{cls.sportName}] {cls.name} ({cls.members?.length || 0} học viên) - {cls.dayOfWeek}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Member Selector (Grouped by Class & Sport) */}
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
-              2. Chọn học viên theo lớp ({classMemberPairs.length} học viên):
-            </label>
-            <select
-              value={currentPair?.compositeKey || ''}
-              onChange={e => setSelectedMemberCompositeKey(e.target.value)}
-              className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white font-semibold text-slate-900"
-            >
-              {activeClassList.map(cls => {
-                const membersInThisClass = (cls.members || []);
-                return (
-                  <optgroup
-                    key={cls.id}
-                    label={`[${cls.sportName}] ${cls.name} (${cls.timeSlot})`}
-                  >
-                    {membersInThisClass.length === 0 ? (
-                      <option disabled value="">(Chưa có học viên nào đặt lớp này)</option>
-                    ) : (
-                      membersInThisClass.map(m => (
-                        <option key={`${m.id}_${cls.id}`} value={`${m.id}_${cls.id}`}>
-                          {m.fullName} - Mã: {m.memberCode}
-                        </option>
-                      ))
-                    )}
-                  </optgroup>
-                );
-              })}
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Selected Member Detail Banner */}
-      {currentPair ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <img
-              src={currentPair.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120'}
-              alt={currentPair.fullName}
-              className="w-14 h-14 rounded-full object-cover border-2 border-red-600 shadow-sm"
-            />
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="font-chivo text-lg font-bold text-slate-900">{currentPair.fullName}</h2>
-                <Badge variant="primary" size="sm">{currentPair.memberCode}</Badge>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-slate-600">
-                <span className="inline-flex items-center gap-1 font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded">
-                  <span className="material-symbols-outlined text-[14px]">sports</span>
-                  <span>{currentPair.sportName}</span>
-                </span>
-                <span className="font-medium">• Lớp: <strong>{currentPair.className}</strong></span>
-                <span className="text-slate-400">({currentPair.timeSlot} | {currentPair.dayOfWeek})</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 self-stretch md:self-auto justify-end">
-            <button
-              onClick={() => setModalOpen(true)}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-chivo text-xs font-bold uppercase tracking-wider rounded-lg shadow-sm transition-all flex items-center gap-1.5"
-            >
-              <span className="material-symbols-outlined text-[16px]">edit_note</span>
-              <span>Ghi Chỉ Số Cho Học Viên Này</span>
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="p-8 text-center bg-white rounded-2xl border border-dashed border-slate-300">
-          <span className="material-symbols-outlined text-4xl text-slate-400">group_off</span>
-          <h3 className="font-chivo text-sm font-bold text-slate-800 mt-2">
-            Không tìm thấy học viên trong các lớp được phân công
-          </h3>
-          <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-            Hệ thống chỉ hiển thị học viên đã đăng ký đặt chỗ vào các lớp mà bạn trực tiếp phụ trách.
-          </p>
-        </div>
-      )}
-
-      {/* Member Progress Timeline */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="font-chivo text-sm font-bold text-slate-900 uppercase tracking-wide flex items-center gap-2">
-            <span className="material-symbols-outlined text-red-600">timeline</span>
-            <span>Lịch Sử Chỉ Số Rèn Luyện ({memberRecords.length} lần ghi nhận)</span>
-          </h3>
-          {currentPair && (
-            <span className="text-xs text-slate-500">
-              Đang xem chỉ số của: <strong className="text-slate-900 font-bold">{currentPair.fullName}</strong>
-            </span>
-          )}
-        </div>
-
-        {memberRecords.length === 0 ? (
-          <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 max-w-xl mx-auto">
-            <span className="material-symbols-outlined text-5xl text-slate-300">bar_chart</span>
-            <h3 className="font-chivo text-base font-bold text-slate-900 mt-2">
-              Chưa Có Lịch Sử Chỉ Số
-            </h3>
-            <p className="text-xs text-slate-500 mt-1">
-              Hãy nhấn nút "Ghi Chỉ Số Mới" để cập nhật dữ liệu InBody và nhận xét đầu tiên cho học viên này.
-            </p>
-          </div>
-        ) : (
-          memberRecords.map(rec => (
-            <div key={rec.id} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-chivo font-black text-xs">
-                    IN
-                  </div>
-                  <div>
-                    <h3 className="font-chivo text-sm font-bold text-slate-900">
-                      Ghi nhận ngày {rec.date}
-                    </h3>
-                    <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                      <span>HLV đánh giá: <strong>{rec.coachName}</strong></span>
-                      {rec.className && <span>• Lớp: <strong>{rec.className}</strong></span>}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <span className="text-[10px] text-slate-400 uppercase block font-bold">Cân nặng</span>
-                    <span className="font-chivo text-base font-bold text-slate-900">{rec.weight} kg</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[10px] text-slate-400 uppercase block font-bold">Tỷ lệ mỡ</span>
-                    <span className="font-chivo text-base font-bold text-red-600">{rec.bodyFat}%</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[10px] text-slate-400 uppercase block font-bold">Khối cơ</span>
-                    <span className="font-chivo text-base font-bold text-emerald-600">{rec.muscleMass} kg</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
-                <span className="font-bold text-slate-700 block mb-1">Kết quả bài tập thực tế:</span>
-                <p className="text-slate-700 leading-relaxed">{rec.workoutResult}</p>
-              </div>
-
-              {rec.coachFeedback && (
-                <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-100 text-xs">
-                  <span className="font-bold text-blue-900 block mb-1">Nhận xét & Dặn dò của HLV:</span>
-                  <p className="text-blue-800 leading-relaxed italic">"{rec.coachFeedback}"</p>
-                </div>
-              )}
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Record Modal */}
-      <Modal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title={`Ghi Nhận Chỉ Số Thể Lực: ${currentPair?.fullName || ''}`}
-      >
-        {currentPair && (
-          <form onSubmit={handleSaveProgress} className="space-y-4">
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs flex items-center justify-between">
-              <div>
-                <span className="text-slate-500 block">Học viên:</span>
-                <strong className="font-bold text-slate-900 text-sm">{currentPair.fullName}</strong>
-                <span className="text-slate-400 block text-[11px]">Mã thẻ: {currentPair.memberCode}</span>
-              </div>
-              <div className="text-right">
-                <span className="text-slate-500 block">Bộ môn & Lớp:</span>
-                <strong className="text-red-600 font-bold">{currentPair.sportName}</strong>
-                <span className="text-slate-600 block text-[11px]">{currentPair.className}</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Cân nặng (kg) *
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  required
-                  value={weight}
-                  onChange={e => setWeight(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white font-bold"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Tỷ lệ mỡ (%) *
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  required
-                  value={bodyFat}
-                  onChange={e => setBodyFat(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white font-bold"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Khối lượng cơ (kg)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={muscleMass}
-                  onChange={e => setMuscleMass(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white font-bold"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                Kết quả bài rèn luyện thực tế *
-              </label>
-              <textarea
-                rows="3"
-                required
-                placeholder="VD: Bơi 1000m trong 19p15s, Hoàn thành 4 hiệp Squat 65kg, Nhịp tim ổn định..."
-                value={workoutResult}
-                onChange={e => setWorkoutResult(e.target.value)}
-                className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                Lời khuyên & Đánh giá của Huấn luyện viên
-              </label>
-              <textarea
-                rows="2"
-                placeholder="Nhận xét về tư thế, nhịp thở hoặc dặn dò dinh dưỡng..."
-                value={coachFeedback}
-                onChange={e => setCoachFeedback(e.target.value)}
-                className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white"
-              />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setModalOpen(false)}
-                className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600"
-              >
-                Hủy
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-5 py-2 text-xs font-bold uppercase tracking-wider rounded-lg bg-red-600 hover:bg-red-700 text-white shadow-md transition-colors"
-              >
-                {saving ? 'Đang lưu...' : 'Lưu Kết Quả'}
-              </button>
-            </div>
-          </form>
-        )}
-      </Modal>
-    </div>
-  );
+      {member && <section className="bg-white p-4 border rounded-xl text-sm space-y-2">
+        <h2 className="font-bold">{member.fullName}</h2>
+        <p>Mục tiêu: {member.fitnessGoal || 'Chưa cập nhật'} · Trình độ: {member.fitnessLevel || 'Chưa cập nhật'}</p>
+        <div className="grid sm:grid-cols-3 gap-3">{metricChanges(history).map(item => <div key={item.key} className="bg-slate-50 rounded-lg p-3">
+          <p className="text-xs text-slate-500">{metrics[item.key][0]}</p>
+          <p className="font-bold">{item.current === null ? 'Chưa đo' : item.current + ' ' + metrics[item.key][1]}</p>
+          <p className="text-xs">{item.change === null ? 'Chưa đủ hai lần đo để so sánh' : (item.change > 0 ? '+' : '') + item.change + ' ' + metrics[item.key][1] + ' so với ' + item.previousDate}</p>
+        </div>)}</div>
+      </section>}
+      <section className="space-y-3">
+        <h2 className="font-bold">Chọn khoảng ngày của buổi tập cần ghi kết quả</h2>
+        <CoachPeriod schedule={schedule} /><CoachError message={schedule.error} retry={schedule.reload} />
+        <button onClick={open} disabled={!member || !sessions.length || schedule.loading || Boolean(schedule.error)} className="px-4 py-2 rounded-lg bg-red-600 text-white disabled:opacity-50">Ghi kết quả sau buổi tập</button>
+        {!schedule.loading && !schedule.error && !sessions.length && <p className="text-sm text-slate-500">Chưa có buổi tập đã kết thúc trong khoảng ngày này.</p>}
+      </section>
+      <section className="space-y-3">
+        <h2 className="font-bold">Lịch sử học viên trong lớp ({history.length} lần ghi nhận)</h2>
+        {!history.length && <p className="text-sm text-slate-500">Chưa có kết quả tập luyện.</p>}
+        {history.map(r => <article key={r.id} className="bg-white p-5 rounded-xl border space-y-3">
+          <h3 className="font-bold">{r.date}{r.sessionId ? ' · Buổi #' + r.sessionId + ' · ' + String(r.sessionStartTime).slice(0, 5) + ' – ' + String(r.sessionEndTime).slice(0, 5) : ' · Ghi nhận tổng quát'}</h3>
+          <p className="text-xs text-slate-500">HLV: {r.coachName} · {r.className}</p>
+          <div className="flex flex-wrap gap-4 text-sm">{Object.entries(metrics).map(([key, [label, unit]]) => <span key={key}>{label}: <strong>{r[key] === null || r[key] === undefined ? 'Chưa đo' : r[key] + ' ' + unit}</strong></span>)}</div>
+          <p className="text-sm whitespace-pre-wrap">{r.workoutResult}</p>
+          {r.coachFeedback && <div className="bg-blue-50 text-blue-900 p-3 rounded-lg text-sm"><strong>Nhận xét & đánh giá: </strong><p className="whitespace-pre-wrap">{r.coachFeedback}</p></div>}
+        </article>)}
+      </section>
+    </>}
+    <Modal isOpen={modal} onClose={() => !saving && setModal(false)} title={'Ghi kết quả: ' + (member?.fullName || '')}>
+      <form onSubmit={save} className="space-y-4">
+        <label className="block text-xs font-bold">Buổi tập đã kết thúc<select aria-label="Buổi tập ghi kết quả" required className={coachInput} value={session?.id || ''} disabled={saving} onChange={e => setSessionId(e.target.value)}>
+          {sessions.map(s => <option key={s.id} value={s.id}>{s.sessionDate} · {s.timeSlot} · {s.roomName}</option>)}
+        </select></label>
+        <p className="text-xs text-slate-500">Học viên cần có đặt chỗ hợp lệ trong buổi đã chọn. Các chỉ số cơ thể có thể để trống.</p>
+        <div className="grid sm:grid-cols-3 gap-3">{Object.entries(metrics).map(([key, [label, unit, min, max]]) => <label key={key} className="text-xs font-bold">{label} ({unit})
+          <input aria-label={label} type="number" step="0.01" min={min} max={max} className={coachInput} value={form[key]} onChange={e => change(key, e.target.value)} />
+        </label>)}</div>
+        <label className="block text-xs font-bold">Kết quả bài tập *<textarea aria-label="Kết quả bài tập" className={coachInput} required maxLength={1000} rows={3} value={form.workoutResult} onChange={e => change('workoutResult', e.target.value)} /></label>
+        <label className="block text-xs font-bold">Nhận xét & đánh giá tiến độ<textarea aria-label="Nhận xét tiến độ" className={coachInput} maxLength={1000} rows={3} value={form.coachFeedback} onChange={e => change('coachFeedback', e.target.value)} /></label>
+        <button disabled={saving || !session} className="px-4 py-2 rounded-lg bg-red-600 text-white disabled:opacity-50">{saving ? 'Đang lưu...' : 'Lưu Kết Quả'}</button>
+      </form>
+    </Modal>
+  </div>;
 }

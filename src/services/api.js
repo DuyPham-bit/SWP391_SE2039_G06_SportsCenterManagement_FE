@@ -12,6 +12,7 @@ function planRequest(plan) {
 export const coachApi = {
   getClassMembers: sessionId => apiRequest('coaches/me/sessions/'+sessionId+'/members'),
   getMembersForClass: classId => apiRequest('coaches/me/classes/'+classId+'/members'),
+  getAIContext: (classId, memberId) => apiRequest(`coaches/me/classes/${classId}/members/${memberId}/ai-context`),
   getCoachClassesAndMembers: () => apiRequest('coaches/me/classes'),
   getTrainingPlans: () => apiRequest('coaches/me/training-plans'),
   createTrainingPlan: plan => apiRequest('coaches/me/training-plans', { method: 'POST', body: planRequest({ ...plan, memberId: null }) }),
@@ -28,7 +29,8 @@ export const coachApi = {
     method: 'POST', body: {
       classId: Number(data.classId), memberId: Number(data.memberId),
       weight: data.weight ?? null, bodyFat: data.bodyFat ?? null, muscleMass: data.muscleMass ?? null,
-      workoutResult: data.workoutResult, coachFeedback: data.coachFeedback || null, date: data.date || null
+      workoutResult: data.workoutResult, coachFeedback: data.coachFeedback || null, date: data.date || null,
+      sessionId: data.sessionId ? Number(data.sessionId) : null
     }
   }),
   takeAttendance: (sessionId, _className, _coachId, _coachName, records) =>

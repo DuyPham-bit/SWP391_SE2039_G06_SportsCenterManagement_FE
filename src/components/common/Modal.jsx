@@ -10,7 +10,7 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-lg' 
       />
 
       {/* Modal Dialog */}
-      <div className={`relative bg-white rounded-xl shadow-2xl border border-slate-200 w-full ${maxWidth} overflow-hidden transform transition-all z-10 my-8`}>
+      <div role="dialog" aria-modal="true" aria-label={title} className={`relative bg-white rounded-xl shadow-2xl border border-slate-200 w-full ${maxWidth} overflow-hidden transform transition-all z-10 my-8`}>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
           <h3 className="font-chivo text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">

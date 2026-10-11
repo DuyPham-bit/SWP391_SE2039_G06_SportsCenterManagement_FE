@@ -1,435 +1,118 @@
 import React, { useState, useEffect } from 'react';
 import { coachApi } from '../../services/api.js';
-import { useAuth } from '../../context/AuthContext.js';
 import { useToast } from '../../context/ToastContext.js';
-import { LoadingSpinner } from '../../components/common/Table.js';
-import { Badge } from '../../components/common/StatCard.js';
+import { CoachError, coachInput } from './CoachShared.js';
+import { coachDate } from './coachOverview.js';
 
 export function AIRecommendation() {
-  const { currentUser } = useAuth();
-  const { showSuccess, showError } = useToast();
-
-  const [coachClasses, setCoachClasses] = useState([]);
-  const [selectedSport, setSelectedSport] = useState('ALL');
-  const [selectedClassId, setSelectedClassId] = useState('ALL');
-  const [selectedMemberCompositeKey, setSelectedMemberCompositeKey] = useState('');
-  const [fitnessGoal, setFitnessGoal] = useState('Tăng cơ & Bền tim mạch');
-  const [currentLevel, setCurrentLevel] = useState('Trung cấp (Tập đều 6 - 12 tháng)');
-  const [notes, setNotes] = useState('Khớp gối từng mỏi nhẹ khi vận động nặng');
-
+  const { showSuccess } = useToast();
+  const [classes, setClasses] = useState([]);
+  const [classId, setClassId] = useState('');
+  const [memberId, setMemberId] = useState('');
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
-  const [aiResult, setAiResult] = useState(null);
-  const [aiContext, setAiContext] = useState(null);
-
+  const [loadError, setLoadError] = useState('');
+  const [context, setContext] = useState(null);
+  const [contextLoading, setContextLoading] = useState(false);
+  const [contextError, setContextError] = useState('');
+  const [version, setVersion] = useState(0);
+  const [goal, setGoal] = useState('');
+  const [level, setLevel] = useState('');
+  const [notes, setNotes] = useState('');
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const load = async () => {
+    setLoading(true); setLoadError('');
+    try { setClasses(await coachApi.getCoachClassesAndMembers()); }
+    catch (e) { setLoadError(e.message); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+  const selectedClass = classes.find(c => c.id === Number(classId)) || classes[0];
+  const member = selectedClass?.members?.find(m => m.id === Number(memberId)) || selectedClass?.members?.[0];
   useEffect(() => {
-    async function loadData() {
-      try {
-        const isManager = currentUser?.role === 'MANAGER';
-        const classesData = await coachApi.getCoachClassesAndMembers(
-          currentUser?.id,
-          currentUser?.fullName,
-          isManager
-        );
-        setCoachClasses(classesData);
-
-        // Set initial member selection
-        for (const cls of classesData) {
-          if (cls.members && cls.members.length > 0) {
-            setSelectedMemberCompositeKey(`${cls.members[0].id}_${cls.id}`);
-            updateDefaultGoalForSport(cls.sportName);
-            break;
-          }
-        }
-      } catch (error) {
-        showError(error.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadData();
-  }, [currentUser?.id]);
-
-  // Distinct sports taught by this coach
-  const distinctSports = Array.from(new Set(coachClasses.map(c => c.sportName).filter(Boolean)));
-
-  // Filter classes according to selected sport
-  const filteredClasses = selectedSport === 'ALL'
-    ? coachClasses
-    : coachClasses.filter(c => c.sportName === selectedSport);
-
-  // Filter classes according to selected class ID
-  const activeClassList = selectedClassId === 'ALL'
-    ? filteredClasses
-    : filteredClasses.filter(c => c.id === selectedClassId);
-
-  // Flatten enrolled members across the active classes (organized by class & sport)
-  const classMemberPairs = [];
-  activeClassList.forEach(cls => {
-    (cls.members || []).forEach(m => {
-      classMemberPairs.push({
-        ...m,
-        classId: cls.id,
-        className: cls.name,
-        sportName: cls.sportName,
-        timeSlot: cls.timeSlot,
-        dayOfWeek: cls.dayOfWeek,
-        roomName: cls.roomName,
-        compositeKey: `${m.id}_${cls.id}`
-      });
-    });
-  });
-
-  const currentPair = classMemberPairs.find(p => p.compositeKey === selectedMemberCompositeKey)
-    || classMemberPairs[0]
-    || null;
-
-  const updateDefaultGoalForSport = (sport) => {
-    if (!sport) return;
-    if (sport.includes('Bơi')) {
-      setFitnessGoal('Tăng dung tích phổi, tối ưu hóa nhịp thở và sức bền sải tay');
-    } else if (sport.includes('Gym') || sport.includes('Fitness')) {
-      setFitnessGoal('Tăng khối lượng cơ nạc (Hypertrophy), giảm mỡ InBody và tăng sức mạnh cốt lõi');
-    } else if (sport.includes('Cầu lông') || sport.includes('Tennis')) {
-      setFitnessGoal('Tăng tốc độ bứt tốc, sức bền phản xạ mắt - tay và độ linh hoạt cổ chân');
-    } else if (sport.includes('Võ thuật') || sport.includes('Boxing')) {
-      setFitnessGoal('Tăng lực phát quyền bộc phát, phản xạ tự vệ và thể lực đối kháng');
-    } else {
-      setFitnessGoal('Tăng cường thể lực toàn diện và sự dẻo dai cơ xương khớp');
-    }
-  };
-
-  const handleSelectMember = (compositeKey) => {
-    setSelectedMemberCompositeKey(compositeKey);
-    const pair = classMemberPairs.find(p => p.compositeKey === compositeKey);
-    if (pair) {
-      updateDefaultGoalForSport(pair.sportName);
-    }
-  };
-
-  const handleGenerateAI = async (e) => {
+    let active = true;
+    setContext(null); setContextError(''); setGoal(''); setLevel(''); setNotes(''); setResult(null); setError('');
+    if (!selectedClass || !member) { setContextLoading(false); return; }
+    setContextLoading(true);
+    coachApi.getAIContext(selectedClass.id, member.id).then(data => {
+      if (!active) return;
+      setContext(data); setGoal(data.fitnessGoal || ''); setLevel(data.fitnessLevel || ''); setNotes(data.medicalNote || '');
+    }).catch(e => { if (active) setContextError(e.message); }).finally(() => { if (active) setContextLoading(false); });
+    return () => { active = false; };
+  }, [selectedClass?.id, member?.id, version]);
+  useEffect(() => { setResult(null); setError(''); }, [goal, level, notes]);
+  const generate = async e => {
     e.preventDefault();
-    if (!currentPair) {
-      showError('Vui lòng chọn học viên từ lớp học!');
-      return;
-    }
-
-    setGenerating(true);
+    if (!context || !member || busy) return;
+    setBusy(true); setResult(null); setError('');
     try {
-      const result = await coachApi.getAIRecommendation({
-        classId: currentPair.classId,
-        memberId: currentPair.id,
-        memberName: currentPair.fullName,
-        fitnessGoal,
-        currentLevel,
-        notes,
-        sportName: currentPair.sportName,
-        className: currentPair.className
-      });
-      setAiResult(result);
-      setAiContext({ classId: currentPair.classId, memberId: currentPair.id, fitnessGoal, currentLevel, notes });
-      showSuccess(`AI đã phân tích và thiết lập giáo án thể lực cho ${currentPair.fullName} môn ${currentPair.sportName}!`);
-    } catch (err) {
-      showError(err.message || 'Lỗi kết nối dịch vụ AI');
-    } finally {
-      setGenerating(false);
-    }
+      setResult(await coachApi.getAIRecommendation({ classId: selectedClass.id, memberId: member.id, fitnessGoal: goal.trim(), currentLevel: level.trim(), notes: notes.trim() }));
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); }
   };
-
-  const handleApplyToPlan = async () => {
-    if (!aiResult || !currentPair || generating) return;
-    if (!aiContext || aiContext.classId !== currentPair.classId || aiContext.memberId !== currentPair.id ||
-        aiContext.fitnessGoal !== fitnessGoal || aiContext.currentLevel !== currentLevel || aiContext.notes !== notes) {
-      showError('Học viên hoặc yêu cầu đã thay đổi. Hãy tạo lại gợi ý trước khi lưu.');
-      return;
-    }
-    setGenerating(true);
+  const apply = async () => {
+    if (!result || busy) return;
+    setBusy(true); setError('');
     try {
-      await coachApi.savePersonalTrainingPlan({
-        classId: currentPair.classId, memberId: currentPair.id,
-        title: aiResult.title, goal: fitnessGoal,
-        startDate: new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10),
-        exercises: aiResult.exercises, fitnessCondition: notes
-      });
-      showSuccess('Đã lưu giáo án cá nhân cho học viên.');
+      await coachApi.savePersonalTrainingPlan({ classId: selectedClass.id, memberId: member.id, title: result.title, goal,
+        startDate: coachDate(), fitnessCondition: notes, exercises: result.exercises });
+      showSuccess('Đã lưu giáo án cá nhân sau khi HLV xem xét.');
       window.location.hash = '#/coach/training-plan';
-    } catch (error) { showError(error.message); }
-    finally { setGenerating(false); }
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); }
   };
-
-  if (loading) return <LoadingSpinner text="Đang tải dữ liệu học viên theo từng môn và từng lớp..." />;
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <span className="font-chivo text-xs font-bold uppercase tracking-wider text-red-600">
-          GET AI WORKOUT RECOMMENDATION • ORGANIZED BY SPORT & CLASS
-        </span>
-        <h1 className="font-chivo text-2xl font-black text-slate-900 tracking-tight">
-          Trợ Lý AI Đề Xuất Giáo Án Thể Lực
-        </h1>
-        <p className="text-xs text-slate-500 mt-0.5">
-          Sử dụng trí tuệ nhân tạo để tính toán khối lượng vận động, vùng nhịp tim và chu kỳ bài tập cho học viên trong các lớp bạn phụ trách.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Form: Parameters (5 cols) */}
-        <div className="lg:col-span-5 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-          <div className="flex items-center gap-2 pb-3 border-b border-slate-100 font-chivo text-xs font-bold uppercase text-slate-900">
-            <span className="material-symbols-outlined text-red-600">tune</span>
-            <span>Chọn Học Viên Theo Môn & Lớp Phụ Trách</span>
-          </div>
-
-          <form onSubmit={handleGenerateAI} className="space-y-4">
-            {/* Step 1: Filter by Sport Chips */}
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5 flex items-center justify-between">
-                <span>1. Lọc theo môn thể thao:</span>
-                <span className="text-red-600 font-bold">{distinctSports.length} môn</span>
-              </label>
-              <div className="flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => { setSelectedSport('ALL'); setSelectedClassId('ALL'); }}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold font-chivo uppercase tracking-wider transition-all ${
-                    selectedSport === 'ALL'
-                      ? 'bg-slate-900 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  Tất cả môn
-                </button>
-                {distinctSports.map(s => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => { setSelectedSport(s); setSelectedClassId('ALL'); }}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold font-chivo uppercase tracking-wider transition-all ${
-                      selectedSport === s
-                        ? 'bg-red-600 text-white shadow-sm'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Step 2: Filter by Class */}
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
-                2. Chọn lớp học ({activeClassList.length} lớp):
-              </label>
-              <select
-                value={selectedClassId}
-                onChange={e => setSelectedClassId(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))}
-                className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white font-semibold text-slate-900"
-              >
-                <option value="ALL">-- Tất cả các lớp --</option>
-                {filteredClasses.map(cls => (
-                  <option key={cls.id} value={cls.id}>
-                    [{cls.sportName}] {cls.name} ({cls.members?.length || 0} HV)
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Step 3: Member Selector (Grouped by Class & Sport) */}
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 mb-1">
-                3. Chọn học viên nhận giáo án AI *
-              </label>
-              <select
-                value={currentPair?.compositeKey || ''}
-                onChange={e => handleSelectMember(e.target.value)}
-                required
-                className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white font-bold text-slate-900 shadow-sm"
-              >
-                {activeClassList.map(cls => {
-                  const membersInThisClass = cls.members || [];
-                  return (
-                    <optgroup
-                      key={cls.id}
-                      label={`[${cls.sportName}] ${cls.name} (${cls.timeSlot})`}
-                    >
-                      {membersInThisClass.length === 0 ? (
-                        <option disabled value="">(Chưa có học viên nào đặt lớp này)</option>
-                      ) : (
-                        membersInThisClass.map(m => (
-                          <option key={`${m.id}_${cls.id}`} value={`${m.id}_${cls.id}`}>
-                            {m.fullName} - Mã thẻ: {m.memberCode}
-                          </option>
-                        ))
-                      )}
-                    </optgroup>
-                  );
-                })}
-              </select>
-            </div>
-
-            {/* Selected Student Highlight Card */}
-            {currentPair && (
-              <div className="p-3 bg-red-50/50 rounded-xl border border-red-200/80 text-xs space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900 text-xs">{currentPair.fullName}</span>
-                  <span className="text-[10px] font-mono bg-white px-2 py-0.5 rounded text-red-600 font-bold border border-red-200">
-                    {currentPair.memberCode}
-                  </span>
-                </div>
-                <div className="text-slate-600 text-[11px] flex items-center gap-1">
-                  <span>Môn & Lớp:</span>
-                  <strong className="text-red-700 font-bold">{currentPair.sportName}</strong>
-                  <span>• {currentPair.className}</span>
-                </div>
-                <div className="text-slate-400 text-[10px]">
-                  Thời gian: {currentPair.timeSlot} ({currentPair.dayOfWeek}) - {currentPair.roomName}
-                </div>
-              </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                Mục tiêu rèn luyện thể lực *
-              </label>
-              <input
-                type="text"
-                required
-                value={fitnessGoal}
-                onChange={e => setFitnessGoal(e.target.value)}
-                className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white font-medium"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                Trình độ thể lực hiện tại *
-              </label>
-              <select
-                value={currentLevel}
-                onChange={e => setCurrentLevel(e.target.value)}
-                className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white font-medium"
-              >
-                <option value="Căn bản (Mới tập dưới 3 tháng)">Căn bản (Mới tập dưới 3 tháng)</option>
-                <option value="Trung cấp (Tập đều 6 - 12 tháng)">Trung cấp (Tập đều 6 - 12 tháng)</option>
-                <option value="Nâng cao (Vận động viên phong trào)">Nâng cao (Vận động viên phong trào)</option>
-                <option value="Chuyên sâu Olympic">Chuyên sâu Olympic</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                Lưu ý tiền sử / Chấn thương
-              </label>
-              <textarea
-                rows="2"
-                value={notes}
-                onChange={e => setNotes(e.target.value)}
-                placeholder="VD: Cổ chân từng bong gân nhẹ, hạn chế nhảy cao..."
-                className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={generating || !currentPair}
-              className="w-full py-3 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white font-chivo text-xs font-bold uppercase tracking-wider rounded-xl shadow-md hover:shadow-red-600/30 transition-all flex items-center justify-center gap-2"
-            >
-              <span className="material-symbols-outlined text-[20px]">psychology</span>
-              <span>{generating ? 'AI Đang Tính Toán...' : 'Khởi Chạy Trợ Lý AI Gợi Ý'}</span>
-            </button>
-          </form>
-        </div>
-
-        {/* Right Output: AI Recommendation Card (7 cols) */}
-        <div className="lg:col-span-7 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <h2 className="font-chivo text-xs font-black uppercase text-slate-900 tracking-wide flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-red-600">auto_awesome</span>
-              <span>Kết Quả Đề Xuất Từ Trí Tuệ Nhân Tạo SCMS</span>
-            </h2>
-            {aiResult && (
-              <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px] uppercase border border-emerald-200">
-                AI GENERATED
-              </span>
-            )}
-          </div>
-
-          {generating ? (
-            <div className="py-16 text-center space-y-3">
-              <div className="w-12 h-12 border-4 border-slate-200 border-t-red-600 rounded-full animate-spin mx-auto" />
-              <p className="font-chivo text-xs font-bold uppercase tracking-wider text-slate-500">
-                Đang xử lý dữ liệu sinh trắc học & vùng nhịp tim...
-              </p>
-            </div>
-          ) : !aiResult ? (
-            <div className="py-16 text-center text-slate-400 space-y-2">
-              <span className="material-symbols-outlined text-5xl text-slate-300">smart_toy</span>
-              <p className="text-xs font-medium">
-                Vui lòng chọn học viên theo môn/lớp và nhấn nút "Khởi Chạy Trợ Lý AI Gợi Ý"
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-slate-900 text-white space-y-2">
-                <h3 className="font-chivo text-base font-black text-white">{aiResult.title}</h3>
-                <div className="text-xs text-slate-300">Áp dụng cho: <strong className="text-red-400">{aiResult.targetAudience}</strong></div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                  <span className="text-slate-400 uppercase font-bold text-[10px] block">Khối lượng rèn luyện</span>
-                  <span className="font-semibold text-slate-900 mt-1 block">{aiResult.weeklyVolume}</span>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                  <span className="text-slate-400 uppercase font-bold text-[10px] block">Vùng nhịp tim mục tiêu</span>
-                  <span className="font-semibold text-red-600 mt-1 block">{aiResult.heartRateZone}</span>
-                </div>
-              </div>
-
-              <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 text-xs">
-                <span className="font-bold text-amber-900 block mb-1">Gợi ý dinh dưỡng & Bổ sung khoáng:</span>
-                <p className="text-amber-800 leading-relaxed">{aiResult.nutritionGuidance}</p>
-              </div>
-
-              {/* Exercises */}
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-2">
-                  Chuỗi bài tập gợi ý:
-                </span>
-                <div className="space-y-2">
-                  {aiResult.exercises.map((ex, idx) => (
-                    <div key={idx} className="p-3 rounded-xl border border-slate-200 text-xs flex items-center justify-between">
-                      <div>
-                        <div className="font-bold text-slate-900">{idx + 1}. {ex.name}</div>
-                        <div className="text-[11px] text-slate-500">{ex.note}</div>
-                      </div>
-                      <div className="font-chivo font-black text-slate-800 text-xs">
-                        {ex.sets} x {ex.reps}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* HLV Disclaimer & Action */}
-              <div className="p-3 rounded-xl bg-slate-100 text-[11px] text-slate-600 italic">
-                {aiResult.coachReviewNote}
-              </div>
-
-              <button
-                onClick={handleApplyToPlan}
-                className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-chivo text-xs font-bold uppercase tracking-wider rounded-xl shadow-md transition-colors flex items-center justify-center gap-2"
-              >
-                <span className="material-symbols-outlined text-[18px]">verified</span>
-                <span>Thẩm Định & Chuyển Thành Giáo Án Chính Thức</span>
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  return <div className="space-y-5">
+    <h1 className="text-2xl font-black">Trợ Lý AI Đề Xuất Giáo Án Thể Lực</h1>
+    <p className="text-sm text-slate-500">Gợi ý dựa trên mục tiêu, trình độ, thể trạng và tối đa 10 kết quả gần nhất trong lớp đang chọn.</p>
+    <CoachError message={loadError} retry={load} />
+    {loading ? <p>Đang tải lớp phụ trách...</p> : !loadError && <div className="grid lg:grid-cols-2 gap-5 items-start">
+      <form onSubmit={generate} className="bg-white border rounded-2xl p-5 space-y-4">
+        <fieldset disabled={busy} className="space-y-4">
+          <label className="block text-xs font-bold">Lớp phụ trách<select aria-label="Lớp gợi ý AI" className={coachInput} value={selectedClass?.id || ''} onChange={e => { setClassId(e.target.value); setMemberId(''); }}>
+            {!classes.length && <option value="">Chưa có lớp được phân công</option>}{classes.map(c => <option key={c.id} value={c.id}>[{c.sportName}] {c.name}</option>)}
+          </select></label>
+          <label className="block text-xs font-bold">Học viên<select aria-label="Học viên gợi ý AI" className={coachInput} value={member?.id || ''} onChange={e => setMemberId(e.target.value)}>
+            {!selectedClass?.members?.length && <option value="">Chưa có học viên</option>}{selectedClass?.members?.map(m => <option key={m.id} value={m.id}>{m.fullName} · {m.memberCode}</option>)}
+          </select></label>
+          <CoachError message={contextError} retry={() => setVersion(v => v + 1)} />
+          {contextLoading && <p className="text-sm">Đang tải hồ sơ và lịch sử...</p>}
+          {context && <div className="p-3 rounded-xl bg-slate-50 text-sm space-y-2">
+            <p className="font-semibold">Ngữ cảnh đã lưu: {context.recentHistory.length} kết quả gần nhất</p>
+            <p>Mục tiêu hồ sơ: {context.fitnessGoal || 'Chưa cập nhật'}</p>
+            <p>Trình độ: {context.fitnessLevel || 'Chưa cập nhật'}</p>
+            {context.recentHistory.length ? <details><summary className="cursor-pointer text-red-600">Xem lịch sử dùng cho gợi ý</summary>
+              <ul className="mt-2 space-y-2">{context.recentHistory.map((h, i) => <li key={i} className="border-t pt-2 break-words">
+                <strong>{h.date}</strong><p className="whitespace-pre-wrap">{h.workoutResult}</p>{h.coachFeedback && <p>Nhận xét: {h.coachFeedback}</p>}
+              </li>)}</ul>
+            </details> : <p>Chưa có lịch sử; AI chỉ có hồ sơ và thông tin HLV nhập.</p>}
+          </div>}
+          <label className="block text-xs font-bold">Mục tiêu tập luyện *<input aria-label="Mục tiêu AI" required maxLength={500} className={coachInput} value={goal} onChange={e => setGoal(e.target.value)} /></label>
+          <label className="block text-xs font-bold">Trình độ hiện tại *<input aria-label="Trình độ AI" required maxLength={50} className={coachInput} placeholder="Nhập trình độ đã đánh giá" value={level} onChange={e => setLevel(e.target.value)} /></label>
+          <label className="block text-xs font-bold">Lưu ý thể trạng / điều chỉnh<textarea aria-label="Lưu ý AI" maxLength={1000} rows={3} className={coachInput} value={notes} onChange={e => setNotes(e.target.value)} /></label>
+          <button disabled={!member || !context || contextLoading} className="w-full px-4 py-3 rounded-xl bg-red-600 text-white disabled:opacity-50">{busy ? 'Đang xử lý...' : 'Tạo gợi ý AI'}</button>
+        </fieldset>
+      </form>
+      <section className="bg-white p-5 border rounded-2xl space-y-4">
+        <h2 className="font-bold">Gợi ý để HLV xem xét</h2>
+        <CoachError message={error} />
+        {!result && !busy && <p className="text-sm text-slate-500">Chọn học viên, kiểm tra ngữ cảnh và tạo gợi ý.</p>}
+        {busy && <p className="text-sm">Đang xử lý yêu cầu...</p>}
+        {result && <>
+          <h3 className="font-bold text-lg">{result.title}</h3>
+          <p className="text-sm">{result.targetAudience}</p>
+          <dl className="grid sm:grid-cols-2 gap-3 text-sm">
+            <div><dt className="text-slate-500">Khối lượng tuần</dt><dd>{result.weeklyVolume}</dd></div>
+            <div><dt className="text-slate-500">Vùng nhịp tim</dt><dd>{result.heartRateZone}</dd></div>
+          </dl>
+          <p className="text-sm whitespace-pre-wrap">{result.nutritionGuidance}</p>
+          {result.exercises.map((ex, i) => <article key={i} className="p-3 border rounded-xl text-sm break-words">
+            <h4 className="font-bold">{i + 1}. {ex.name}</h4><p>{ex.sets} × {ex.reps}</p><p>{ex.note}</p>
+          </article>)}
+          <p className="p-3 bg-amber-50 text-amber-900 text-sm rounded-xl">{result.coachReviewNote}</p>
+          <button disabled={busy} onClick={apply} className="w-full p-3 bg-red-600 rounded-xl text-white disabled:opacity-50">Đã xem xét — Lưu thành giáo án cá nhân</button>
+        </>}
+      </section>
+    </div>}
+  </div>;
 }

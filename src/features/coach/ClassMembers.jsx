@@ -4,6 +4,8 @@ import { useToast } from '../../context/ToastContext.js';
 import { Table, LoadingSpinner } from '../../components/common/Table.js';
 import { Badge } from '../../components/common/StatCard.js';
 import { Modal } from '../../components/common/Modal.js';
+import { CoachError, coachInput } from './CoachShared.js';
+import { coachDate } from './coachOverview.js';
 
 const { useState, useEffect } = React;
 
@@ -12,10 +14,15 @@ export function ClassMembers() {
   const { showSuccess, showError } = useToast();
 
   const [classes, setClasses] = useState([]);
-  const [selectedClassId, setSelectedClassId] = useState('');
+  const [selectedClassId, setSelectedClassId] = useState(Number(new URLSearchParams(window.location.hash.split('?')[1]).get('classId')) || '');
   const [members, setMembers] = useState([]);
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersError, setMembersError] = useState('');
+  const [memberVersion, setMemberVersion] = useState(0);
+  const [profile, setProfile] = useState(null);
 
   // Modal State for Personal Training Plan
   const [modalOpen, setModalOpen] = useState(false);
@@ -24,7 +31,7 @@ export function ClassMembers() {
   const [planTitle, setPlanTitle] = useState('');
   const [fitnessCondition, setFitnessCondition] = useState('');
   const [planGoal, setPlanGoal] = useState('');
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(coachDate());
   const [endDate, setEndDate] = useState('');
   const [exercises, setExercises] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -32,6 +39,7 @@ export function ClassMembers() {
 
   // Load coach classes
   const loadData = async () => {
+    setLoading(true); setError('');
     try {
       const isManager = currentUser?.role === 'MANAGER';
       const coachClasses = await coachApi.getCoachClassesAndMembers(
@@ -49,8 +57,7 @@ export function ClassMembers() {
       const allPlans = await coachApi.getTrainingPlans();
       setPlans(allPlans);
     } catch (e) {
-      console.error(e);
-      showError('Không thể tải dữ liệu lớp học');
+      setError(e.message);
     } finally {
       setLoading(false);
     }
@@ -62,28 +69,33 @@ export function ClassMembers() {
 
   // Load members whenever selectedClassId changes
   useEffect(() => {
+    let active = true;
     async function loadMembers() {
+      setMembers([]); setMembersError('');
       if (!selectedClassId) {
         setMembers([]);
         return;
       }
       try {
+        setMembersLoading(true);
         const list = await coachApi.getMembersForClass(selectedClassId);
-        setMembers(list);
+        if (active) setMembers(list);
       } catch (e) {
-        setMembers([]);
-        showError(e.message);
+        if (active) setMembersError(e.message);
+      } finally {
+        if (active) setMembersLoading(false);
       }
     }
     loadMembers();
-  }, [selectedClassId]);
+    return () => { active = false; };
+  }, [selectedClassId, memberVersion]);
 
   const selectedClass = classes.find(c => c.id === selectedClassId) || classes[0];
 
   // Helper: check if a member has a custom personal plan in this class
   const getPersonalPlanForMember = (memberId) => {
     return plans.find(
-      p => p.classId === selectedClassId && (p.memberId === memberId || p.memberId === activeMember?.id) && p.isCustom
+      p => p.classId === selectedClassId && p.memberId === memberId && p.isCustom
     );
   };
 
@@ -97,25 +109,19 @@ export function ClassMembers() {
     if (existing) {
       setExistingPlanId(existing.id);
       setPlanTitle(existing.title || `Giáo án cá nhân: ${memberRow.memberName}`);
-      setFitnessCondition(existing.fitnessCondition || 'Học viên cần điều chỉnh tải trọng phù hợp thể trạng');
+      setFitnessCondition(existing.fitnessCondition || '');
       setPlanGoal(existing.goal || '');
-      setStartDate(existing.startDate || new Date().toISOString().split('T')[0]);
+      setStartDate(existing.startDate || coachDate());
       setEndDate(existing.endDate || '');
-      setExercises(existing.exercises?.length > 0 ? existing.exercises : [
-        { name: 'Khởi động chuyên biệt phục hồi', sets: '2', reps: '10 phút', note: 'Theo dõi nhịp tim' },
-        { name: 'Bài tập tải trọng tùy biến', sets: '3', reps: '8 - 10', note: 'Điều chỉnh theo ngưỡng mỏi' }
-      ]);
+      setExercises((existing.exercises || []).map(ex => ({ ...ex })));
     } else {
       setExistingPlanId(null);
       setPlanTitle(`Giáo án riêng biệt: ${memberRow.memberName}`);
-      setFitnessCondition('Thể chất khác biệt: Cần tăng/giảm cường độ so với giáo án chung của lớp');
-      setPlanGoal(`Tối ưu hóa thể lực riêng cho ${memberRow.memberName} theo thể trạng`);
-      setStartDate(new Date().toISOString().split('T')[0]);
+      setFitnessCondition(memberRow.medicalNote || '');
+      setPlanGoal(memberRow.fitnessGoal || '');
+      setStartDate(coachDate());
       setEndDate('');
-      setExercises([
-        { name: 'Khởi động xoay khớp & làm nóng có kiểm soát', sets: '2', reps: '5 phút', note: 'Tránh quá tải khớp' },
-        { name: 'Bài tập thể lực cá nhân hóa', sets: '3', reps: '8 - 10', note: 'RPE 7.0, nghỉ đủ 90s' }
-      ]);
+      setExercises([{ name: '', sets: '', reps: '', note: '' }]);
     }
 
     setModalOpen(true);
@@ -132,7 +138,7 @@ export function ClassMembers() {
 
   const handleExerciseChange = (idx, field, val) => {
     const next = [...exercises];
-    next[idx][field] = val;
+    next[idx] = { ...next[idx], [field]: val };
     setExercises(next);
   };
 
@@ -144,6 +150,9 @@ export function ClassMembers() {
       return;
     }
 
+    if (!exercises.length || exercises.some(ex => !ex.name.trim()) || (endDate && endDate < startDate)) {
+      showError('Nhập ít nhất một bài tập có tên và khoảng ngày hợp lệ.'); return;
+    }
     setSaving(true);
     try {
       await coachApi.savePersonalTrainingPlan({
@@ -226,8 +235,8 @@ export function ClassMembers() {
       accessor: 'phone'
     },
     {
-      header: 'Trạng Thái Booking',
-      render: () => <Badge variant="success">CONFIRMED</Badge>
+      header: 'Hồ sơ',
+      render: row => <button onClick={() => setProfile(row)} className="text-red-600 font-semibold text-xs underline">Xem hồ sơ</button>
     },
     {
       header: 'Giáo Án Riêng (⭐)',
@@ -303,6 +312,8 @@ export function ClassMembers() {
       </div>
 
       {/* Class Selector Bar */}
+      <CoachError message={error} retry={loadData} />
+      <CoachError message={membersError} retry={() => setMemberVersion(v => v + 1)} />
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <span className="text-xs font-bold uppercase tracking-wider text-slate-500 shrink-0">
@@ -320,7 +331,7 @@ export function ClassMembers() {
             >
               {classes.map(cls => (
                 <option key={cls.id} value={cls.id}>
-                  {cls.name} ({cls.sessionDate} • {cls.timeSlot} • {cls.sportName})
+                  {cls.name} ({cls.sportName})
                 </option>
               ))}
             </select>
@@ -329,8 +340,6 @@ export function ClassMembers() {
 
         {selectedClass && (
           <div className="flex items-center gap-3 text-xs flex-wrap">
-            <span className="text-slate-500">Địa điểm: <strong className="text-slate-900">{selectedClass.roomName}</strong></span>
-            <span className="text-slate-300">|</span>
             <span className="text-slate-500">Sĩ số: <strong className="text-red-600 font-bold">{members.length} / {selectedClass.capacity}</strong></span>
             <span className="text-slate-300">|</span>
             <span className="text-amber-700 font-medium flex items-center gap-1">
@@ -352,13 +361,24 @@ export function ClassMembers() {
       </div>
 
       {/* Table */}
-      <Table
+      {membersLoading ? <LoadingSpinner text="Đang tải học viên của lớp..." /> : !membersError && !error && <Table
         columns={columns}
         data={members}
         searchKey="memberName"
         searchPlaceholder="Tìm theo tên học viên..."
         emptyMessage="Chưa có học viên nào đặt chỗ cho lớp này"
-      />
+      />}
+
+      <Modal isOpen={Boolean(profile)} onClose={() => setProfile(null)} title={`Hồ sơ học viên: ${profile?.memberName || ''}`}>
+        {profile && <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm break-words">
+          {[
+            ['Mã thẻ', profile.memberCode], ['Email', profile.email], ['Điện thoại', profile.phone],
+            ['Ngày sinh', profile.dateOfBirth], ['Giới tính', profile.gender],
+            ['Chiều cao (cm)', profile.heightCm], ['Cân nặng hồ sơ (kg)', profile.weightKg],
+            ['Mục tiêu tập luyện', profile.fitnessGoal], ['Trình độ', profile.fitnessLevel], ['Lưu ý thể trạng', profile.medicalNote]
+          ].map(([label, value]) => <div key={label}><dt className="text-slate-500 text-xs">{label}</dt><dd className="font-semibold whitespace-pre-wrap mt-1">{value ?? 'Chưa cập nhật'}</dd></div>)}
+        </dl>}
+      </Modal>
 
       {/* Modal: Soạn giáo án riêng cho học viên */}
       <Modal
@@ -424,11 +444,10 @@ export function ClassMembers() {
             {/* Row 2: Thể trạng khác biệt & Lý do điều chỉnh */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                Tình trạng thể chất &amp; Lý do điều chỉnh riêng *
+                Tình trạng thể chất &amp; Lý do điều chỉnh riêng
               </label>
               <input
                 type="text"
-                required
                 placeholder="VD: Học viên có tiền sử giãn dây chằng gối, giảm 30% bài tập plyometric; hoặc Nền tảng thể lực tốt, tăng 2 hiệp"
                 value={fitnessCondition}
                 onChange={e => setFitnessCondition(e.target.value)}
@@ -437,6 +456,7 @@ export function ClassMembers() {
             </div>
 
             {/* Row 3: Mục tiêu riêng & Thời hạn */}
+            <label className="block text-xs font-bold">Ngày bắt đầu<input aria-label="Ngày bắt đầu giáo án cá nhân" type="date" required className={coachInput} value={startDate} onChange={e => setStartDate(e.target.value)} /></label>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="sm:col-span-2">
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">

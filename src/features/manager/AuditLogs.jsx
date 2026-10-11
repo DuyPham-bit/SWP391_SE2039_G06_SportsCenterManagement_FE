@@ -1,17 +1,16 @@
 import { systemApi } from '../../services/api.js';
 import { Table, LoadingSpinner } from '../../components/common/Table.js';
-import { Badge } from '../../components/common/StatCard.js';
-import { useToast } from '../../context/ToastContext.js';
 
 const { useState, useEffect } = React;
 
 function formatTimestamp(isoString) {
   if (!isoString) return { date: '—', time: '—' };
   try {
-    const d = new Date(isoString);
+    const value = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(isoString) ? isoString : isoString + 'Z';
+    const d = new Date(value);
     if (Number.isNaN(d.getTime())) return { date: isoString, time: '' };
-    const date = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const time = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const date = d.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric' });
+    const time = d.toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', second: '2-digit' });
     return { date, time };
   } catch {
     return { date: isoString, time: '' };
@@ -19,6 +18,10 @@ function formatTimestamp(isoString) {
 }
 
 const ACTION_META = {
+  'CLASS_COACH.ASSIGNED': { label: 'Phân công HLV', color: 'bg-blue-50 text-blue-700 border-blue-200', icon: 'assignment_ind' },
+  'CLASS_COACH.UNASSIGNED': { label: 'Gỡ phân công HLV', color: 'bg-amber-50 text-amber-700 border-amber-200', icon: 'person_remove' },
+  'SPORT.CREATED': { label: 'Tạo bộ môn', color: 'bg-teal-50 text-teal-700 border-teal-200', icon: 'sports' },
+  'SPORT.UPDATED': { label: 'Cập nhật bộ môn', color: 'bg-teal-50 text-teal-700 border-teal-200', icon: 'edit' },
   'MEMBER.CREATED': { label: 'Đăng Ký Hội Viên', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: 'person_add' },
   'MEMBER.ACCOUNT_STATUS.UPDATED': { label: 'Đổi Trạng Thái Hội Viên', color: 'bg-amber-50 text-amber-700 border-amber-200', icon: 'manage_accounts' },
   'STAFF.CREATED': { label: 'Bổ Nhiệm Nhân Sự', color: 'bg-blue-50 text-blue-700 border-blue-200', icon: 'badge' },
@@ -147,25 +150,20 @@ function renderAuditDetails(row) {
 }
 
 export function AuditLogs() {
-  const { showError } = useToast();
   const [logs, setLogs] = useState([]);
   const [actionFilter, setActionFilter] = useState('ALL');
   const [loading, setLoading] = useState(true);
-
-  const loadLogs = async () => {
-    try {
-      const data = await systemApi.getAuditLogs();
-      setLogs(data);
-    } catch (e) {
-      showError(e.message || 'Không thể tải nhật ký từ backend.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [error, setError] = useState('');
+  const [revision, setRevision] = useState(0);
 
   useEffect(() => {
-    loadLogs();
-  }, []);
+    let active = true; setLoading(true); setError('');
+    systemApi.getAuditPage(page).then(data => { if (active) { setLogs(data.items); setTotalCount(data.totalCount); } })
+      .catch(e => { if (active) setError(e.message); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [page, revision]);
 
   const filteredLogs = actionFilter === 'ALL'
     ? logs
@@ -173,7 +171,7 @@ export function AuditLogs() {
 
   const columns = [
     {
-      header: 'Thời Gian',
+      header: 'Thời Gian (Việt Nam)',
       render: (row) => {
         const { date, time } = formatTimestamp(row.timestamp);
         return (
@@ -231,14 +229,14 @@ export function AuditLogs() {
     },
     {
       header: 'Chi Tiết Thao Tác',
-      render: (row) => renderAuditDetails(row)
+      render: (row) => <div className="space-y-2">{renderAuditDetails(row)}<details><summary className="cursor-pointer text-xs text-red-600">Giá trị trước / sau</summary><pre className="text-xs whitespace-pre-wrap break-all mt-2">{`Trước: ${row.oldValues || '—'}\nSau: ${row.newValues || '—'}`}</pre></details></div>
     },
     {
-      header: 'Kết Quả',
+      header: 'Ghi nhận',
       render: (row) => (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
           <span className="material-symbols-outlined text-[14px]">check_circle</span>
-          <span>{row.status || 'SUCCESS'}</span>
+          <span>Đã lưu nhật ký</span>
         </span>
       )
     }
@@ -250,6 +248,8 @@ export function AuditLogs() {
     { id: 'STAFF', label: 'Nhân sự' },
     { id: 'PACKAGE', label: 'Gói tập' },
     { id: 'CLASS', label: 'Lớp học' },
+    { id: 'SPORT', label: 'Bộ môn' },
+    { id: 'ROOM', label: 'Phòng tập' },
     { id: 'SESSION', label: 'Đặt chỗ' },
     { id: 'PAYMENT', label: 'Thanh toán' },
     { id: 'ROLE', label: 'Phân quyền' }
@@ -274,7 +274,7 @@ export function AuditLogs() {
         </div>
 
         <button
-          onClick={loadLogs}
+          onClick={() => setRevision(x => x + 1)}
           className="px-3.5 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold font-chivo uppercase tracking-wider flex items-center gap-1.5 transition-colors shadow-sm self-start sm:self-auto"
         >
           <span className="material-symbols-outlined text-[16px]">refresh</span>
@@ -284,7 +284,7 @@ export function AuditLogs() {
 
       {/* Action Filters */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1">Lọc hành động:</span>
+        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1">Lọc trong trang hiện tại:</span>
         {filterTabs.map(tab => (
           <button
             key={tab.id}
@@ -301,14 +301,16 @@ export function AuditLogs() {
       </div>
 
       {/* Audit Log Table */}
-      <Table
+      {error ? <p role="alert" className="text-red-700">{error}</p> : <Table
+        key={`${page}:${actionFilter}:${revision}`}
         columns={columns}
         data={filteredLogs}
         searchKey="searchIndex"
-        searchPlaceholder="Tìm theo mã thẻ, ID người dùng, chi tiết thao tác..."
+        searchPlaceholder="Tìm trong trang hiện tại..."
         emptyMessage="Không có nhật ký nào phù hợp với bộ lọc"
-        pageSize={10}
-      />
+        pageSize={50}
+      />}
+      <div className="flex flex-wrap items-center gap-3 text-sm"><button className="border rounded px-3 py-2 disabled:opacity-50" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Trang trước</button><span>Trang {page} / {Math.max(1, Math.ceil(totalCount / 50))} · {totalCount} thao tác</span><button className="border rounded px-3 py-2 disabled:opacity-50" disabled={page * 50 >= totalCount || Boolean(error)} onClick={() => setPage(p => p + 1)}>Trang sau</button></div>
     </div>
   );
 }

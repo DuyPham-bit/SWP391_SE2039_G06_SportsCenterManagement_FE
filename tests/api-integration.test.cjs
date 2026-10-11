@@ -42,6 +42,22 @@ test('progress and member plans are loaded from server', async () => {
   await memberApi.getMyProgress(); await memberApi.getMyPlans();
   assert.deepEqual(requests.map(r => r.path), ['members/me/progress', 'members/me/training-plans']);
 });
+test('coach progress preserves the session ID and optional empty measurements', async () => {
+  const { coachApi } = await api; setup();
+  await coachApi.recordWorkoutProgress({ classId: '31', memberId: '15', sessionId: '700', weight: null, bodyFat: 0, workoutResult: 'Completed', coachId: 999 });
+  const body = requests[0].options.body;
+  assert.equal(body.sessionId, 700); assert.equal(body.classId, 31); assert.equal(body.memberId, 15);
+  assert.equal(body.weight, null); assert.equal(body.bodyFat, 0); assert.equal(body.muscleMass, null);
+  assert.equal(body.coachId, undefined);
+});
+test('AI context uses the selected class and member without sending client history', async () => {
+  const { coachApi } = await api; setup();
+  await coachApi.getAIContext(31, 15);
+  await coachApi.getAIRecommendation({ classId: 31, memberId: 15, fitnessGoal: 'Goal', currentLevel: 'Beginner', recentHistory: ['forged'], memberName: 'Private Name' });
+  assert.equal(requests[0].path, 'coaches/me/classes/31/members/15/ai-context');
+  assert.equal(requests[1].options.body.recentHistory, undefined);
+  assert.equal(requests[1].options.body.memberName, undefined);
+});
 test('notifications send an explicit class ID rather than display label', async () => {
   const { coachApi } = await api; setup();
   await coachApi.sendNotification({ classId: '31', title: 'Homework', content: 'Practice', coachId: 999, target: 'Class name' });

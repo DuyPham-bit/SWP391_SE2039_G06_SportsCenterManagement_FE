@@ -21,6 +21,8 @@ export function CounterMembership() {
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState('TIỀN MẶT');
   const [posApprovalCode, setPosApprovalCode] = useState('');
+  const [amountReceived, setAmountReceived] = useState('');
+  const [loadError, setLoadError] = useState('');
   const [processing, setProcessing] = useState(false);
   const [receiptData, setReceiptData] = useState(null);
   const [checkoutAttempt, setCheckoutAttempt] = useState({ fingerprint: '', key: '' });
@@ -31,8 +33,9 @@ export function CounterMembership() {
       try {
         const pkgs = await packageApi.getAll();
         setMembers([]);
-        setPackages(pkgs);
-        if (pkgs.length > 0) setSelectedPackage(pkgs[0]);
+        const activePackages = pkgs.filter(p => p.status === 'ACTIVE');
+        setPackages(activePackages);
+        if (activePackages.length > 0) setSelectedPackage(activePackages[0]);
 
         const hash = window.location.hash || '';
         const match = hash.match(/[?&]query=([^&]+)/);
@@ -41,17 +44,19 @@ export function CounterMembership() {
           setMemberSearchQuery(q);
           const results = await receptionApi.lookupMember(q);
           setMembers(results);
-          if (results.length > 0) setSelectedMember(results[0]);
+          if (results.length === 1) setSelectedMember(results[0]);
         }
       } catch (e) {
         console.error(e);
         showError(e.message || 'Không thể tải hội viên hoặc gói tập từ backend.');
+        setLoadError(e.message || 'Không thể tải dữ liệu thu ngân.');
       } finally {
         setLoading(false);
       }
     }
     loadInitial();
   }, []);
+  useEffect(() => { setAmountReceived(String(selectedPackage?.price || '')); }, [selectedPackage?.id]);
 
   const handleSearchMembers = async event => {
     event.preventDefault();
@@ -60,6 +65,7 @@ export function CounterMembership() {
       return;
     }
     setMemberSearchLoading(true);
+    setMembers([]); setSelectedMember(null);
     try {
       const results = await receptionApi.lookupMember(memberSearchQuery);
       setMembers(results);
@@ -74,7 +80,9 @@ export function CounterMembership() {
 
   const handleProcessPayment = async (overrideCancelPending = false) => {
     if (!selectedMember || !selectedPackage) return;
-    const fingerprint = [selectedMember.id, selectedPackage.id, paymentMethod, posApprovalCode.trim(), overrideCancelPending].join(':');
+    const received = paymentMethod === 'THẺ POS' ? selectedPackage.price : Number(amountReceived);
+    if (!Number.isFinite(received) || received <= 0) { showError('Nhập số tiền thực nhận lớn hơn 0.'); return; }
+    const fingerprint = [selectedMember.id, selectedPackage.id, paymentMethod, received, posApprovalCode.trim(), overrideCancelPending === true].join(':');
     const idempotencyKey = checkoutAttempt.fingerprint === fingerprint && checkoutAttempt.key
       ? checkoutAttempt.key
       : createIdempotencyKey();
@@ -85,15 +93,15 @@ export function CounterMembership() {
         memberId: selectedMember.id,
         packageId: selectedPackage.id,
         paymentMethod,
-        amountReceived: selectedPackage.price,
+        amountReceived: received,
         posApprovalCode,
         idempotencyKey,
-        cancelPendingIfAny: overrideCancelPending
+        cancelPendingIfAny: overrideCancelPending === true
       });
       setReceiptData(result);
       setPendingInvoice(null);
       setCheckoutAttempt({ fingerprint: '', key: '' });
-      showSuccess(`Kích hoạt gói tập thành công! Mã giao dịch: ${result.transactionRef}`);
+      showSuccess(result.message || 'Đã ghi nhận thanh toán tại quầy.');
       setStep(4);
     } catch (err) {
       const match = err.message && err.message.match(/SC-[A-Za-z0-9-]+/);
@@ -109,15 +117,13 @@ export function CounterMembership() {
   const handleCancelPendingAndRetry = async (invNumber) => {
     setProcessing(true);
     try {
-      showSuccess(`Đang hủy hóa đơn ${invNumber}...`);
       await receptionApi.cancelPendingInvoice({
         invoiceNumber: invNumber,
         memberId: selectedMember?.id,
         packageId: selectedPackage?.id
       });
       setPendingInvoice(null);
-      showSuccess('Đã hủy hóa đơn chờ. Đang tiến hành thanh toán và kích hoạt thẻ mới...');
-      await handleProcessPayment(true);
+      await handleProcessPayment();
     } catch (err) {
       showError(err.message || 'Lỗi khi hủy hóa đơn chờ!');
       setProcessing(false);
@@ -137,12 +143,14 @@ export function CounterMembership() {
           Đăng Ký & Gia Hạn Gói Tập Tại Quầy
         </h1>
         <p className="text-xs text-slate-500 mt-0.5">
-          Quy trình 4 bước thu ngân: Chọn hội viên → Chọn gói tập → Thanh toán → Cấp TransactionRef.
+          Chọn thành viên và gói tập, ghi nhận tiền mặt hoặc mã chuẩn chi POS, rồi xem biên lai.
         </p>
       </div>
 
       {/* Step Progress Tracker */}
-      <div className="grid grid-cols-4 gap-2 bg-white p-3 rounded-2xl border border-slate-200">
+      {loadError && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{loadError}<button onClick={() => window.location.reload()} className="ml-3 underline font-bold">Thử lại</button></div>}
+      {!loadError && packages.length === 0 && <p className="text-sm text-amber-800">Trung tâm chưa có gói tập đang mở bán.</p>}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-white p-3 rounded-2xl border border-slate-200">
         {[
           { num: 1, label: '1. Chọn Hội Viên' },
           { num: 2, label: '2. Chọn Gói Tập' },
@@ -322,7 +330,7 @@ export function CounterMembership() {
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
               Hình thức thu tiền *
             </label>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               {['TIỀN MẶT', 'THẺ POS'].map(m => (
                 <button
                   key={m}
@@ -340,6 +348,10 @@ export function CounterMembership() {
                 </button>
               ))}
             </div>
+            {paymentMethod === 'TIỀN MẶT' && <label className="block mt-3 text-sm font-semibold">Số tiền thực nhận (VNĐ)
+              <input aria-label="Số tiền thực nhận" type="number" min="0.01" max="1000000000" step="0.01" value={amountReceived} disabled={processing} onChange={e => setAmountReceived(e.target.value)} className="mt-1 w-full rounded-lg border p-3" />
+              <span className="block mt-1 text-xs text-slate-500">Thu một phần: gói chờ thu đủ. Tiền dư sẽ được ghi là tiền trả lại.</span>
+            </label>}
             {paymentMethod === 'THẺ POS' && (
               <label className="block mt-3 text-xs font-bold text-slate-700">
                 Mã chuẩn chi POS *
@@ -404,12 +416,12 @@ export function CounterMembership() {
               Quay lại
             </button>
             <button
-              onClick={handleProcessPayment}
+              onClick={() => handleProcessPayment()}
               disabled={processing}
               className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-chivo text-xs font-black uppercase tracking-wider rounded-xl shadow-lg hover:shadow-red-600/30 transition-all flex items-center gap-2"
             >
               <span className="material-symbols-outlined text-[20px]">check_circle</span>
-              <span>{processing ? 'Đang kích hoạt...' : 'Xác Nhận Đã Thu & Kích Hoạt Thẻ'}</span>
+              <span>{processing ? 'Đang ghi nhận...' : 'Xác nhận khoản thu'}</span>
             </button>
           </div>
         </div>
@@ -424,13 +436,13 @@ export function CounterMembership() {
 
           <div>
             <span className="font-chivo text-xs font-black uppercase tracking-widest text-emerald-600">
-              GIAO DỊCH THÀNH CÔNG
+              ĐÃ GHI NHẬN KHOẢN THU
             </span>
             <h2 className="font-chivo text-2xl font-black text-slate-900 mt-1">
               Biên Lai Đăng Ký Thẻ Hội Viên SCMS
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              Gói tập đã được gia hạn và kích hoạt có hiệu lực ngay lập tức.
+              {receiptData.outstandingBalance > 0 ? 'Đã thu một phần. Gói sẽ được kích hoạt khi thu đủ.' : 'Đã thu đủ. Ngày hiệu lực được tính theo các gói hiện có của thành viên.'}
             </p>
           </div>
 
@@ -444,12 +456,12 @@ export function CounterMembership() {
               <span className="font-bold text-slate-900">{receiptData.member.fullName} ({receiptData.member.memberCode})</span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-200">
-              <span className="text-slate-500">Gói tập kích hoạt:</span>
+              <span className="text-slate-500">Gói tập đăng ký:</span>
               <span className="font-bold text-slate-900">{receiptData.package.name}</span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-200">
               <span className="text-slate-500">Thời hạn sử dụng mới:</span>
-              <span className="font-bold text-emerald-600">{receiptData.member.packageExpiry}</span>
+              <span className="font-bold text-emerald-600">{receiptData.member.packageExpiry || 'Chờ thanh toán đủ'}</span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-200">
               <span className="text-slate-500">Phương thức:</span>
@@ -457,11 +469,15 @@ export function CounterMembership() {
             </div>
             <div className="flex justify-between py-1 text-sm font-black text-slate-900 pt-2">
               <span>Số tiền đã thanh toán:</span>
-              <span className="text-red-600 font-chivo">{receiptData.amount.toLocaleString()} VNĐ</span>
+              <span className="text-red-600 font-chivo">{Number(receiptData.amountPaid).toLocaleString('vi-VN')} VNĐ</span>
             </div>
+            <div className="flex justify-between"><span>Tiền thực nhận:</span><strong>{Number(receiptData.amountReceived).toLocaleString('vi-VN')} VNĐ</strong></div>
+            <div className="flex justify-between"><span>Trả lại:</span><strong>{Number(receiptData.changeDue).toLocaleString('vi-VN')} VNĐ</strong></div>
+            <div className="flex justify-between"><span>Còn phải thu:</span><strong>{Number(receiptData.outstandingBalance).toLocaleString('vi-VN')} VNĐ</strong></div>
           </div>
 
           <div className="flex flex-wrap justify-center gap-3 pt-2">
+            <a href={`#/receptionist/invoices?query=${encodeURIComponent(receiptData.invoiceNumber)}`} className="rounded-lg bg-slate-900 px-5 py-3 text-sm font-bold text-white">Xem / In hóa đơn</a>
             <button
               onClick={() => { setStep(1); setReceiptData(null); }}
               className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-chivo text-xs font-bold uppercase tracking-wider rounded-lg shadow transition-colors"

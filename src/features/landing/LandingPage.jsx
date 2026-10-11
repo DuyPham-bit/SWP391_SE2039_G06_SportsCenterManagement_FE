@@ -98,15 +98,20 @@ export function LandingPage() {
   const [selectedCategory, setSelectedCategory] = useState('Tất cả');
   const [selectedFacilityForModal, setSelectedFacilityForModal] = useState(null);
   const [activeNav, setActiveNav] = useState('trang-chu');
+  const [isScrolled, setIsScrolled] = useState(false);
   const [isCoursesDropdownOpen, setIsCoursesDropdownOpen] = useState(false);
+  const [isAboutDropdownOpen, setIsAboutDropdownOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobileCoursesOpen, setIsMobileCoursesOpen] = useState(false);
+  const [isMobileAboutOpen, setIsMobileAboutOpen] = useState(false);
   const [highlightedSportId, setHighlightedSportId] = useState(null);
   const [selectedSportFromMenu, setSelectedSportFromMenu] = useState('all');
   const [isVideoMuted, setIsVideoMuted] = useState(true);
   const videoRef = useRef(null);
   const coursesDropdownRef = useRef(null);
+  const aboutDropdownRef = useRef(null);
   const closeTimerRef = useRef(null);
+  const aboutCloseTimerRef = useRef(null);
 
   const leftSports = [
     { id: 'all', name: 'Tất cả' },
@@ -124,11 +129,21 @@ export function LandingPage() {
     { id: 'yoga-pilates', name: 'Yoga & Pilates' },
   ];
 
+  const aboutMenuItems = [
+    { id: 'gioi-thieu', label: 'Về trung tâm MLC', targetId: 've-chung-toi' },
+    { id: 'tam-nhin', label: 'Tầm nhìn & Sứ mệnh', targetId: 've-chung-toi' },
+    { id: 'doi-ngu', label: 'Đội ngũ huấn luyện viên', targetId: 'huan-luyen-vien' },
+    { id: 'co-so', label: 'Hệ thống cụm sân', targetId: 'co-so-vat-chat' },
+    { id: 'uu-dai', label: 'Chính sách ưu đãi & Tuyển sinh', targetId: 'tuyen-sinh' },
+  ];
+
   const navItems = [
     { id: 'trang-chu', href: '#/', label: 'TRANG CHỦ', targetId: 'trang-chu' },
-    { id: 've-chung-toi', href: '#ve-chung-toi', label: 'VỀ CHÚNG TÔI', targetId: 've-chung-toi' },
-    { id: 'khoa-hoc', href: '#khoa-hoc', label: 'KHÓA HỌC', targetId: 'khoa-hoc' },
-    { id: 'co-so-vat-chat', href: '#co-so-vat-chat', label: 'CƠ SỞ VẬT CHẤT', targetId: 'co-so-vat-chat' }
+    { id: 've-chung-toi', href: '#ve-chung-toi', label: 'VỀ CHÚNG TÔI', targetId: 've-chung-toi', hasDropdown: true },
+    { id: 'khoa-hoc', href: '#khoa-hoc', label: 'KHÓA HỌC', targetId: 'khoa-hoc', hasDropdown: true },
+    { id: 'huan-luyen-vien', href: '#huan-luyen-vien', label: 'HUẤN LUYỆN VIÊN', targetId: 'huan-luyen-vien' },
+    { id: 'co-so-vat-chat', href: '#co-so-vat-chat', label: 'CƠ SỞ VẬT CHẤT', targetId: 'co-so-vat-chat' },
+    { id: 'tuyen-sinh', href: '#tuyen-sinh', label: 'TUYỂN SINH', targetId: 'tuyen-sinh' },
   ];
 
   const handleSportClick = (sport) => {
@@ -151,6 +166,36 @@ export function LandingPage() {
     e.preventDefault();
     e.stopPropagation();
     setIsCoursesDropdownOpen(prev => !prev);
+  };
+
+  const handleAboutMouseEnter = () => {
+    if (aboutCloseTimerRef.current) clearTimeout(aboutCloseTimerRef.current);
+    setIsAboutDropdownOpen(true);
+  };
+
+  const handleAboutMouseLeave = () => {
+    aboutCloseTimerRef.current = setTimeout(() => {
+      setIsAboutDropdownOpen(false);
+    }, 220);
+  };
+
+  const toggleAboutDropdown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsAboutDropdownOpen(prev => !prev);
+  };
+
+  const handleSelectAboutItem = (item) => {
+    setIsAboutDropdownOpen(false);
+    setIsMobileMenuOpen(false);
+    setActiveNav(item.targetId);
+    const el = document.getElementById(item.targetId);
+    if (el) {
+      const headerOffset = 80;
+      const elementPosition = el.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+      window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
+    }
   };
 
   const handleSelectMenuItem = (item) => {
@@ -222,10 +267,14 @@ export function LandingPage() {
       if (coursesDropdownRef.current && !coursesDropdownRef.current.contains(e.target)) {
         setIsCoursesDropdownOpen(false);
       }
+      if (aboutDropdownRef.current && !aboutDropdownRef.current.contains(e.target)) {
+        setIsAboutDropdownOpen(false);
+      }
     };
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         setIsCoursesDropdownOpen(false);
+        setIsAboutDropdownOpen(false);
         setIsMobileMenuOpen(false);
       }
     };
@@ -235,12 +284,13 @@ export function LandingPage() {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
       if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+      if (aboutCloseTimerRef.current) clearTimeout(aboutCloseTimerRef.current);
     };
   }, []);
 
-  // ScrollSpy & Hash synchronization
+  // ScrollSpy & Hash synchronization & Header scroll transition
   useEffect(() => {
-    const sectionIds = ['trang-chu', 've-chung-toi', 'khoa-hoc', 'co-so-vat-chat'];
+    const sectionIds = ['trang-chu', 've-chung-toi', 'huan-luyen-vien', 'khoa-hoc', 'co-so-vat-chat', 'tuyen-sinh'];
 
     const syncFromHash = () => {
       const raw = window.location.hash || '';
@@ -264,12 +314,15 @@ export function LandingPage() {
     syncFromHash();
 
     const handleScroll = () => {
-      if (window.scrollY < 250) {
+      const scrollY = window.scrollY;
+      setIsScrolled(scrollY > 40);
+
+      if (scrollY < 200) {
         setActiveNav('trang-chu');
         return;
       }
 
-      const scrollPos = window.scrollY + 140;
+      const scrollPos = scrollY + 140;
       for (let i = sectionIds.length - 1; i >= 0; i--) {
         const id = sectionIds[i];
         const el = document.getElementById(id);
@@ -280,6 +333,7 @@ export function LandingPage() {
       }
     };
 
+    handleScroll();
     window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('hashchange', syncFromHash);
     return () => {
@@ -309,136 +363,242 @@ export function LandingPage() {
 
   return (
     <div className="landing-page-root w-full min-h-screen bg-white text-slate-900 font-inter antialiased">
-      {/* LANDING HEADER */}
-      <header className="fixed top-0 left-0 right-0 w-full z-50 bg-white/95 backdrop-blur-md border-b border-slate-200">
-        <div className="h-20 w-full max-w-[1720px] mx-auto px-6 sm:px-10 md:px-14 lg:px-20 flex items-center justify-between">
-          {/* Brand Logo */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-red-600 flex items-center justify-center text-white shadow-md font-chivo font-black text-xl">
-              S
+      {/* LANDING HEADER (ẨN HIỆN THEO SCROLL: TRONG SUỐT Ở TOP - HIỆN NỀN TRẮNG KHI CUỘN) */}
+      <header
+        id="site-header"
+        className={`fixed top-0 left-0 right-0 w-full z-50 transition-all duration-300 ease-in-out ${
+          isScrolled
+            ? 'bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-md py-0'
+            : 'bg-transparent border-b border-transparent py-1'
+        }`}
+      >
+        <div className="h-20 w-full max-w-[1720px] mx-auto px-4 sm:px-8 md:px-12 lg:px-16 flex items-center justify-between">
+          {/* Brand Logo - MLC SPORTS */}
+          <a
+            href="#/"
+            onClick={(e) => handleNavClick(navItems[0], e)}
+            aria-label="MLC Sports Center"
+            className="flex items-center gap-3 shrink-0 cursor-pointer focus:outline-none transition-transform hover:scale-105"
+          >
+            <img
+              src="./mlc-logo.png"
+              alt="MLC Sports Center"
+              className="h-12 sm:h-14 lg:h-16 w-auto object-contain transition-all duration-300 drop-shadow-md"
+              onError={(e) => {
+                e.target.style.display = 'none';
+                if (e.target.nextElementSibling) e.target.nextElementSibling.style.display = 'flex';
+              }}
+            />
+            <div className="hidden items-center gap-2.5">
+              <div className="w-10 h-10 bg-red-600 flex items-center justify-center text-white shadow-md font-chivo font-black text-xl">
+                S
+              </div>
+              <div className="flex flex-col">
+                <span className={`font-chivo text-xl font-extrabold uppercase tracking-tight leading-none ${isScrolled ? 'text-slate-900' : 'text-white'}`}>
+                  SCMS
+                </span>
+                <span className="font-chivo text-[11px] tracking-widest text-red-600 uppercase font-bold leading-none mt-1">
+                  Sports Center
+                </span>
+              </div>
             </div>
-            <div className="flex flex-col">
-              <span className="font-chivo text-xl font-extrabold uppercase tracking-tight text-slate-900 leading-none">
-                SCMS
-              </span>
-              <span className="font-chivo text-[11px] tracking-widest text-red-600 uppercase font-bold leading-none mt-1">
-                Sports Center
-              </span>
-            </div>
-          </div>
+          </a>
 
-          {/* Navigation Links */}
-          <nav className="hidden md:flex items-center gap-8 font-chivo text-xs uppercase tracking-wider">
-            {navItems.map(item => {
-              const isActive = activeNav === item.id;
+          {/* Navigation Links matching User's Screenshots */}
+          <nav className="hidden lg:flex items-center gap-3 xl:gap-5 font-chivo text-xs xl:text-sm uppercase tracking-wider">
+            {/* TRANG CHỦ - Signature red slanted parallelogram badge from screenshots */}
+            <a
+              href="#/"
+              onClick={(e) => handleNavClick(navItems[0], e)}
+              className="relative inline-flex items-center justify-center -skew-x-12 bg-red-600 hover:bg-red-700 text-white px-4 xl:px-5 py-2 xl:py-2.5 font-bold shadow-md hover:shadow-red-600/30 transition-all cursor-pointer"
+            >
+              <span className="skew-x-12 whitespace-nowrap">TRANG CHỦ</span>
+            </a>
 
-              if (item.id === 'khoa-hoc') {
-                return (
-                  <div
-                    key={item.id}
-                    ref={coursesDropdownRef}
-                    className="relative"
-                    onMouseEnter={handleCoursesMouseEnter}
-                    onMouseLeave={handleCoursesMouseLeave}
-                  >
-                    <button
-                      type="button"
-                      onClick={toggleCoursesDropdown}
-                      className={`font-chivo text-xs uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-1 focus:outline-none ${
-                        isCoursesDropdownOpen
-                          ? 'bg-red-600 text-white font-extrabold px-4 py-2.5 rounded-none shadow-sm'
-                          : isActive
-                            ? 'text-red-600 border-b-2 border-red-600 font-extrabold pb-1'
-                            : 'text-slate-700 hover:text-red-600 border-transparent font-bold pb-1'
-                      }`}
-                    >
-                      <span>{item.label}</span>
-                      <span className="material-symbols-outlined text-[16px] leading-none">
-                        {isCoursesDropdownOpen ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
-                      </span>
-                    </button>
+            {/* VỀ CHÚNG TÔI with Dropdown */}
+            <div
+              ref={aboutDropdownRef}
+              className="relative"
+              onMouseEnter={handleAboutMouseEnter}
+              onMouseLeave={handleAboutMouseLeave}
+            >
+              <button
+                type="button"
+                onClick={toggleAboutDropdown}
+                className={`inline-flex items-center gap-1 px-3 py-2 font-bold transition-colors cursor-pointer focus:outline-none whitespace-nowrap ${
+                  isScrolled
+                    ? activeNav === 've-chung-toi'
+                      ? 'text-red-600'
+                      : 'text-slate-800 hover:text-red-600'
+                    : activeNav === 've-chung-toi'
+                      ? 'text-red-400'
+                      : 'text-white hover:text-red-400 drop-shadow-sm'
+                }`}
+              >
+                <span>VỀ CHÚNG TÔI</span>
+                <span className={`material-symbols-outlined text-[16px] transition-transform duration-200 ${isAboutDropdownOpen ? 'rotate-180' : ''} ${isScrolled ? 'text-slate-700' : 'text-white/80'}`}>
+                  keyboard_arrow_down
+                </span>
+              </button>
 
-                    {/* Simple 2-column Dropdown Menu matching user request */}
-                    {isCoursesDropdownOpen && (
-                      <div className="absolute top-full left-0 z-50 animate-in fade-in duration-150">
-                        <div className="w-[280px] bg-white rounded-none shadow-2xl border border-slate-200 p-5">
-                          <div className="grid grid-cols-2 gap-x-6 gap-y-3.5">
-                            {/* Left Column */}
-                            <div className="flex flex-col space-y-3.5">
-                              {leftSports.map(sportItem => {
-                                const isSelected = selectedSportFromMenu === sportItem.id;
-                                return (
-                                  <button
-                                    key={sportItem.id}
-                                    type="button"
-                                    onClick={() => handleSelectMenuItem(sportItem)}
-                                    className={`text-left text-[14px] leading-snug transition-colors cursor-pointer ${
-                                      isSelected
-                                        ? 'text-red-600 font-semibold'
-                                        : 'text-slate-800 hover:text-red-600 font-medium'
-                                    }`}
-                                  >
-                                    {sportItem.name}
-                                  </button>
-                                );
-                              })}
-                            </div>
-
-                            {/* Right Column */}
-                            <div className="flex flex-col space-y-3.5">
-                              {rightSports.map(sportItem => {
-                                const isSelected = selectedSportFromMenu === sportItem.id;
-                                return (
-                                  <button
-                                    key={sportItem.id}
-                                    type="button"
-                                    onClick={() => handleSelectMenuItem(sportItem)}
-                                    className={`text-left text-[14px] leading-snug transition-colors cursor-pointer ${
-                                      isSelected
-                                        ? 'text-red-600 font-semibold'
-                                        : 'text-slate-800 hover:text-red-600 font-medium'
-                                    }`}
-                                  >
-                                    {sportItem.name}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+              {isAboutDropdownOpen && (
+                <div className="absolute top-full left-0 z-50 pt-1.5 animate-in fade-in duration-150">
+                  <div className="w-[220px] bg-white rounded-none shadow-2xl border border-slate-200 py-2">
+                    {aboutMenuItems.map(item => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleSelectAboutItem(item)}
+                        className="w-full text-left px-4 py-2.5 text-[13px] font-medium text-slate-800 hover:bg-slate-50 hover:text-red-600 transition-colors block cursor-pointer"
+                      >
+                        {item.label}
+                      </button>
+                    ))}
                   </div>
-                );
-              }
+                </div>
+              )}
+            </div>
 
-              return (
-                <a
-                  key={item.id}
-                  href={item.href}
-                  onClick={(e) => handleNavClick(item, e)}
-                  className={`pb-1 border-b-2 transition-all cursor-pointer ${
-                    isActive
-                      ? 'text-red-600 border-red-600 font-extrabold'
-                      : 'text-slate-600 hover:text-red-600 border-transparent font-bold'
-                  }`}
-                >
-                  {item.label}
-                </a>
-              );
-            })}
+            {/* KHÓA HỌC with 2-Column Sports Dropdown */}
+            <div
+              ref={coursesDropdownRef}
+              className="relative"
+              onMouseEnter={handleCoursesMouseEnter}
+              onMouseLeave={handleCoursesMouseLeave}
+            >
+              <button
+                type="button"
+                onClick={toggleCoursesDropdown}
+                className={`inline-flex items-center gap-1 px-3 py-2 font-bold transition-colors cursor-pointer focus:outline-none whitespace-nowrap ${
+                  isCoursesDropdownOpen
+                    ? 'bg-red-600 text-white shadow-sm'
+                    : isScrolled
+                      ? activeNav === 'khoa-hoc'
+                        ? 'text-red-600'
+                        : 'text-slate-800 hover:text-red-600'
+                      : activeNav === 'khoa-hoc'
+                        ? 'text-red-400'
+                        : 'text-white hover:text-red-400 drop-shadow-sm'
+                }`}
+              >
+                <span>KHÓA HỌC</span>
+                <span className={`material-symbols-outlined text-[16px] transition-transform duration-200 ${isCoursesDropdownOpen ? 'rotate-180' : ''} ${isCoursesDropdownOpen ? 'text-white' : isScrolled ? 'text-slate-700' : 'text-white/80'}`}>
+                  keyboard_arrow_down
+                </span>
+              </button>
+
+              {isCoursesDropdownOpen && (
+                <div className="absolute top-full left-0 z-50 pt-1.5 animate-in fade-in duration-150">
+                  <div className="w-[300px] bg-white rounded-none shadow-2xl border border-slate-200 p-5">
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-3.5">
+                      <div className="flex flex-col space-y-3.5">
+                        {leftSports.map(sportItem => {
+                          const isSelected = selectedSportFromMenu === sportItem.id;
+                          return (
+                            <button
+                              key={sportItem.id}
+                              type="button"
+                              onClick={() => handleSelectMenuItem(sportItem)}
+                              className={`text-left text-[14px] leading-snug transition-colors cursor-pointer ${
+                                isSelected
+                                  ? 'text-red-600 font-semibold'
+                                  : 'text-slate-800 hover:text-red-600 font-medium'
+                              }`}
+                            >
+                              {sportItem.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex flex-col space-y-3.5">
+                        {rightSports.map(sportItem => {
+                          const isSelected = selectedSportFromMenu === sportItem.id;
+                          return (
+                            <button
+                              key={sportItem.id}
+                              type="button"
+                              onClick={() => handleSelectMenuItem(sportItem)}
+                              className={`text-left text-[14px] leading-snug transition-colors cursor-pointer ${
+                                isSelected
+                                  ? 'text-red-600 font-semibold'
+                                  : 'text-slate-800 hover:text-red-600 font-medium'
+                              }`}
+                            >
+                              {sportItem.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* HUẤN LUYỆN VIÊN */}
+            <a
+              href="#huan-luyen-vien"
+              onClick={(e) => handleNavClick(navItems[3], e)}
+              className={`inline-flex items-center px-3 py-2 font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                isScrolled
+                  ? activeNav === 'huan-luyen-vien'
+                    ? 'text-red-600'
+                    : 'text-slate-800 hover:text-red-600'
+                  : activeNav === 'huan-luyen-vien'
+                    ? 'text-red-400'
+                    : 'text-white hover:text-red-400 drop-shadow-sm'
+              }`}
+            >
+              HUẤN LUYỆN VIÊN
+            </a>
+
+            {/* CƠ SỞ VẬT CHẤT */}
+            <a
+              href="#co-so-vat-chat"
+              onClick={(e) => handleNavClick(navItems[4], e)}
+              className={`inline-flex items-center px-3 py-2 font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                isScrolled
+                  ? activeNav === 'co-so-vat-chat'
+                    ? 'text-red-600'
+                    : 'text-slate-800 hover:text-red-600'
+                  : activeNav === 'co-so-vat-chat'
+                    ? 'text-red-400'
+                    : 'text-white hover:text-red-400 drop-shadow-sm'
+              }`}
+            >
+              CƠ SỞ VẬT CHẤT
+            </a>
+
+            {/* TUYỂN SINH */}
+            <a
+              href="#tuyen-sinh"
+              onClick={(e) => handleNavClick(navItems[5], e)}
+              className={`inline-flex items-center px-3 py-2 font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                isScrolled
+                  ? activeNav === 'tuyen-sinh'
+                    ? 'text-red-600'
+                    : 'text-slate-800 hover:text-red-600'
+                  : activeNav === 'tuyen-sinh'
+                    ? 'text-red-400'
+                    : 'text-white hover:text-red-400 drop-shadow-sm'
+              }`}
+            >
+              TUYỂN SINH
+            </a>
           </nav>
 
-          {/* Action / Auth Button */}
+          {/* Action / Auth Buttons */}
           <div className="flex items-center gap-3">
             {isAuthenticated ? (
               <div className="flex items-center gap-2">
                 <a
                   href={getDashboardLink()}
-                  className="bg-red-600 hover:bg-red-700 text-white font-chivo text-xs font-bold uppercase px-4 sm:px-5 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+                  className="bg-red-600 hover:bg-red-700 text-white font-chivo text-xs font-bold uppercase px-4 sm:px-5 py-2.5 shadow-md hover:shadow-lg transition-all flex items-center gap-2 -skew-x-12"
                 >
-                  <span className="material-symbols-outlined text-[18px]">space_dashboard</span>
-                  <span>Vào Dashboard ({role})</span>
+                  <span className="skew-x-12 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[18px]">space_dashboard</span>
+                    <span>Vào Dashboard ({role})</span>
+                  </span>
                 </a>
                 <button
                   type="button"
@@ -446,7 +606,11 @@ export function LandingPage() {
                     logout();
                     window.location.hash = '#/login';
                   }}
-                  className="border border-slate-300 hover:border-red-600 hover:bg-red-50 hover:text-red-600 text-slate-700 font-chivo text-xs font-bold uppercase px-3.5 py-2.5 rounded-lg transition-colors flex items-center gap-1.5"
+                  className={`border px-3 py-2.5 font-chivo text-xs font-bold uppercase transition-colors flex items-center gap-1.5 ${
+                    isScrolled
+                      ? 'border-slate-300 hover:border-red-600 hover:bg-red-50 hover:text-red-600 text-slate-700'
+                      : 'border-white/30 hover:border-white hover:bg-white/10 text-white'
+                  }`}
                   title="Đăng xuất tài khoản"
                 >
                   <span className="material-symbols-outlined text-[18px]">logout</span>
@@ -457,16 +621,22 @@ export function LandingPage() {
               <div className="hidden sm:flex items-center gap-2">
                 <a
                   href="#/login"
-                  className="text-slate-700 hover:text-red-600 font-chivo text-xs font-bold uppercase px-3.5 py-2 transition-colors"
+                  className={`font-chivo text-xs xl:text-sm font-bold uppercase px-3.5 py-2 transition-colors ${
+                    isScrolled
+                      ? 'text-slate-800 hover:text-red-600'
+                      : 'text-white hover:text-red-400 drop-shadow-sm'
+                  }`}
                 >
                   ĐĂNG NHẬP
                 </a>
                 <a
                   href="#/register"
-                  className="bg-red-600 hover:bg-red-700 text-white font-chivo text-xs font-bold uppercase px-4 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-1.5"
+                  className="bg-red-600 hover:bg-red-700 text-white font-chivo text-xs xl:text-sm font-bold uppercase px-4 py-2.5 shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 -skew-x-12"
                 >
-                  <span>ĐĂNG KÝ</span>
-                  <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                  <span className="skew-x-12 flex items-center gap-1.5">
+                    <span>ĐĂNG KÝ</span>
+                    <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                  </span>
                 </a>
               </div>
             )}
@@ -475,7 +645,11 @@ export function LandingPage() {
             <button
               type="button"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="md:hidden w-10 h-10 rounded-lg flex items-center justify-center text-slate-700 hover:bg-slate-100 transition-colors"
+              className={`lg:hidden w-10 h-10 flex items-center justify-center transition-colors cursor-pointer ${
+                isScrolled
+                  ? 'text-slate-800 hover:bg-slate-100'
+                  : 'text-white hover:bg-white/10'
+              }`}
               aria-label="Toggle menu"
             >
               <span className="material-symbols-outlined text-[24px]">
@@ -487,7 +661,7 @@ export function LandingPage() {
 
         {/* Mobile Navigation Drawer */}
         {isMobileMenuOpen && (
-          <div className="md:hidden fixed top-20 left-0 right-0 bg-white border-b border-slate-200 px-4 py-5 shadow-2xl max-h-[calc(100vh-80px)] overflow-y-auto z-50">
+          <div className="lg:hidden fixed top-20 left-0 right-0 bg-white border-b border-slate-200 px-4 py-5 shadow-2xl max-h-[calc(100vh-80px)] overflow-y-auto z-50">
             <div className="flex flex-col space-y-1">
               <a
                 href="#/"
@@ -495,33 +669,50 @@ export function LandingPage() {
                   setIsMobileMenuOpen(false);
                   handleNavClick(navItems[0], e);
                 }}
-                className={`px-3 py-2.5 rounded-lg font-chivo text-xs uppercase tracking-wider font-bold ${
-                  activeNav === 'trang-chu' ? 'bg-red-50 text-red-600' : 'text-slate-700 hover:bg-slate-50'
+                className={`px-3.5 py-2.5 font-chivo text-xs uppercase tracking-wider font-bold ${
+                  activeNav === 'trang-chu' ? 'bg-red-600 text-white' : 'text-slate-800 hover:bg-slate-50'
                 }`}
               >
                 TRANG CHỦ
               </a>
 
-              <a
-                href="#ve-chung-toi"
-                onClick={(e) => {
-                  setIsMobileMenuOpen(false);
-                  handleNavClick(navItems[1], e);
-                }}
-                className={`px-3 py-2.5 rounded-lg font-chivo text-xs uppercase tracking-wider font-bold ${
-                  activeNav === 've-chung-toi' ? 'bg-red-50 text-red-600' : 'text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                VỀ CHÚNG TÔI
-              </a>
+              {/* Mobile About Accordion */}
+              <div className="overflow-hidden border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setIsMobileAboutOpen(!isMobileAboutOpen)}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 font-chivo text-xs uppercase tracking-wider font-bold ${
+                    activeNav === 've-chung-toi' || isMobileAboutOpen ? 'bg-red-600 text-white' : 'text-slate-800 hover:bg-slate-50'
+                  }`}
+                >
+                  <span>VỀ CHÚNG TÔI</span>
+                  <span className="material-symbols-outlined text-[18px]">
+                    {isMobileAboutOpen ? 'keyboard_arrow_up' : 'keyboard_arrow_down'}
+                  </span>
+                </button>
+                {isMobileAboutOpen && (
+                  <div className="bg-white p-3 border-t border-slate-100 flex flex-col space-y-2">
+                    {aboutMenuItems.map(subItem => (
+                      <button
+                        key={subItem.id}
+                        type="button"
+                        onClick={() => handleSelectAboutItem(subItem)}
+                        className="text-left text-sm text-slate-700 hover:text-red-600 py-1 font-medium"
+                      >
+                        {subItem.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               {/* Mobile Courses Accordion */}
-              <div className="rounded-none overflow-hidden border border-slate-200">
+              <div className="overflow-hidden border border-slate-200">
                 <button
                   type="button"
                   onClick={() => setIsMobileCoursesOpen(!isMobileCoursesOpen)}
                   className={`w-full flex items-center justify-between px-3.5 py-2.5 font-chivo text-xs uppercase tracking-wider font-bold ${
-                    activeNav === 'khoa-hoc' || isMobileCoursesOpen ? 'bg-red-600 text-white' : 'text-slate-700 hover:bg-slate-50'
+                    activeNav === 'khoa-hoc' || isMobileCoursesOpen ? 'bg-red-600 text-white' : 'text-slate-800 hover:bg-slate-50'
                   }`}
                 >
                   <span>KHÓA HỌC</span>
@@ -571,16 +762,42 @@ export function LandingPage() {
               </div>
 
               <a
-                href="#co-so-vat-chat"
+                href="#huan-luyen-vien"
                 onClick={(e) => {
                   setIsMobileMenuOpen(false);
                   handleNavClick(navItems[3], e);
                 }}
-                className={`px-3 py-2.5 rounded-lg font-chivo text-xs uppercase tracking-wider font-bold ${
-                  activeNav === 'co-so-vat-chat' ? 'bg-red-50 text-red-600' : 'text-slate-700 hover:bg-slate-50'
+                className={`px-3.5 py-2.5 font-chivo text-xs uppercase tracking-wider font-bold ${
+                  activeNav === 'huan-luyen-vien' ? 'bg-red-600 text-white' : 'text-slate-800 hover:bg-slate-50'
+                }`}
+              >
+                HUẤN LUYỆN VIÊN
+              </a>
+
+              <a
+                href="#co-so-vat-chat"
+                onClick={(e) => {
+                  setIsMobileMenuOpen(false);
+                  handleNavClick(navItems[4], e);
+                }}
+                className={`px-3.5 py-2.5 font-chivo text-xs uppercase tracking-wider font-bold ${
+                  activeNav === 'co-so-vat-chat' ? 'bg-red-600 text-white' : 'text-slate-800 hover:bg-slate-50'
                 }`}
               >
                 CƠ SỞ VẬT CHẤT
+              </a>
+
+              <a
+                href="#tuyen-sinh"
+                onClick={(e) => {
+                  setIsMobileMenuOpen(false);
+                  handleNavClick(navItems[5], e);
+                }}
+                className={`px-3.5 py-2.5 font-chivo text-xs uppercase tracking-wider font-bold ${
+                  activeNav === 'tuyen-sinh' ? 'bg-red-600 text-white' : 'text-slate-800 hover:bg-slate-50'
+                }`}
+              >
+                TUYỂN SINH
               </a>
             </div>
 
@@ -590,7 +807,7 @@ export function LandingPage() {
                   <a
                     href={getDashboardLink()}
                     onClick={() => setIsMobileMenuOpen(false)}
-                    className="w-full bg-red-600 text-white font-chivo text-xs font-bold uppercase py-2.5 rounded-lg text-center shadow-md flex items-center justify-center gap-2"
+                    className="w-full bg-red-600 text-white font-chivo text-xs font-bold uppercase py-2.5 text-center shadow-md flex items-center justify-center gap-2"
                   >
                     <span className="material-symbols-outlined text-[18px]">space_dashboard</span>
                     <span>Vào Dashboard ({role})</span>
@@ -602,7 +819,7 @@ export function LandingPage() {
                       logout();
                       window.location.hash = '#/login';
                     }}
-                    className="w-full text-center py-2 text-slate-700 hover:text-red-600 font-chivo text-xs font-bold uppercase border border-slate-300 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
+                    className="w-full text-center py-2 text-slate-700 hover:text-red-600 font-chivo text-xs font-bold uppercase border border-slate-300 flex items-center justify-center gap-1.5 transition-colors"
                   >
                     <span className="material-symbols-outlined text-[18px]">logout</span>
                     <span>Đăng xuất tài khoản</span>
@@ -613,14 +830,14 @@ export function LandingPage() {
                   <a
                     href="#/login"
                     onClick={() => setIsMobileMenuOpen(false)}
-                    className="w-full text-center py-2 text-slate-700 font-chivo text-xs font-bold uppercase border border-slate-300 rounded-lg"
+                    className="w-full text-center py-2 text-slate-700 font-chivo text-xs font-bold uppercase border border-slate-300"
                   >
                     ĐĂNG NHẬP
                   </a>
                   <a
                     href="#/register"
                     onClick={() => setIsMobileMenuOpen(false)}
-                    className="w-full text-center py-2.5 bg-red-600 text-white font-chivo text-xs font-bold uppercase rounded-lg shadow-md"
+                    className="w-full text-center py-2.5 bg-red-600 text-white font-chivo text-xs font-bold uppercase shadow-md"
                   >
                     ĐĂNG KÝ HỘI VIÊN MỚI
                   </a>
@@ -766,7 +983,7 @@ export function LandingPage() {
             </p>
 
             <div className="w-full space-y-4 mt-8">
-              <div className="flex items-start gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100 hover:border-slate-300 transition-colors">
+              <div id="huan-luyen-vien" className="flex items-start gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100 hover:border-slate-300 transition-colors scroll-mt-28">
                 <div className="w-10 h-10 rounded-lg bg-red-600 text-white flex items-center justify-center shrink-0 shadow-sm">
                   <span className="material-symbols-outlined text-[22px]">workspace_premium</span>
                 </div>
@@ -984,8 +1201,8 @@ export function LandingPage() {
         onModalClose={() => setSelectedFacilityForModal(null)}
       />
 
-      {/* MEMBERSHIP CALLOUT BANNER */}
-      <section className="w-full bg-slate-100 py-20 px-6 sm:px-10 md:px-14 lg:px-20" id="uu-dai">
+      {/* MEMBERSHIP CALLOUT BANNER & TUYỂN SINH */}
+      <section className="w-full bg-slate-100 py-20 px-6 sm:px-10 md:px-14 lg:px-20 scroll-mt-20" id="tuyen-sinh" data-alias="uu-dai">
         <div className="w-full max-w-[1720px] mx-auto bg-white p-8 md:p-14 shadow-xl flex flex-col lg:flex-row items-center justify-between gap-8 border border-slate-200">
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-2 text-red-600 font-chivo text-xs uppercase tracking-wider font-bold mb-2">
