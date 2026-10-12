@@ -50,18 +50,16 @@ import { MemberNotifications } from './features/member/MemberNotifications.jsx';
 import { MemberAIAssistant } from './features/member/MemberAIAssistant.js';
 import { PaymentResult } from './features/member/PaymentResult.js';
 
+function getRouteHash() {
+  const hash = window.location.hash || '';
+  if (hash && hash !== '#/' && hash !== '#/payment-result') return hash;
+  if (window.location.pathname === '/payment-result') return '#/payment-result';
+  return hash || '#/';
+}
+
 function AppRouter() {
   const { initializing, initializationError } = useAuth();
-  const [currentHash, setCurrentHash] = useState(() => {
-    const hash = window.location.hash || '';
-    if (hash && hash !== '#/' && hash !== '#/payment-result') {
-      return hash;
-    }
-    if (window.location.pathname === '/payment-result') {
-      return '#/payment-result';
-    }
-    return hash || '#/';
-  });
+  const [currentHash, setCurrentHash] = useState(getRouteHash);
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -78,6 +76,8 @@ function AppRouter() {
     };
 
     window.addEventListener('hashchange', handleHashChange);
+    // A protected route can redirect before this listener is installed on reload.
+    setCurrentHash(getRouteHash());
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 

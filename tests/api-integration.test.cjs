@@ -4,13 +4,14 @@ const fs = require('node:fs');
 let requests = [];
 let reply = () => ({});
 globalThis.__integrationRequest = async (path, options = {}) => { requests.push({ path, options }); return reply(path, options); };
-globalThis.localStorage = { getItem: () => JSON.stringify({ centerId: 42, role: 'MEMBER' }) };
+globalThis.__integrationUser = { centerId: 42, role: 'MEMBER' };
 const load = source => import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
 const api = load(fs.readFileSync('src/services/api.js', 'utf8')
   .replace(/^\uFEFF/, '')
   .replace(/^import .*?from '\.\/http.js';/m, 'const apiRequest = globalThis.__integrationRequest;')
   .replace(/^export \{.*?\} from '\.\/backendApi.js';/m, ''));
 const backend = load(fs.readFileSync('src/services/backendApi.js', 'utf8')
+  .replace(/^import .*?from '\.\/authState.js';/m, 'const getAuthUser=()=>globalThis.__integrationUser; const setAuthUser=user=>{globalThis.__integrationUser=user;}; const beginAuthOperation=()=>0; const getAuthVersion=()=>0; const assertAuthVersion=()=>{};')
   .replace(/^import .*?from '\.\/http.js';/m, 'const apiRequest = globalThis.__integrationRequest; const clearApiToken=()=>{}; const createIdempotencyKey=()=>"test"; const getApiToken=()=>"jwt"; const setApiToken=()=>{};')
   .replaceAll('import.meta.env.VITE_SPORTS_CENTER_ID', '42'));
 function setup(fn = () => ({})) { requests = []; reply = fn; }
@@ -114,23 +115,25 @@ test('CSV export keeps Unicode/quotes and neutralizes spreadsheet formulas', asy
   assert.ok(csv.includes('"\'=SUM(1,2)"""'));
 });
 
-test('HTTP sends JWT and expires only the current protected session', async () => {
-  let token = 'current-jwt'; let events = 0; let lastFetch;
-  globalThis.localStorage = { getItem: () => token, setItem: (_, value) => { token = value; }, removeItem: () => { token = null; } };
+test('HTTP sends JWT and expires only the current protected token', async () => {
+  let events = 0; let lastFetch;
   globalThis.window = { dispatchEvent: () => { events += 1; } };
   let status = 200;
   globalThis.fetch = async (url, options) => {
     lastFetch = { url, options };
     return new Response(status === 200 ? '{"ok":true}' : '{"message":"Invalid"}', { status, headers: { 'content-type': 'application/json' } });
   };
-  const http = await load(fs.readFileSync('src/services/http.js', 'utf8').replace('import.meta.env.VITE_API_BASE_URL', "'/api'"));
+  const http = await load(fs.readFileSync('src/services/http.js', 'utf8')
+    .replace(/^import .*?from '\.\/authState.js';/m, 'const setAuthUser=()=>{}; const beginAuthOperation=()=>0; const getAuthVersion=()=>0;')
+    .replace('import.meta.env.VITE_API_BASE_URL', "'/api'"));
+  http.setApiToken('current-jwt');
   await http.apiRequest('profile/me');
   assert.equal(lastFetch.options.headers.get('Authorization'), 'Bearer current-jwt');
   status = 401;
   await assert.rejects(http.apiRequest('auth/google', { token: null }), /Invalid/);
-  assert.equal(token, 'current-jwt'); assert.equal(events, 0);
+  assert.equal(http.getApiToken(), 'current-jwt'); assert.equal(events, 0);
   await assert.rejects(http.apiRequest('profile/me', { token: 'old-jwt' }), /Invalid/);
-  assert.equal(token, 'current-jwt');
+  assert.equal(http.getApiToken(), 'current-jwt');
   await assert.rejects(http.apiRequest('profile/me'), /Phiên đăng nhập/);
-  assert.equal(token, null); assert.equal(events, 1);
+  assert.equal(http.getApiToken(), null); assert.equal(events, 1);
 });

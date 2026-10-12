@@ -59,8 +59,9 @@ test('SQL timestamps with or without UTC offset display the same Vietnam time', 
 });
 
 test('member navigation exposes attendance and notifications and respects revoked progress access', async () => {
-  globalThis.localStorage = { getItem: () => JSON.stringify({ role: 'MEMBER', capabilities: ['book_class', 'ask_ai_assistant'] }) };
-  const { getDynamicNavItems } = await load('src/services/permissions.js');
+  const source = fs.readFileSync('src/services/permissions.js', 'utf8')
+    .replace(/^import .*?from '\.\/authState.js';/m, 'const getAuthUser = () => ({ role: "MEMBER", capabilities: ["book_class", "ask_ai_assistant"] });');
+  const { getDynamicNavItems } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
   const paths = getDynamicNavItems('MEMBER').map(item => item.path);
   assert.ok(paths.includes('#/member/attendance'));
   assert.ok(paths.includes('#/member/notifications'));

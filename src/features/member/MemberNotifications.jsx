@@ -31,7 +31,7 @@ export function MemberNotifications() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap justify-between items-start gap-3">
-        <div><h1 className="font-chivo text-2xl font-black text-slate-900">Thông Báo Của Tôi</h1><p className="text-xs text-slate-500 mt-1">Nhắc lịch học, thay đổi lịch và thời hạn gói thành viên. Thông báo tự làm mới mỗi phút khi mở trang.</p></div>
+        <div><h1 className="font-chivo text-2xl font-black text-slate-900">Thông Báo Của Tôi</h1><p className="text-xs text-slate-500 mt-1">Lịch học, giáo án, kết quả tập, gói thành viên và phản hồi hỗ trợ. Thông báo tự làm mới mỗi 15 giây khi mở trang.</p></div>
         <button type="button" disabled={loading} onClick={() => { refresh(); setReload(value => value + 1); }} className="px-4 py-2 rounded-lg border text-xs font-bold disabled:opacity-50">Tải lại</button>
       </div>
       {bookingError && <p role="alert" className="p-4 bg-red-50 text-red-700 rounded-xl">Nhắc lịch học: {bookingError}</p>}

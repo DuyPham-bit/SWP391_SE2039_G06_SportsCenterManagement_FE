@@ -5,6 +5,11 @@ const http = require('node:http');
 const { spawn } = require('node:child_process');
 const assert = require('node:assert/strict');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+const deferred = () => {
+  let resolve;
+  const promise = new Promise(done => { resolve = done; });
+  return { promise, resolve };
+};
 const root = path.resolve(__dirname, '../..');
 const webRoot = path.resolve(process.env.SCMS_TEST_WEB_ROOT || path.join(root, 'Frontend/dist'));
 const report = path.join(root, '.validation/browser');
@@ -14,6 +19,8 @@ if (!browserPath || !process.env.SCMS_TEST_API) throw new Error('Requires Chrome
 const requests = [];
 let failMemberProgress = false;
 let failCoachProgress = false;
+let expiringAuthorization = null;
+let heldProfile = null;
 const server = http.createServer(async (req, res) => {
   try {
     if (req.url.startsWith('/api/')) {
@@ -30,10 +37,21 @@ const server = http.createServer(async (req, res) => {
       const chunks = []; for await (const chunk of req) chunks.push(chunk);
       const body = Buffer.concat(chunks);
       const headers = { ...req.headers }; delete headers.host; delete headers['content-length'];
+      const profileGate = heldProfile && req.method === 'GET' && req.url === '/api/profile/me' && headers.authorization === heldProfile.authorization ? heldProfile : null;
+      const expectedAuthExpiry = expiringAuthorization && headers.authorization === expiringAuthorization && req.url === '/api/notifications/me';
+      if (expectedAuthExpiry) headers.authorization = 'Bearer invalid-expired-token';
       const response = await fetch(process.env.SCMS_TEST_API + req.url, { method: req.method, headers, body: body.length ? body : undefined });
-      requests.push({ path: req.url, method: req.method, status: response.status });
-      res.writeHead(response.status, Object.fromEntries(response.headers));
-      res.end(Buffer.from(await response.arrayBuffer())); return;
+      requests.push({ path: req.url, method: req.method, status: response.status,
+        expectedAuthExpiry: Boolean(expectedAuthExpiry && response.status === 401) });
+      const responseBody = Buffer.from(await response.arrayBuffer());
+      const responseHeaders = Object.fromEntries(response.headers);
+      if (profileGate) responseHeaders['cache-control'] = 'no-store';
+      res.writeHead(response.status, responseHeaders);
+      if (profileGate) {
+        // Let Chrome start another authenticated GET to this URL while the old body is delayed.
+        res.flushHeaders(); profileGate.started.resolve(); await profileGate.release.promise;
+      }
+      res.end(responseBody); return;
     }
     const pathname = new URL(req.url, 'http://test').pathname;
     const filename = path.resolve(webRoot, '.' + (pathname === '/' ? '/index.html' : pathname));
@@ -49,6 +67,7 @@ const server = http.createServer(async (req, res) => {
   const profile = path.join(report, 'profile-' + Date.now());
   const browser = spawn(browserPath, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--remote-allow-origins=*', '--remote-debugging-port=0', '--user-data-dir='+profile, 'about:blank'], { windowsHide: true, stdio: 'ignore' });
   let socket;
+  const sockets = [];
   const exceptions = [];
   const results = [];
   try {
@@ -57,28 +76,46 @@ const server = http.createServer(async (req, res) => {
     const port = fs.readFileSync(portFile, 'utf8').split('\n')[0];
     const target = await (await fetch('http://127.0.0.1:'+port+'/json/new?about:blank', { method: 'PUT' })).json();
     socket = new WebSocket(target.webSocketDebuggerUrl);
+    sockets.push(socket);
     await new Promise((resolve, reject) => { socket.addEventListener('open', resolve, { once: true }); socket.addEventListener('error', reject, { once: true }); });
     let nextId = 0; const pending = new Map();
-    socket.addEventListener('message', event => {
+    const bearerHeaders = new Map();
+    const onMessage = event => {
       const message = JSON.parse(event.data);
       if (message.id) {
         const task = pending.get(message.id); if (!task) return;
         pending.delete(message.id); clearTimeout(task.timer);
         if (message.error) task.reject(new Error(message.error.message)); else task.resolve(message.result);
       } else if (message.method === 'Runtime.exceptionThrown') exceptions.push(message.params.exceptionDetails.exception?.description || message.params.exceptionDetails.text);
-    });
+      else if (message.method === 'Network.requestWillBeSent') {
+        const authorization = Object.entries(message.params.request.headers).find(([name]) => name.toLowerCase() === 'authorization')?.[1];
+        if (authorization) bearerHeaders.set(event.currentTarget, authorization);
+      }
+    };
+    socket.addEventListener('message', onMessage);
     const send = (method, params = {}) => new Promise((resolve, reject) => {
       const id = ++nextId; const timer = setTimeout(() => { pending.delete(id); reject(new Error('CDP timeout: '+method)); }, 20000);
       pending.set(id, { resolve, reject, timer }); socket.send(JSON.stringify({ id, method, params }));
     });
+    const openTab = async () => {
+      const target = await (await fetch('http://127.0.0.1:'+port+'/json/new?about:blank', { method: 'PUT' })).json();
+      const nextSocket = new WebSocket(target.webSocketDebuggerUrl);
+      sockets.push(nextSocket);
+      await new Promise((resolve, reject) => { nextSocket.addEventListener('open', resolve, { once: true }); nextSocket.addEventListener('error', reject, { once: true }); });
+      nextSocket.addEventListener('message', onMessage);
+      socket = nextSocket;
+      await send('Runtime.enable'); await send('Page.enable'); await send('Network.enable'); await send('Page.bringToFront');
+      await send('Emulation.setDeviceMetricsOverride', { width: 1365, height: 900, deviceScaleFactor: 1, mobile: false });
+      return nextSocket;
+    };
     const evaluate = async expression => {
       const result = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
       if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
       return result.result.value;
     };
-    const wait = async expression => {
-      for (let attempt = 0; attempt < 150; attempt++) { if (await evaluate(expression)) return; await delay(100); }
-      throw new Error('Browser condition timed out: '+expression+'\n'+await evaluate('document.body.innerText'));
+    const wait = async (expression, attempts = 150) => {
+      for (let attempt = 0; attempt < attempts; attempt++) { if (await evaluate(expression)) return; await delay(100); }
+      throw new Error('Browser condition timed out: '+expression+'\n'+await evaluate('window.location.hash + "\\n" + document.body.innerText'));
     };
     const pass = name => { results.push(name); process.stdout.write('PASS: browser '+name+'\n'); };
     const clickText = text => evaluate(`(() => { const button = [...document.querySelectorAll('button')].find(b => b.textContent.includes(${JSON.stringify(text)})); if (!button) throw new Error('Missing button'); button.click(); })()`);
@@ -89,7 +126,7 @@ const server = http.createServer(async (req, res) => {
       const data = await send('Page.captureScreenshot', { format: 'png' });
       fs.writeFileSync(path.join(report, name+'.png'), Buffer.from(data.data, 'base64'));
     };
-    await send('Runtime.enable'); await send('Page.enable');
+    await send('Runtime.enable'); await send('Page.enable'); await send('Network.enable');
     await send('Emulation.setDeviceMetricsOverride', { width: 1365, height: 900, deviceScaleFactor: 1, mobile: false });
     await send('Page.navigate', { url: webOrigin + '/#/login' });
     await wait('document.querySelector("#login-email") !== null');
@@ -193,6 +230,33 @@ const server = http.createServer(async (req, res) => {
     await wait('document.querySelector("main").textContent.includes("Buổi học đã bị hủy") && document.querySelector("main").textContent.includes("Test Coach")');
     pass('member dashboard shows the next real class, coach, changed room and cancelled-session alert');
     await screenshot('member-dashboard-desktop');
+    const coachLogin = await fetch(process.env.SCMS_TEST_API + '/api/auth/login', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: process.env.SCMS_TEST_COACH_EMAIL, password: process.env.SCMS_TEST_PASSWORD })
+    });
+    assert.equal(coachLogin.status, 200);
+    const coachToken = (await coachLogin.json()).accessToken;
+    const sendLiveMessage = async title => {
+      const response = await fetch(process.env.SCMS_TEST_API + '/api/coaches/me/notifications', {
+        method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + coachToken },
+        body: JSON.stringify({ title, content: 'Delivered while member dashboard stays open' })
+      });
+      assert.equal(response.status, 204);
+    };
+    await sendLiveMessage('Live Focus Notification');
+    await evaluate('window.dispatchEvent(new Event("focus"))');
+    await wait('document.querySelector("main").textContent.includes("Live Focus Notification")');
+    pass('member dashboard receives a new server notification when the window regains focus');
+    await sendLiveMessage('Live Poll Notification');
+    await wait('document.querySelector("main").textContent.includes("Live Poll Notification")', 300);
+    assert.ok(await evaluate('document.querySelector(\'button[aria-label="Thông báo"] [aria-label$="thông báo chưa đọc"]\') !== null'));
+    await evaluate('document.querySelector(\'button[aria-label="Thông báo"]\').click()');
+    await wait('document.querySelector(\'button[aria-label="Thông báo"]\').nextElementSibling.textContent.includes("Live Poll Notification")');
+    await evaluate('[...document.querySelector(\'button[aria-label="Thông báo"]\').nextElementSibling.querySelectorAll("button")].find(b => b.textContent.includes("Live Poll Notification")).click()');
+    await wait('[...document.querySelectorAll("main a")].find(a => a.querySelector("h3")?.textContent === "Live Poll Notification")?.textContent.includes("Đã đọc")');
+    await evaluate('document.querySelector(\'button[aria-label="Thông báo"]\').click()');
+    pass('polling updates the open dashboard and bell, and reading from the bell updates the dashboard');
+    await screenshot('member-notifications-live-desktop');
     await clickText('Cập nhật hồ sơ');
     await wait('document.body.textContent.includes("Hồ Sơ & Bảo Mật Tài Khoản") && document.querySelector("form input[type=text]")?.value === "Test Member"');
     await evaluate('[...document.querySelectorAll("button")].find(b => b.textContent.trim() === "close").click()');
@@ -358,19 +422,106 @@ const server = http.createServer(async (req, res) => {
     assert.ok(requests.some(r => r.path.includes('/reports/membership?from=2026-01-01&to=2026-03-31&groupBy=month')));
     assert.ok(await evaluate('document.body.textContent.includes("Thành viên mới theo kỳ") && document.body.textContent.includes("Sự kiện đăng ký lớp trong kỳ")'));
     pass('manager reports use chosen historical range and monthly grouping');
+    // Two targets share one Chrome profile/origin and must send independent JWTs.
+    const managerSocket = socket;
+    const memberSocket = await openTab();
+    await send('Page.navigate', { url: webOrigin + '/#/login' });
+    await wait('document.querySelector("#login-email") !== null');
+    assert.ok(await evaluate('sessionStorage.getItem("SCMS_API_ACCESS_TOKEN") === null && sessionStorage.getItem("SCMS_AUTH_SESSION") === null'));
+    await fill('#login-email', process.env.SCMS_TEST_MEMBER_EMAIL); await fill('#login-password', process.env.SCMS_TEST_PASSWORD);
+    await evaluate('document.querySelector("form button[type=submit]").click()');
+    await wait('window.location.hash === "#/member/dashboard" && document.querySelector("header") !== null');
+    const ownRole = async () => {
+      const authorization = bearerHeaders.get(socket);
+      assert.ok(authorization, 'this tab sent a Bearer header');
+      const response = await fetch(process.env.SCMS_TEST_API + '/api/profile/me', { headers: { authorization } });
+      assert.equal(response.status, 200);
+      return (await response.json()).role.toUpperCase();
+    };
+    const hasNoStoredAuth = () => evaluate('[localStorage, sessionStorage].every(storage => storage.getItem("SCMS_API_ACCESS_TOKEN") === null && storage.getItem("SCMS_AUTH_SESSION") === null)');
+    assert.equal(await ownRole(), 'MEMBER');
+    assert.ok(await hasNoStoredAuth());
+    await screenshot('multitab-member-desktop');
+    socket = managerSocket; await send('Page.bringToFront');
+    assert.equal(await ownRole(), 'MANAGER');
+    assert.ok(await hasNoStoredAuth());
+    pass('manager and member sign in to two tabs of the same Chrome profile with independent JWT and profile');
+    const reloadTab = async (email, dashboard) => {
+      await evaluate('document.documentElement.dataset.beforeJwtReload = "true"');
+      await send('Page.reload');
+      await wait('document.documentElement.dataset.beforeJwtReload !== "true" && document.querySelector("#login-email") !== null && document.querySelector("header") === null');
+      assert.ok(await hasNoStoredAuth());
+      await fill('#login-email', email); await fill('#login-password', process.env.SCMS_TEST_PASSWORD);
+      await evaluate('document.querySelector("form button[type=submit]").click()');
+      await wait(`window.location.hash === ${JSON.stringify(dashboard)} && document.querySelector("header") !== null`);
+    };
+    for (let attempt = 0; attempt < 3; attempt++) await reloadTab(process.env.SCMS_TEST_MANAGER_EMAIL, '#/manager/dashboard');
+    assert.equal(await ownRole(), 'MANAGER'); await screenshot('multitab-manager-desktop');
+    socket = memberSocket; await send('Page.bringToFront');
+    assert.equal(await ownRole(), 'MEMBER');
+    for (let attempt = 0; attempt < 3; attempt++) await reloadTab(process.env.SCMS_TEST_MEMBER_EMAIL, '#/member/dashboard');
+    assert.equal(await ownRole(), 'MEMBER');
+    pass('reload discards JWT and requires login again without changing the other tab');
+    socket = managerSocket; await send('Page.bringToFront');
+    await evaluate('document.querySelector("header img[alt=Avatar]").closest("button").click()');
+    await clickText('Đăng xuất'); await wait('document.querySelector("#login-email") !== null');
+    assert.ok(await hasNoStoredAuth());
+    socket = memberSocket; await send('Page.bringToFront');
+    assert.equal(await ownRole(), 'MEMBER');
+    await hash('#/member/notifications'); await wait('document.querySelector("main").textContent.includes("Thông Báo Của Tôi")');
+    pass('logging out of the manager tab leaves the member tab authenticated and usable');
+    socket = managerSocket; await send('Page.bringToFront');
+    await fill('#login-email', process.env.SCMS_TEST_MANAGER_EMAIL); await fill('#login-password', process.env.SCMS_TEST_PASSWORD);
+    await evaluate('document.querySelector("form button[type=submit]").click()');
+    await wait('window.location.hash === "#/manager/dashboard" && document.querySelector("header") !== null');
+    socket = memberSocket; await send('Page.bringToFront');
+    expiringAuthorization = bearerHeaders.get(memberSocket);
+    await evaluate('window.dispatchEvent(new Event("focus"))');
+    await wait('document.querySelector("#login-email") !== null && sessionStorage.getItem("SCMS_API_ACCESS_TOKEN") === null && sessionStorage.getItem("SCMS_AUTH_SESSION") === null');
+    expiringAuthorization = null;
+    assert.ok(requests.some(r => r.expectedAuthExpiry));
+    socket = managerSocket; await send('Page.bringToFront');
+    assert.equal(await ownRole(), 'MANAGER');
+    assert.ok(await evaluate('document.querySelector("header") !== null'));
+    assert.ok(await hasNoStoredAuth());
+    pass('a real 401 expires only the affected tab and leaves the other account signed in');
+    // Hold a genuine API profile response while this tab changes accounts.
+    heldProfile = { authorization: bearerHeaders.get(socket), started: deferred(), release: deferred() };
+    await evaluate('document.querySelector("header img[alt=Avatar]").closest("button").click()');
+    await clickText('Hồ sơ & Đổi mật khẩu');
+    await wait('document.querySelector("form input[type=text]") !== null');
+    await fill('form input[type=text]', 'Test Manager');
+    await clickText('Lưu Thay Đổi');
+    let profileTimeout;
+    try {
+      await Promise.race([heldProfile.started.promise, new Promise((_, reject) => { profileTimeout = setTimeout(() => reject(new Error('Profile response did not reach the delay barrier')), 20000); })]);
+    } finally { clearTimeout(profileTimeout); }
+    await evaluate('[...document.querySelectorAll("button")].find(b => b.textContent.trim() === "close").click()');
+    await evaluate('document.querySelector("header img[alt=Avatar]").closest("button").click()');
+    await clickText('Đăng xuất'); await wait('document.querySelector("#login-email") !== null');
+    await fill('#login-email', process.env.SCMS_TEST_MEMBER_EMAIL); await fill('#login-password', process.env.SCMS_TEST_PASSWORD);
+    await evaluate('document.querySelector("form button[type=submit]").click()');
+    await wait('window.location.hash === "#/member/dashboard" && document.querySelector("header") !== null');
+    heldProfile.release.resolve();
+    await wait('document.body.textContent.includes("Thông tin đăng nhập đã thay đổi")');
+    assert.ok(await evaluate(`document.querySelector("header").textContent.includes(${JSON.stringify(process.env.SCMS_TEST_MEMBER_EMAIL)}) && document.querySelector("header").textContent.includes("MEMBER")`));
+    assert.equal(await ownRole(), 'MEMBER');
+    assert.ok(await hasNoStoredAuth());
+    pass('a delayed manager profile response cannot restore the old account after logout and member login');
     const materialExceptions = exceptions.filter(error => !error.includes('tailwind is not defined'));
     assert.deepEqual(materialExceptions, []); pass('no application JavaScript exceptions');
     const expectedUnavailable = ['/api/ai/chat', '/api/ai/recommendations', '/api/members/me/progress', '/api/coaches/me/progress'];
-    assert.equal(requests.filter(r => r.status >= 400 && !(r.status === 503 && expectedUnavailable.includes(r.path))).length, 0);
+    assert.equal(requests.filter(r => r.status >= 400 && !r.expectedAuthExpiry && !(r.status === 503 && expectedUnavailable.includes(r.path))).length, 0);
     for (const unavailablePath of expectedUnavailable) assert.equal(requests.filter(r => r.status === 503 && r.path === unavailablePath).length, 1);
-    pass('business APIs succeed except the expected missing AI key and injected progress failure');
+    pass('business APIs succeed except the expected missing AI key, progress failure and deliberate tab expiry');
     fs.writeFileSync(path.join(report, 'report.json'), JSON.stringify({ results, requests, exceptions }, null, 2));
     fs.rmSync(path.join(report, 'failure.txt'), { force: true });
   } catch (error) {
     fs.writeFileSync(path.join(report, 'failure.txt'), error.stack);
     throw error;
   } finally {
-    socket?.close(); browser.kill(); server.close();
+    heldProfile?.release.resolve();
+    sockets.forEach(connection => connection.close()); browser.kill(); server.close();
     fs.writeFileSync(path.join(report, 'requests.json'), JSON.stringify({ requests, exceptions }, null, 2));
   }
 })().catch(error => { process.stderr.write(error.stack+'\n'); process.exitCode = 1; server.close(); });

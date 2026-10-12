@@ -1,17 +1,8 @@
 import { apiRequest, clearApiToken, createIdempotencyKey, getApiToken, setApiToken } from './http.js';
-
-const SESSION_KEY = 'SCMS_AUTH_SESSION';
-
-function readSession() {
-  try {
-    return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
-  } catch {
-    return null;
-  }
-}
+import { assertAuthVersion, beginAuthOperation, getAuthUser, getAuthVersion, setAuthUser } from './authState.js';
 
 function centerId() {
-  const id = readSession()?.centerId || import.meta.env.VITE_SPORTS_CENTER_ID;
+  const id = getAuthUser()?.centerId || import.meta.env.VITE_SPORTS_CENTER_ID;
   if (!id || !Number.isSafeInteger(Number(id)) || Number(id) <= 0) {
     throw new Error('Chưa xác định trung tâm. Hãy đăng nhập tài khoản được gán centerId hoặc cấu hình VITE_SPORTS_CENTER_ID.');
   }
@@ -83,16 +74,19 @@ function mapMember(member) {
   };
 }
 
-async function loadCurrentUser(token = getApiToken()) {
+async function loadCurrentUser(token = getApiToken(), version = getAuthVersion()) {
   if (!token) return null;
   const profile = await apiRequest('profile/me', { token });
+  assertAuthVersion(version);
   let memberId = null;
   let activeSubscription = null;
 
   if (String(profile.role).toUpperCase() === 'MEMBER') {
     const member = await apiRequest('members/me', { token });
+    assertAuthVersion(version);
     memberId = member.memberId;
     const subscriptions = await apiRequest(`members/${memberId}/subscriptions`, { token });
+    assertAuthVersion(version);
     const today = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
     const activeSubs = asArray(subscriptions).filter(item => String(item.status).toUpperCase() === 'ACTIVE' && item.startDate && item.endDate && item.startDate <= today && item.endDate >= today);
     activeSubs.sort((a, b) => (b.endDate || '').localeCompare(a.endDate || ''));
@@ -100,7 +94,8 @@ async function loadCurrentUser(token = getApiToken()) {
   }
 
   const capabilities = await apiRequest('access/me/capabilities', { token });
-  return {
+  assertAuthVersion(version);
+  const user = {
     capabilities,
     id: profile.userId,
     memberId,
@@ -118,6 +113,22 @@ async function loadCurrentUser(token = getApiToken()) {
     packageStatus: activeSubscription ? 'ACTIVE' : 'INACTIVE',
     avatar: null
   };
+  setAuthUser(user);
+  return user;
+}
+
+async function loginAndLoad(path, body) {
+  let version = beginAuthOperation();
+  const result = await apiRequest(path, { method: 'POST', token: null, body });
+  assertAuthVersion(version);
+  setApiToken(result.accessToken);
+  version = getAuthVersion();
+  try {
+    return { token: result.accessToken, user: await loadCurrentUser(result.accessToken, version) };
+  } catch (error) {
+    if (version === getAuthVersion()) clearApiToken();
+    throw error;
+  }
 }
 
 function mapPackage(item) {
@@ -177,14 +188,7 @@ function mapBooking(item) {
 
 export const authApi = {
   async login(email, password) {
-    const result = await apiRequest('auth/login', { method: 'POST', body: { email: email.trim(), password } });
-    setApiToken(result.accessToken);
-    try {
-      return { token: result.accessToken, user: await loadCurrentUser(result.accessToken) };
-    } catch (error) {
-      clearApiToken();
-      throw error;
-    }
+    return loginAndLoad('auth/login', { email: email.trim(), password });
   },
 
   async register({ fullName, email, phone, password }) {
@@ -195,8 +199,9 @@ export const authApi = {
     }
     const localPart = cleanEmail.split('@')[0];
     const username = localPart.length >= 3 ? localPart : `user-${localPart}`;
+    const version = beginAuthOperation();
     await apiRequest('auth/register', {
-      method: 'POST',
+      method: 'POST', token: null,
       body: {
         username,
         email: cleanEmail,
@@ -206,18 +211,14 @@ export const authApi = {
         centerId: registeredCenterId
       }
     });
+    assertAuthVersion(version);
     return (await this.login(cleanEmail, password)).user;
   },
 
   async loginWithGoogle({ credential }) {
-    const result = await apiRequest('auth/google', {
-      method: 'POST', token: null,
-      body: { idToken: credential, centerId: Number(import.meta.env.VITE_SPORTS_CENTER_ID) || null }
+    return loginAndLoad('auth/google', {
+      idToken: credential, centerId: Number(import.meta.env.VITE_SPORTS_CENTER_ID) || null
     });
-    setApiToken(result.accessToken);
-    try {
-      return { token: result.accessToken, user: await loadCurrentUser(result.accessToken) };
-    } catch (error) { clearApiToken(); throw error; }
   },
 
   async linkGoogle(credential, currentPassword) {
@@ -234,20 +235,25 @@ export const authApi = {
   },
 
   async changePassword(_userId, currentPassword, newPassword) {
+    const version = beginAuthOperation();
     const result = await apiRequest('auth/change-password', {
       method: 'POST',
       body: { currentPassword, newPassword }
     });
+    assertAuthVersion(version);
     setApiToken(result.accessToken);
     return loadCurrentUser(result.accessToken);
   },
 
   async updateProfile(_userId, profileData) {
+    const version = getAuthVersion();
+    const token = getApiToken();
     await apiRequest('profile/me', {
-      method: 'PATCH',
+      method: 'PATCH', token,
       body: { fullName: profileData.fullName, phone: profileData.phone || null }
     });
-    return loadCurrentUser();
+    assertAuthVersion(version);
+    return loadCurrentUser(token, version);
   },
 
   getCurrentUser: loadCurrentUser,
@@ -257,7 +263,7 @@ export const authApi = {
 export const packageApi = {
   async getAll() {
     const id = centerId();
-    const role = String(readSession()?.role || '').toUpperCase();
+    const role = String(getAuthUser()?.role || '').toUpperCase();
     const suffix = role === 'MANAGER' || role === 'ADMIN' ? '/all' : '';
     const packages = await apiRequest(`centers/${id}/membership-packages${suffix}`);
     return asArray(packages).map(mapPackage);
@@ -446,7 +452,7 @@ export const classApi = {
     const end = new Date();
     end.setDate(end.getDate() + 90);
     const query = new URLSearchParams({ from: today, to: end.toISOString().slice(0, 10), page: '1', pageSize: '100' });
-    const isCoach = String(readSession()?.role || '').toUpperCase() === 'COACH';
+    const isCoach = String(getAuthUser()?.role || '').toUpperCase() === 'COACH';
     const path = isCoach ? `coaches/me/teaching-schedule?from=${today}&to=${end.toISOString().slice(0, 10)}` : `class-sessions?${query}`;
     const result = isCoach ? await apiRequest(path) : await loadSessionsBetween(today, end.toISOString().slice(0, 10));
     return asArray(result).map(mapSession);
@@ -788,9 +794,9 @@ export const systemApi = {
   },
 
   async getAuditPage(page = 1) {
-    const session = readSession();
+    const user = getAuthUser();
     const params = new URLSearchParams({ page: String(page), pageSize: '50' });
-    const isAdmin = String(session?.role || '').toUpperCase() === 'ADMIN';
+    const isAdmin = String(user?.role || '').toUpperCase() === 'ADMIN';
     const path = isAdmin
       ? `admin/audit-logs?${params}`
       : `centers/${centerId()}/audit-logs?${params}`;
@@ -824,7 +830,7 @@ export const systemApi = {
   },
 
   async getPermissions() {
-    const isManager = String(readSession()?.role || '').toUpperCase() === 'MANAGER';
+    const isManager = String(getAuthUser()?.role || '').toUpperCase() === 'MANAGER';
     if (isManager) return asArray(await apiRequest(`centers/${centerId()}/roles`));
     const [matrix, catalog] = await Promise.all([apiRequest('admin/roles'), apiRequest('admin/permissions')]);
     return asArray(matrix).map(row => ({ ...row, availablePermissions: asArray(catalog) }));
@@ -832,7 +838,7 @@ export const systemApi = {
 
   // Cập nhật quyền theo roleId (PUT /api/admin/roles/{roleId}/permissions)
   async updatePermissions(roleId, permissionCodes, capabilityIds = []) {
-    const isManager = String(readSession()?.role || '').toUpperCase() === 'MANAGER';
+    const isManager = String(getAuthUser()?.role || '').toUpperCase() === 'MANAGER';
     return apiRequest(isManager ? `centers/${centerId()}/roles/${roleId}/permissions` : `admin/roles/${roleId}/permissions`, {
       method: 'PUT',
       body: isManager ? { permissionCodes, capabilityIds } : { permissionCodes }

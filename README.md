@@ -48,7 +48,7 @@ Frontend của Hệ thống Quản lý Trung tâm Thể thao SCMS chịu trách 
 
 4. **Dữ liệu qua API và SQL Server:**
    - `api.js`/`backendApi.js` gọi backend qua `http.js`, gửi Bearer JWT và hiển thị lỗi HTTP. Giáo án, tiến độ, thông báo và lịch sử AI lưu ở server.
-   - localStorage giữ token/phiên giao diện; backend kiểm tra tài khoản và quyền từ database. `dbStorage.js` là mã mô phỏng cũ, không được service hiện tại sử dụng.
+   - Xác thực bằng JWT Bearer cho toàn bộ API được bảo vệ. JWT chỉ giữ trong bộ nhớ của từng tab; hồ sơ/quyền/trung tâm lấy từ API và giữ trong bộ nhớ, không dùng Session, sessionStorage, localStorage hay cookie để xác thực. Các tab đăng nhập tài khoản khác nhau độc lập; đăng xuất hoặc HTTP 401 ở một tab không ảnh hưởng tab khác. F5, mở tab mới hoặc Duplicate Tab cần đăng nhập lại. Backend kiểm tra chữ ký, thời hạn JWT và tài khoản/quyền trong database. localStorage chỉ giữ tùy chọn Ghi nhớ email; dữ liệu đăng nhập lưu theo cơ chế cũ được bỏ qua. `dbStorage.js` là mã mô phỏng cũ, không được service hiện tại sử dụng. Chi tiết: [JWT và đăng nhập nhiều tab](docs/jwt-auth-fix.md).
 
 ---
 

@@ -4,8 +4,9 @@ const fs = require('node:fs');
 let requests = [];
 let respond;
 globalThis.__flowRequest = async (path, options) => { requests.push({ path, options }); return respond(path, options); };
-globalThis.localStorage = { getItem: () => JSON.stringify({ centerId: 42, role: 'MEMBER' }) };
+globalThis.__flowUser = { centerId: 42, role: 'MEMBER' };
 const source = fs.readFileSync('src/services/backendApi.js', 'utf8')
+  .replace(/^import .*?from '\.\/authState.js';/m, 'const getAuthUser=()=>globalThis.__flowUser; const setAuthUser=user=>{globalThis.__flowUser=user;}; const beginAuthOperation=()=>0; const getAuthVersion=()=>0; const assertAuthVersion=()=>{};')
   .replace(/^import .*?from '\.\/http.js';/m, 'const apiRequest = globalThis.__flowRequest; const clearApiToken=()=>{}; const createIdempotencyKey=()=>"test"; const getApiToken=()=>"token"; const setApiToken=()=>{};')
   .replaceAll('import.meta.env.VITE_SPORTS_CENTER_ID', '42');
 const modulePromise = import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
@@ -86,8 +87,8 @@ test('coach assignment sends coach profile ID', async () => {
 
 test('manager permissions are read and written through center scope', async () => {
   const { systemApi } = await modulePromise;
-  const previous = globalThis.localStorage;
-  globalThis.localStorage = { getItem: () => JSON.stringify({ centerId: 42, role: 'MANAGER' }) };
+  const previous = globalThis.__flowUser;
+  globalThis.__flowUser = { centerId: 42, role: 'MANAGER' };
   try {
     setup(() => [{ roleId: 5, roleName: 'Coach', permissions: [{code:'read'}], capabilityIds:['view_teaching_schedule'] }]);
     const matrix = await systemApi.getPermissions();
@@ -95,7 +96,7 @@ test('manager permissions are read and written through center scope', async () =
     await systemApi.updatePermissions(5,['read'],['view_teaching_schedule']);
     assert.equal(requests[1].path,'centers/42/roles/5/permissions');
     assert.deepEqual(requests[1].options.body, { permissionCodes:['read'], capabilityIds:['view_teaching_schedule'] });
-  } finally { globalThis.localStorage = previous; }
+  } finally { globalThis.__flowUser = previous; }
 });
 test('permission loading failures propagate to the screen', async () => {
   const { systemApi } = await modulePromise;

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { bookingApi, memberApi, notificationApi } from '../../services/api.js';
+import { bookingApi, memberApi } from '../../services/api.js';
+import { useNotifications } from '../../components/common/useNotifications.js';
 import { useAuth } from '../../context/AuthContext.js';
 import { StatCard } from '../../components/common/StatCard.js';
 import { LoadingSpinner } from '../../components/common/Table.js';
@@ -9,7 +10,8 @@ import { formatMemberDate, formatMeasurement, getLatestProgress, getMembershipSu
 
 export function MemberDashboard() {
   const { currentUser } = useAuth();
-  const [data, setData] = useState({ bookings: [], progress: [], plans: [], notifications: [] });
+  const { items: notifications, error: notificationError, refresh: refreshNotifications } = useNotifications();
+  const [data, setData] = useState({ bookings: [], progress: [], plans: [] });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(true);
   const [reload, setReload] = useState(0);
@@ -26,8 +28,7 @@ export function MemberDashboard() {
     const sources = [
       ['bookings', canBook ? bookingApi.getMemberBookings() : Promise.resolve([])],
       ['progress', canProgress ? memberApi.getMyProgress() : Promise.resolve([])],
-      ['plans', canProgress ? memberApi.getMyPlans() : Promise.resolve([])],
-      ['notifications', notificationApi.getMine()]
+      ['plans', canProgress ? memberApi.getMyPlans() : Promise.resolve([])]
     ];
     Promise.allSettled(sources.map(([, request]) => request)).then(results => {
       if (!active) return;
@@ -48,7 +49,8 @@ export function MemberDashboard() {
   const upcoming = getUpcomingBookings(data.bookings);
   const membership = getMembershipSummary(currentUser);
   const latest = getLatestProgress(data.progress);
-  const unread = data.notifications.filter(item => !item.isRead).length;
+  const unread = notifications.filter(item => !item.isRead).length;
+  const displayErrors = { ...errors, ...(notificationError ? { notifications: notificationError } : {}) };
   const reminders = getMemberReminders(currentUser, data.bookings);
   const shortcuts = [
     { href: '#/member/packages', icon: 'card_membership', label: 'Gói tập & Gia hạn' },
@@ -72,13 +74,13 @@ export function MemberDashboard() {
         </div>
         <div className="flex flex-wrap gap-2 shrink-0">
           <button type="button" onClick={() => setProfileOpen(true)} className="px-4 py-2.5 bg-red-600 hover:bg-red-700 rounded-lg text-xs font-bold">Cập nhật hồ sơ</button>
-          <button type="button" onClick={() => setReload(value => value + 1)} className="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-bold">Tải lại</button>
+          <button type="button" onClick={() => { setReload(value => value + 1); refreshNotifications(); }} className="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-bold">Tải lại</button>
         </div>
       </div>
 
-      {Object.keys(errors).length > 0 && <div role="alert" className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-800 space-y-1">
+      {Object.keys(displayErrors).length > 0 && <div role="alert" className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-800 space-y-1">
         <p className="font-bold">Một số dữ liệu chưa tải được. Bấm Tải lại để thử lại.</p>
-        {Object.entries(errors).map(([key, message]) => <p key={key}>{({ bookings: 'Lịch học', progress: 'Kết quả tập', plans: 'Giáo án', notifications: 'Thông báo' })[key]}: {message}</p>)}
+        {Object.entries(displayErrors).map(([key, message]) => <p key={key}>{({ bookings: 'Lịch học', progress: 'Kết quả tập', plans: 'Giáo án', notifications: 'Thông báo' })[key]}: {message}</p>)}
       </div>}
 
       <MemberReminders items={reminders} />
@@ -93,7 +95,7 @@ export function MemberDashboard() {
         {canBook && <StatCard title="Lớp sắp tới" value={errors.bookings ? '—' : upcoming.length} subtitle="Buổi chưa bắt đầu, đã xác nhận" icon="calendar_month" color="red" />}
         <StatCard title="Trạng thái gói tập" value={membership.label} subtitle={membership.active ? `Hạn: ${formatMemberDate(currentUser?.packageExpiry)}` : 'Xem gói và gia hạn trực tuyến'} icon="credit_card" color="slate" />
         {canProgress && <StatCard title="Kết quả tập luyện" value={errors.progress ? '—' : data.progress.length} subtitle={latest ? `Cập nhật: ${formatMemberDate(latest.date)}` : 'Chưa có đánh giá từ HLV'} icon="monitoring" color="slate" />}
-        <StatCard title="Thông báo chưa đọc" value={errors.notifications ? '—' : unread} subtitle="Tin nhắn và cập nhật từ trung tâm" icon="notifications" color="slate" />
+        <StatCard title="Thông báo chưa đọc" value={notificationError ? '—' : unread} subtitle="Tin nhắn và cập nhật từ trung tâm" icon="notifications" color="slate" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
@@ -132,7 +134,7 @@ export function MemberDashboard() {
 
         <section className="bg-white p-6 rounded-2xl border border-slate-200 space-y-4">
           <div className="flex flex-wrap justify-between gap-2"><h2 className="font-chivo text-sm font-bold">Thông báo mới nhất</h2><a href="#/member/notifications" className="text-xs font-bold text-red-700 hover:underline">Xem tất cả</a></div>
-          {errors.notifications ? <p className="text-sm text-red-700">Chưa tải được thông báo.</p> : data.notifications.length === 0 ? <p className="text-xs text-slate-500">Chưa có thông báo từ trung tâm.</p> : data.notifications.slice(0, 3).map(item => <a key={item.id} href="#/member/notifications" className={`block p-3 rounded-lg space-y-1 ${item.isRead ? 'bg-slate-50' : 'bg-red-50'}`}>
+          {notificationError ? <p className="text-sm text-red-700">Chưa tải được thông báo.</p> : notifications.length === 0 ? <p className="text-xs text-slate-500">Chưa có thông báo từ trung tâm.</p> : notifications.slice(0, 3).map(item => <a key={item.id} href="#/member/notifications" className={`block p-3 rounded-lg space-y-1 ${item.isRead ? 'bg-slate-50' : 'bg-red-50'}`}>
             <h3 className="font-bold text-sm">{item.title}</h3><p className="text-xs text-slate-600 whitespace-pre-wrap break-words">{item.content}</p><p className="text-xs text-slate-500">{item.isRead ? 'Đã đọc' : 'Chưa đọc'}</p>
           </a>)}
         </section>

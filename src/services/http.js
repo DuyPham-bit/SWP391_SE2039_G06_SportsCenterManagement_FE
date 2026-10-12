@@ -1,13 +1,17 @@
+import { beginAuthOperation, getAuthVersion, setAuthUser } from './authState.js';
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/+$/, '');
-const API_TOKEN_KEY = 'SCMS_API_ACCESS_TOKEN';
+// Memory belongs to this document, so another tab cannot replace its JWT.
+let accessToken = null;
 
 export function getApiToken() {
-  return localStorage.getItem(API_TOKEN_KEY);
+  return accessToken;
 }
 
 export function setApiToken(token) {
-  if (token) localStorage.setItem(API_TOKEN_KEY, token);
-  else localStorage.removeItem(API_TOKEN_KEY);
+  beginAuthOperation();
+  if (!token || token !== accessToken) setAuthUser(null);
+  accessToken = token || null;
 }
 
 export function clearApiToken() {
@@ -20,6 +24,7 @@ export function createIdempotencyKey() {
 }
 
 export async function apiRequest(path, { method = 'GET', body, token = getApiToken(), headers = {}, signal } = {}) {
+  const authVersion = getAuthVersion();
   const requestHeaders = new Headers(headers);
   if (body !== undefined) requestHeaders.set('Content-Type', 'application/json');
   if (token) requestHeaders.set('Authorization', `Bearer ${token}`);
@@ -55,15 +60,15 @@ export async function apiRequest(path, { method = 'GET', body, token = getApiTok
       'auth/request-password-reset',
       'auth/reset-password'
     ]);
-    const expiredSession = response.status === 401 && token && token === getApiToken() &&
+    const expiredToken = response.status === 401 && token && token === getApiToken() && authVersion === getAuthVersion() &&
       !publicAuthEndpoints.has(diagnosticPath.toLowerCase());
-    if (expiredSession) {
+    if (expiredToken) {
       clearApiToken();
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new Event('scms:session-expired'));
+        window.dispatchEvent(new Event('scms:auth-expired'));
       }
     }
-    const message = expiredSession
+    const message = expiredToken
       ? 'Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.'
       : payload?.detail || payload?.message || validationErrors || payload?.title ||
         (typeof payload === 'string' && payload) || `Yêu cầu API thất bại (${response.status}).`;

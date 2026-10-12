@@ -1,4 +1,6 @@
 
+import { getAuthUser } from './authState.js';
+
 export const SYSTEM_CAPABILITIES = [
   // 1. Quản lý chung
   {
@@ -172,10 +174,8 @@ export const SYSTEM_CAPABILITIES = [
 // Helper to get active permissions of a role
 export function getPermissionsForRole(role) {
   const normalized = String(role || '').toUpperCase();
-  try {
-    const session = JSON.parse(localStorage.getItem('SCMS_AUTH_SESSION') || 'null');
-    if (String(session?.role || '').toUpperCase() === normalized && Array.isArray(session?.capabilities)) return session.capabilities;
-  } catch {}
+  const user = getAuthUser();
+  if (String(user?.role || '').toUpperCase() === normalized && Array.isArray(user?.capabilities)) return user.capabilities;
   return [];
 }
 

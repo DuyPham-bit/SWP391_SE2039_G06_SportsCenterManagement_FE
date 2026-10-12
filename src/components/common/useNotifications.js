@@ -26,12 +26,14 @@ export function useNotifications() {
     if (!currentUser) return;
     const refreshVisible = () => { if (!document.hidden) refresh(); };
     const onRead = event => setItems(previous => previous.map(item => item.id === event.detail.id ? { ...item, isRead: true } : item));
-    const timer = window.setInterval(refreshVisible, 60000);
+    const timer = window.setInterval(refreshVisible, 15000);
     document.addEventListener('visibilitychange', refreshVisible);
+    window.addEventListener('focus', refreshVisible);
     window.addEventListener('scms:notification-read', onRead);
     return () => {
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', refreshVisible);
+      window.removeEventListener('focus', refreshVisible);
       window.removeEventListener('scms:notification-read', onRead);
     };
   }, [currentUser?.id, refresh]);
