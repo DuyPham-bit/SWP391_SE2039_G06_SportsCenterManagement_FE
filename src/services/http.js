@@ -38,8 +38,10 @@ export async function apiRequest(path, { method = 'GET', body, token = getApiTok
       signal
     });
   } catch (cause) {
-    const error = new Error(`Không kết nối được API tại ${API_BASE_URL}. Hãy kiểm tra backend và VITE_API_BASE_URL.`);
+    const error = new Error(`Chưa xác định kết quả: Mất kết nối mạng hoặc hết thời gian chờ tới backend (${API_BASE_URL}). Vui lòng kiểm tra trạng thái giao dịch trước khi thử lại.`);
     error.cause = cause;
+    error.code = 'COMMON-01';
+    error.proposedHandling = 'Thông báo “Chưa xác định kết quả”; kiểm tra trạng thái trước khi thử lại. Tránh tạo hai đăng ký hoặc hai khoản thu.';
     throw error;
   }
 
@@ -69,11 +71,18 @@ export async function apiRequest(path, { method = 'GET', body, token = getApiTok
       }
     }
     const message = expiredToken
-      ? 'Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.'
+      ? 'Phiên đăng nhập đã hết hạn hoặc quyền đã bị thu hồi. Vui lòng đăng nhập lại.'
       : payload?.detail || payload?.message || validationErrors || payload?.title ||
         (typeof payload === 'string' && payload) || `Yêu cầu API thất bại (${response.status}).`;
     const traceSuffix = payload?.traceId ? `, traceId ${payload.traceId}` : '';
     const error = new Error(message);
+    error.code = payload?.code || (expiredToken ? 'COMMON-04' : (response.status === 409 ? 'COMMON-03' : null));
+    error.proposedHandling = payload?.proposedHandling || (expiredToken
+      ? 'Kiểm tra lại quyền trước thao tác; yêu cầu đăng nhập lại khi cần và không tiếp tục lưu bằng quyền cũ.'
+      : (response.status === 409
+        ? 'Phát hiện dữ liệu đã thay đổi; yêu cầu tải bản mới để đối chiếu, tránh âm thầm ghi đè.'
+        : null));
+    error.isDraftPolicy = Boolean(payload?.isDraftPolicy);
     error.diagnostic = `[${method} /${diagnosticPath}, HTTP ${response.status}${traceSuffix}]`;
     error.status = response.status;
     error.traceId = payload?.traceId;

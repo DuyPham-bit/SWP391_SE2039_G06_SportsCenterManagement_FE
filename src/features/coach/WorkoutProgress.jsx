@@ -75,7 +75,7 @@ export function WorkoutProgress() {
         <div className="grid sm:grid-cols-3 gap-3">{metricChanges(history).map(item => <div key={item.key} className="bg-slate-50 rounded-lg p-3">
           <p className="text-xs text-slate-500">{metrics[item.key][0]}</p>
           <p className="font-bold">{item.current === null ? 'Chưa đo' : item.current + ' ' + metrics[item.key][1]}</p>
-          <p className="text-xs">{item.change === null ? 'Chưa đủ hai lần đo để so sánh' : (item.change > 0 ? '+' : '') + item.change + ' ' + metrics[item.key][1] + ' so với ' + item.previousDate}</p>
+          <p className="text-xs text-slate-600">{item.change === null ? 'Chưa đủ dữ liệu đánh giá' : (item.change > 0 ? '+' : '') + item.change + ' ' + metrics[item.key][1] + ' so với ' + item.previousDate}</p>
         </div>)}</div>
       </section>}
       <section className="space-y-3">

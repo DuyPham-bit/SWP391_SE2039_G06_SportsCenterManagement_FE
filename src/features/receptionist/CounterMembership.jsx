@@ -323,6 +323,17 @@ export function CounterMembership() {
               <span>TỔNG TIỀN PHẢI THU:</span>
               <span className="text-2xl font-chivo text-red-600">{selectedPackage?.price.toLocaleString()} VNĐ</span>
             </div>
+
+            {selectedMember?.packageStatus === 'ACTIVE' && (
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-amber-800">
+                  <span className="material-symbols-outlined text-[16px]">info</span>
+                  <span>[RE-03] Dự kiến gia hạn nối tiếp gói tập</span>
+                </div>
+                <p>Hội viên đang có gói hiệu lực đến <strong>{selectedMember.packageExpiry}</strong>. Gói mới sẽ bắt đầu tiếp nối từ ngày kế tiếp và không làm mất số ngày còn lại.</p>
+                <p className="text-[11px] text-amber-700 italic">* Bản nháp đề xuất: Cách tính ngày gia hạn cần được xác nhận thêm từ Ban Quản Lý.</p>
+              </div>
+            )}
           </div>
 
           {/* Payment Method Selector */}

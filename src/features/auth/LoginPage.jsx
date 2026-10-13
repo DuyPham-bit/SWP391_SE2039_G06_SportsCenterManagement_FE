@@ -246,11 +246,12 @@ export function LoginPage() {
           CỘT TRÁI: SHOWCASE THỂ THAO ĐỈNH CAO (Cinematic Athletic Hero)
           ======================================================== */}
       <aside className="hidden lg:flex lg:w-[48%] xl:w-[50%] 2xl:w-[52%] h-full relative overflow-hidden bg-slate-950 text-white flex-col justify-between p-8 sm:p-10 xl:p-12 select-none shrink-0 border-r border-white/5">
-        {/* Nền ảnh cao cấp kết hợp ánh sáng động */}
         <img
           alt="Sports Arena"
+          loading="lazy"
+          decoding="async"
           className="absolute inset-0 object-cover w-full h-full opacity-40 scale-105 transition-transform duration-1000 ease-out hover:scale-100"
-          src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1600&auto=format&fit=crop"
+          src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=75&w=800&auto=format&fit=crop"
         />
         {/* Gradient mờ ảo đa tầng */}
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/80 to-slate-950/40" />
@@ -376,11 +377,16 @@ export function LoginPage() {
 
         {/* Thanh điều hướng góc trên */}
         <div className="flex items-center justify-between w-full shrink-0 mb-1 z-10">
-          <a href="#/" aria-label="SCMS Sports Center - Trang chủ" className="lg:hidden flex items-center gap-2">
-            <span className="w-8 h-8 rounded-xl bg-red-600 text-white flex items-center justify-center shadow-sm font-chivo font-black text-base">S</span>
+          <a href="#/" aria-label="SCMS Olympic Sports Arena - Trang chủ" className="lg:hidden flex items-center gap-2.5 group">
+            <span className="w-8 h-8 rounded-xl bg-gradient-to-tr from-red-600 via-rose-500 to-amber-500 text-white flex items-center justify-center shadow-md shadow-red-600/30 font-chivo font-black text-base transition-transform duration-300 group-hover:scale-105">
+              S
+            </span>
             <span className="flex flex-col">
-              <span className="font-chivo font-black text-sm leading-none">SCMS</span>
-              <span className="text-[9px] font-bold text-red-600 tracking-wider uppercase mt-0.5">Sports Center</span>
+              <span className="flex items-center gap-1.5">
+                <span className="font-chivo font-black text-sm leading-none text-slate-900">SCMS</span>
+                <span className="text-[9px] px-1 py-0.2 rounded bg-red-600/10 text-red-600 font-extrabold uppercase border border-red-500/20">PRO</span>
+              </span>
+              <span className="text-[9px] font-bold text-slate-500 tracking-[0.16em] uppercase mt-0.5 leading-none">Olympic Sports Arena</span>
             </span>
           </a>
 
@@ -446,15 +452,15 @@ export function LoginPage() {
                   type="button"
                   disabled={isSubmitting || googleLoading}
                   onClick={() => setShowGoogleModal(true)}
-                  className="w-full min-h-10 sm:min-h-10.5 px-3 py-2 inline-flex items-center justify-center gap-2.5 border border-slate-200 hover:border-slate-300 rounded-xl bg-white text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-60 transition-all active:scale-[0.99]"
+                  className="w-full min-h-10 sm:min-h-10.5 px-3 py-2 inline-flex items-center justify-center gap-2.5 border border-slate-200 hover:border-slate-300 rounded-xl bg-white text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-60 transition-all active:scale-[0.99] cursor-pointer"
                 >
-                  <svg className="w-4.5 h-4.5 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                  <svg className="w-5 h-5 shrink-0" style={{ width: '20px', height: '20px', minWidth: '20px', minHeight: '20px' }} viewBox="0 0 24 24" aria-hidden="true">
                     <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.03h3.88c2.27-2.09 3.66-5.17 3.66-9.12z" />
                     <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.03c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.24v3.13C3.26 21.36 7.33 24 12 24z" />
                     <path fill="#FBBC05" d="M5.28 14.29c-.25-.72-.38-1.49-.38-2.29s.13-1.57.38-2.29V6.58H1.24C.45 8.15 0 9.99 0 12s.45 3.85 1.24 5.42l4.04-3.13z" />
                     <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.24 6.58l4.04 3.13c.95-2.83 3.6-4.96 6.72-4.96z" />
                   </svg>
-                  <span>{isRegister ? 'Đăng ký với Google' : 'Tiếp tục với Google'}</span>
+                  <span className="font-medium text-slate-800">{isRegister ? 'Đăng ký với Google' : 'Tiếp tục với Google'}</span>
                 </button>
               )}
 

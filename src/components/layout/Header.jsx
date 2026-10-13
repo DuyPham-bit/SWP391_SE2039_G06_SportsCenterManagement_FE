@@ -32,16 +32,21 @@ export function Header({ onOpenProfile, onToggleSidebar }) {
           <span className="material-symbols-outlined text-[22px]">menu</span>
         </button>
 
-        <a href="#/" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-red-600 flex items-center justify-center text-white shadow-sm font-chivo font-black text-base">
+        <a href="#/" className="flex items-center gap-2.5 group">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-red-600 via-rose-500 to-amber-500 text-white flex items-center justify-center shadow-md shadow-red-600/30 font-chivo font-black text-base transition-transform duration-300 group-hover:scale-105">
             S
           </div>
           <div className="hidden sm:flex flex-col">
-            <span className="font-chivo font-black text-sm tracking-tight text-slate-900 leading-none">
-              SCMS
-            </span>
-            <span className="text-[10px] font-bold text-red-600 tracking-widest uppercase leading-none mt-0.5">
-              Sports Center
+            <div className="flex items-center gap-1.5">
+              <span className="font-chivo font-black text-sm tracking-tight text-slate-900 leading-none">
+                SCMS
+              </span>
+              <span className="text-[9px] px-1 py-0.2 rounded bg-red-600/10 text-red-600 font-extrabold uppercase border border-red-500/20">
+                PRO
+              </span>
+            </div>
+            <span className="text-[9px] font-bold text-slate-500 tracking-[0.16em] uppercase mt-0.5 leading-none">
+              Olympic Sports Arena
             </span>
           </div>
         </a>

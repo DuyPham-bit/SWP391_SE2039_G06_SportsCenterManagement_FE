@@ -55,7 +55,8 @@ export function MyBookings() {
       setCancelModalOpen(false);
       loadBookings();
     } catch (err) {
-      showError(err.message || 'Lỗi hủy đặt chỗ');
+      const hint = err.code === 'ME-06' ? `\n👉 Hướng dẫn: ${err.proposedHandling || 'Liên hệ lễ tân hỗ trợ'}` : '';
+      showError((err.message || 'Không thể hủy đặt chỗ.') + hint);
     } finally {
       setCancelling(false);
     }
@@ -163,7 +164,10 @@ export function MyBookings() {
               <div>Lớp: <strong>{bookingToCancel.className}</strong></div>
               <div>Thời gian: <strong>{bookingToCancel.bookingDate} ({bookingToCancel.timeSlot})</strong></div>
               <p className="pt-2 text-red-700 leading-relaxed">
-                Hủy trước ít nhất 2 giờ sẽ giải phóng chỗ. Hủy muộn dưới 2 giờ vẫn được tính sử dụng buổi tập.
+                [ME-06] Áp dụng chính sách hủy: Hủy trước thời hạn quy định (ít nhất 2 giờ) sẽ giải phóng chỗ và hoàn lại lượt tập. Hủy muộn hoặc sau khi buổi học bắt đầu sẽ tính là đã tham gia.
+              </p>
+              <p className="text-[11px] text-amber-700 italic pt-1 border-t border-red-200/60">
+                * Bản nháp đề xuất: Hạn hủy lớp và chính sách trừ lượt tập cần được trung tâm xác nhận chính thức. Nếu không được hủy trên hệ thống, vui lòng liên hệ quầy lễ tân để được hỗ trợ.
               </p>
             </div>
 
