@@ -21,7 +21,8 @@ export function createIdempotencyKey() {
 
 export async function apiRequest(path, { method = 'GET', body, token = getApiToken(), headers = {}, signal } = {}) {
   const requestHeaders = new Headers(headers);
-  if (body !== undefined) requestHeaders.set('Content-Type', 'application/json');
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+  if (body !== undefined && !isFormData) requestHeaders.set('Content-Type', 'application/json');
   if (token) requestHeaders.set('Authorization', `Bearer ${token}`);
 
   let response;
@@ -29,7 +30,7 @@ export async function apiRequest(path, { method = 'GET', body, token = getApiTok
     response = await fetch(`${API_BASE_URL}/${path.replace(/^\/+/, '')}`, {
       method,
       headers: requestHeaders,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
       signal
     });
   } catch (cause) {

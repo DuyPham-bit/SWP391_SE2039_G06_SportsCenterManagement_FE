@@ -6,7 +6,7 @@ import { LoadingSpinner } from '../../components/common/Table.js';
 const shortcuts = [
   ['members', 'group', 'Quản lý thành viên', 'Hồ sơ, trạng thái tài khoản và lịch sử gói.'],
   ['staff', 'badge', 'Huấn luyện viên & nhân viên', 'Bổ nhiệm, cập nhật thông tin và trạng thái nhân sự.'],
-  ['classes-rooms', 'sports_score', 'Lớp, bộ môn, phòng & lịch', 'Tạo lớp, quản lý bộ môn, phòng tập và lịch học.'],
+  ['classes-rooms', 'sports_score', 'Môn thể thao, sân & lớp học', 'Quản lý ảnh, nội dung hiển thị, trạng thái và lịch hoạt động.'],
   ['coach-assignment', 'assignment_ind', 'Phân công HLV', 'Chọn HLV phụ trách và kiểm tra trùng lịch.'],
   ['reports', 'analytics', 'Báo cáo theo thời gian', 'Thành viên, đăng ký lớp và doanh thu.'],
   ['packages', 'card_membership', 'Gói tập & học phí', 'Thiết lập giá, thời hạn và trạng thái gói.'],
@@ -34,7 +34,10 @@ export function ManagerDashboard() {
   return <div className="space-y-6">
     <div className="p-6 rounded-2xl bg-slate-900 text-white flex flex-wrap items-center justify-between gap-4">
       <div><p className="text-xs text-red-400 uppercase tracking-widest">Trung tâm điều hành SCMS</p><h1 className="text-2xl font-bold mt-1">Bảng quản lý tổng quan</h1><p className="text-sm text-slate-300 mt-2">Theo dõi thành viên, lớp học và hoạt động của trung tâm.</p></div>
-      <button className="border border-slate-600 rounded-lg px-4 py-2 disabled:opacity-50" disabled={loading} onClick={() => setRevision(x => x + 1)}>Làm mới</button>
+      <div className="flex flex-wrap gap-2">
+        <a className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500" href="#/manager/classes-rooms">Quản lý môn & sân</a>
+        <button className="border border-slate-600 rounded-lg px-4 py-2 disabled:opacity-50" disabled={loading} onClick={() => setRevision(x => x + 1)}>Làm mới</button>
+      </div>
     </div>
     {loading ? <LoadingSpinner text="Đang tải tổng quan..." /> : error ? <p role="alert" className="p-4 rounded-lg bg-red-50 text-red-700">{error}</p> : metrics && <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
       <StatCard title="Tổng thành viên" value={metrics.totalMembers} subtitle={`Có gói hiệu lực hôm nay: ${metrics.activeMembers}`} icon="group" color="red" />

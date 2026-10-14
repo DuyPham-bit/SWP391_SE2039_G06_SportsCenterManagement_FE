@@ -1,4 +1,5 @@
 import { useAuth } from '../../context/AuthContext.js';
+import { publicResourcesApi } from '../../services/backendApi.js';
 import { SUPPORTED_SPORTS } from '../../services/sportsCatalog.js';
 import { FacilitiesSection, SCMS_FACILITIES } from './FacilitiesSection.js';
 
@@ -95,6 +96,7 @@ export function AnimatedNumber({ value, duration = 1400, suffix = '', prefix = '
 
 export function LandingPage() {
   const { isAuthenticated, role, logout } = useAuth();
+  const [homeResources, setHomeResources] = useState({ sports: [], rooms: [] });
   const [selectedCategory, setSelectedCategory] = useState('Tất cả');
   const [selectedFacilityForModal, setSelectedFacilityForModal] = useState(null);
   const [activeNav, setActiveNav] = useState('trang-chu');
@@ -112,6 +114,40 @@ export function LandingPage() {
   const aboutDropdownRef = useRef(null);
   const closeTimerRef = useRef(null);
   const aboutCloseTimerRef = useRef(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    publicResourcesApi.getForHome(controller.signal)
+      .then(resources => setHomeResources({
+        sports: Array.isArray(resources?.sports) ? resources.sports : [],
+        rooms: Array.isArray(resources?.rooms) ? resources.rooms : []
+      }))
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
+
+  const landingSports = LANDING_SPORTS.map(sport => {
+    const imageAliases = {
+      'boi-loi': ['boi loi', 'swimming', 'pool'],
+      'gym-fitness': ['gym', 'fitness'],
+      'yoga-pilates': ['yoga', 'pilates'],
+      'vo-thuat': ['vo thuat', 'boxing', 'kickfit'],
+      'bong-da': ['bong da', 'soccer', 'football'],
+      'cau-long': ['cau long', 'badminton'],
+      'bong-ro': ['bong ro', 'basketball'],
+      'bong-ban': ['bong ban', 'table tennis', 'ping pong'],
+      pickleball: ['pickleball']
+    }[sport.id] || [];
+    const sportImage = homeResources.sports.find(item => {
+      const searchable = normalizeResourceName(item.name);
+      return imageAliases.some(alias => searchable.includes(normalizeResourceName(alias)));
+    })?.imageUrl;
+    return { ...sport, imageUrl: sportImage || null };
+  });
+
+  function normalizeResourceName(value = '') {
+    return value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+  }
 
   const leftSports = [
     { id: 'all', name: 'Tất cả' },
@@ -217,7 +253,7 @@ export function LandingPage() {
       return;
     }
 
-    const sport = LANDING_SPORTS.find(s => s.id === item.id);
+    const sport = landingSports.find(s => s.id === item.id);
     if (sport) {
       setSelectedCategory('Tất cả');
       setHighlightedSportId(sport.id);
@@ -345,8 +381,8 @@ export function LandingPage() {
   const categories = ['Tất cả', 'Thể thao đối kháng', 'Bóng & Vợt', 'Sức bền & Tĩnh tâm'];
 
   const filteredSports = selectedCategory === 'Tất cả'
-    ? LANDING_SPORTS
-    : LANDING_SPORTS.filter(s => s.category === selectedCategory);
+    ? landingSports
+    : landingSports.filter(s => s.category === selectedCategory);
 
   const getDashboardLink = () => {
     const normalized = String(role || '').toUpperCase();
@@ -1150,12 +1186,18 @@ export function LandingPage() {
                       <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600" />
                     </span>
                   )}
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-3 transition-all shadow-xs ${
-                    isHighlighted
-                      ? 'bg-red-600 text-white scale-110 shadow-md'
-                      : 'bg-red-100 text-red-600 group-hover:scale-110 group-hover:bg-red-600 group-hover:text-white'
-                  }`}>
-                    <span className="material-symbols-outlined text-[28px]">{sport.icon}</span>
+                  <div className="w-full h-28 mb-3 overflow-hidden bg-slate-100 flex items-center justify-center">
+                    {sport.imageUrl ? (
+                      <img src={sport.imageUrl} alt={sport.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
+                    ) : (
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-xs ${
+                        isHighlighted
+                          ? 'bg-red-600 text-white scale-110 shadow-md'
+                          : 'bg-red-100 text-red-600 group-hover:scale-110 group-hover:bg-red-600 group-hover:text-white'
+                      }`}>
+                        <span className="material-symbols-outlined text-[28px]">{sport.icon}</span>
+                      </div>
+                    )}
                   </div>
                   <span className={`font-chivo text-base font-bold transition-colors ${
                     isHighlighted ? 'text-red-600' : 'text-slate-900 group-hover:text-red-600'
@@ -1199,6 +1241,7 @@ export function LandingPage() {
       <FacilitiesSection
         externalFacility={selectedFacilityForModal}
         onModalClose={() => setSelectedFacilityForModal(null)}
+        roomResources={homeResources.rooms}
       />
 
       {/* MEMBERSHIP CALLOUT BANNER & TUYỂN SINH */}

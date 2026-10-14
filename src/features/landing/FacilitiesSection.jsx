@@ -1,5 +1,9 @@
 const { useState, useMemo, useEffect } = React;
 
+function normalizeResourceName(value = '') {
+  return value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+}
+
 export const SCMS_FACILITIES = [
   {
     id: 'room-01',
@@ -228,7 +232,7 @@ export const SCMS_FACILITIES = [
   }
 ];
 
-export function FacilitiesSection({ externalFacility = null, onModalClose = null } = {}) {
+export function FacilitiesSection({ externalFacility = null, onModalClose = null, roomResources = [] } = {}) {
   const [activeCategory, setActiveCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFacility, setSelectedFacility] = useState(null);
@@ -250,6 +254,28 @@ export function FacilitiesSection({ externalFacility = null, onModalClose = null
   const [submitted, setSubmitted] = useState(false);
   const [showFacilityPicker, setShowFacilityPicker] = useState(false);
 
+  const facilities = useMemo(() => SCMS_FACILITIES.map(facility => {
+    const aliasesByFacility = {
+      'room-01': ['boi loi', 'swimming', 'pool'],
+      'room-02': ['bong da', 'soccer', 'football'],
+      'room-03': ['cau long', 'badminton'],
+      'room-04': ['bong ban', 'table tennis', 'ping pong'],
+      'room-05': ['bong ro', 'basketball'],
+      'room-06': ['pickleball'],
+      'room-07': ['vo thuat', 'boxing', 'kickfit', 'combat'],
+      'room-08': ['gym', 'fitness'],
+      'room-09': ['yoga', 'pilates']
+    };
+    const aliases = aliasesByFacility[facility.id] || [];
+    const resource = roomResources.find(room => {
+      const searchable = normalizeResourceName(`${room.name || ''} ${room.type || ''}`);
+      return aliases.some(alias => searchable.includes(normalizeResourceName(alias)));
+    });
+    return resource?.imageUrl
+      ? { ...facility, image: resource.imageUrl, secondaryImage: null }
+      : facility;
+  }), [roomResources]);
+
   const categories = [
     { id: 'all', label: `Tất cả (${SCMS_FACILITIES.length} cụm sân)`, icon: 'grid_view' },
     { id: 'team-sports', label: 'Sân bóng & Vợt', icon: 'sports_soccer' },
@@ -259,7 +285,7 @@ export function FacilitiesSection({ externalFacility = null, onModalClose = null
   ];
 
   const filteredFacilities = useMemo(() => {
-    return SCMS_FACILITIES.filter(fac => {
+    return facilities.filter(fac => {
       const matchCat = activeCategory === 'all' || fac.category === activeCategory;
       const matchSearch = !searchQuery.trim() || 
         fac.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -268,10 +294,10 @@ export function FacilitiesSection({ externalFacility = null, onModalClose = null
         fac.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
       return matchCat && matchSearch;
     });
-  }, [activeCategory, searchQuery]);
+  }, [activeCategory, searchQuery, facilities]);
 
   const handleOpenModal = (facility, initialTab = 'rent') => {
-    setSelectedFacility(facility);
+    setSelectedFacility(facilities.find(item => item.id === facility.id) || facility);
     setBookingType('rent');
     const targetTab = (initialTab === 'rent' || initialTab === 'booking') ? 'booking' : 'specs';
     setActiveModalTab(targetTab);
@@ -287,7 +313,7 @@ export function FacilitiesSection({ externalFacility = null, onModalClose = null
   };
 
   const handleChangeFacility = (facilityId) => {
-    const facility = SCMS_FACILITIES.find(f => f.id === facilityId);
+    const facility = facilities.find(f => f.id === facilityId);
     if (!facility) return;
     setSelectedFacility(facility);
     setShowFacilityPicker(false);
@@ -298,20 +324,20 @@ export function FacilitiesSection({ externalFacility = null, onModalClose = null
     if (externalFacility) {
       handleOpenModal(externalFacility, 'specs');
     }
-  }, [externalFacility]);
+  }, [externalFacility, facilities]);
 
   // Support global event dispatching as well
   useEffect(() => {
     const handleCustomOpen = (e) => {
       const { facility, facilityId, type } = e.detail || {};
-      const target = facility || SCMS_FACILITIES.find(f => f.id === facilityId);
+      const target = facility || facilities.find(f => f.id === facilityId);
       if (target) {
         handleOpenModal(target, type || 'specs');
       }
     };
     window.addEventListener('SCMS_OPEN_FACILITY', handleCustomOpen);
     return () => window.removeEventListener('SCMS_OPEN_FACILITY', handleCustomOpen);
-  }, []);
+  }, [facilities]);
 
   const handleToggleExtraService = (service) => {
     setFormState(prev => {

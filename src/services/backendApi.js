@@ -348,7 +348,7 @@ export const staffApi = {
   },
 
   previewRoleId() {
-    return 'Backend cấp mã nhân viên';
+    return 'Do hệ thống cấp sau khi lưu';
   },
 
   async create(staffData) {
@@ -422,8 +422,18 @@ export const staffApi = {
 export const roomApi = {
  async getAll() { return asArray(await apiRequest('centers/'+centerId()+'/rooms')); },
  async create(body) { return apiRequest('centers/'+centerId()+'/rooms', { method: 'POST', body }); },
- async update(id, body) { return apiRequest('centers/'+centerId()+'/rooms/'+id, { method: 'PUT', body }); }
+ async update(id, body) { return apiRequest('centers/'+centerId()+'/rooms/'+id, { method: 'PUT', body }); },
+ async delete(id) { return apiRequest('centers/'+centerId()+'/rooms/'+id, { method: 'DELETE' }); }
 };
+
+export const publicResourcesApi = {
+ async getForHome(signal) {
+   const id = Number(readSession()?.centerId || import.meta.env.VITE_SPORTS_CENTER_ID || 1);
+   if (!Number.isSafeInteger(id) || id <= 0) return { sports: [], rooms: [] };
+   return apiRequest(`public/centers/${id}/resources`, { token: null, signal });
+ }
+};
+
 export const classApi = {
  async getTeachingSchedule(from, to) {
    const query = new URLSearchParams({ from, to, includeHistory: 'true' });
@@ -434,6 +444,16 @@ export const classApi = {
  async getManagementSports() { return asArray(await apiRequest('centers/'+centerId()+'/sports/all')); },
  async createSport(body) { return apiRequest('centers/'+centerId()+'/sports', { method: 'POST', body }); },
  async updateSport(id, body) { return apiRequest('centers/'+centerId()+'/sports/'+id, { method: 'PUT', body }); },
+ async deleteSport(id) { return apiRequest('centers/'+centerId()+'/sports/'+id, { method: 'DELETE' }); },
+ async uploadResourceImage(file) {
+   const body = new FormData();
+   body.append('file', file);
+   return apiRequest(`centers/${centerId()}/resources/images`, { method: 'POST', body });
+ },
+ async deleteUnusedResourceImage(imageUrl) {
+   const query = new URLSearchParams({ imageUrl });
+   return apiRequest(`centers/${centerId()}/resources/images?${query}`, { method: 'DELETE' });
+ },
  async getCoaches() { return asArray(await apiRequest('centers/'+centerId()+'/coaches')); },
  async getSchedules(id) { return asArray(await apiRequest('classes/'+id+'/schedules')); },
  async createSchedule(id, body) { return apiRequest('classes/'+id+'/schedules', { method: 'POST', body }); },
@@ -659,7 +679,22 @@ export const receptionApi = {
 export const memberApi = {
   async getCenterMembers(query = '', page = 1) {
     const params = new URLSearchParams({ query: query.trim(), page: String(page), pageSize: '20' });
-    return apiRequest(`centers/${centerId()}/members?${params}`);
+    const result = await apiRequest(`centers/${centerId()}/members?${params}`);
+    const items = asArray(result).map(item => {
+      const rawStatus = item.accountStatus ?? item.AccountStatus ?? item.status ?? item.Status ?? 'Active';
+      return {
+        ...item,
+        memberId: item.memberId ?? item.MemberId,
+        accountStatus: String(rawStatus).toLowerCase() === 'active' ? 'Active' : 'Disabled'
+      };
+    });
+    return {
+      ...result,
+      items,
+      page: result?.page ?? result?.Page ?? page,
+      pageSize: result?.pageSize ?? result?.PageSize ?? 20,
+      totalCount: result?.totalCount ?? result?.TotalCount ?? items.length
+    };
   },
 
   async updateAtCenter(id, body) {

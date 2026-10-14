@@ -7,6 +7,7 @@ import { useToast } from '../../context/ToastContext.js';
 const field = 'w-full border border-slate-300 rounded-lg p-2 text-sm';
 const button = 'px-3 py-2 bg-slate-900 text-white rounded-lg text-sm disabled:opacity-50';
 const today = () => new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
+const isAccountActive = row => String(row.accountStatus || '').toUpperCase() === 'ACTIVE';
 
 export function MemberManagement() {
   const { showSuccess, showError } = useToast();
@@ -47,7 +48,7 @@ export function MemberManagement() {
   const toggleStatus = async () => {
     setBusy(true);
     try {
-      await memberApi.setAccountStatus(modal.row.memberId, modal.row.accountStatus === 'Active' ? 'Disabled' : 'Active');
+      await memberApi.setAccountStatus(modal.row.memberId, isAccountActive(modal.row) ? 'Disabled' : 'Active');
       showSuccess('Đã cập nhật trạng thái tài khoản.'); setModal(null); setRevision(x => x + 1);
     } catch (e) { showError(e.message); } finally { setBusy(false); }
   };
@@ -59,12 +60,12 @@ export function MemberManagement() {
   const columns = [
     { header: 'Thành viên', render: r => <div><strong>{r.fullName}</strong><p className="text-xs text-slate-500">{r.memberCode} · {r.username}</p></div> },
     { header: 'Liên hệ', render: r => <div>{r.email}<p className="text-xs">{r.phone || 'Chưa có điện thoại'}</p></div> },
-    { header: 'Tài khoản', render: r => <span>{r.accountStatus === 'Active' ? 'Hoạt động' : 'Đã khóa'}</span> },
+    { header: 'Tài khoản', render: r => <span>{isAccountActive(r) ? 'Hoạt động' : 'Đã khóa'}</span> },
     { header: 'Gói tập', render: r => <div>{r.packageName}<p className="text-xs">{r.packageStatus} {r.packageExpiry && `· Hết hạn ${r.packageExpiry}`}</p></div> },
     { header: 'Thao tác', render: r => <div className="flex flex-wrap gap-2">
       <button className={button} disabled={busy} onClick={() => open(r)}>Sửa hồ sơ</button>
       <button className={button} disabled={busy} onClick={() => viewSubscriptions(r)}>Lịch sử gói</button>
-      <button className={button} disabled={busy} onClick={() => setModal({ type: 'status', row: r })}>{r.accountStatus === 'Active' ? 'Khóa' : 'Mở khóa'}</button>
+      <button className={button} disabled={busy} onClick={() => setModal({ type: 'status', row: r })}>{isAccountActive(r) ? 'Khóa' : 'Mở khóa'}</button>
     </div> }
   ];
   const totalPages = Math.max(1, Math.ceil(data.totalCount / data.pageSize));
@@ -89,7 +90,7 @@ export function MemberManagement() {
         {modal.row && <><label className="block">Giới tính<select className={field} name="gender" value={form.gender || ''} onChange={change}><option value="" disabled={Boolean(modal.row.gender)}>Chưa cung cấp</option><option value="Male">Nam</option><option value="Female">Nữ</option><option value="Other">Khác</option></select></label><label className="block">Địa chỉ<input className={field} name="address" maxLength={255} value={form.address || ''} onChange={change} /></label></>}
         <button className={button} type="submit" disabled={busy}>{busy ? 'Đang lưu...' : 'Lưu thành viên'}</button>
       </form>}
-      {modal?.type === 'status' && <div className="space-y-4"><p>{modal.row.accountStatus === 'Active' ? 'Khóa' : 'Mở khóa'} tài khoản của {modal.row.fullName}?</p><button className={button} disabled={busy} onClick={toggleStatus}>Xác nhận</button></div>}
+      {modal?.type === 'status' && <div className="space-y-4"><p>{isAccountActive(modal.row) ? 'Khóa' : 'Mở khóa'} tài khoản của {modal.row.fullName}?</p><button className={button} disabled={busy} onClick={toggleStatus}>Xác nhận</button></div>}
       {modal?.type === 'subscriptions' && <div className="space-y-3">{subscriptions.length ? subscriptions.map(s => <article className="border rounded-lg p-3" key={s.subscriptionId}><strong>{s.packageName}</strong><p>{Number(s.price).toLocaleString('vi-VN')}đ · {s.durationDays} ngày · {s.status}</p><p>{s.startDate || 'Chưa kích hoạt'} – {s.endDate || 'Chưa có ngày hết hạn'}</p></article>) : <p>Chưa có lịch sử đăng ký gói.</p>}</div>}
     </Modal>
   </div>;

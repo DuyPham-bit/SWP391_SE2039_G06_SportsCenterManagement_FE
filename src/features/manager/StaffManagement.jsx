@@ -10,6 +10,7 @@ export function StaffManagement() {
   const { showSuccess, showError } = useToast();
   const [staffList, setStaffList] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
 
   // Modal State
@@ -34,18 +35,22 @@ export function StaffManagement() {
   const [saving, setSaving] = useState(false);
 
   const loadStaff = async () => {
+    setLoading(true);
+    setLoadError('');
     try {
       const data = await staffApi.getAll();
       setStaffList(data);
     } catch (e) {
-      showError('Không thể tải danh sách nhân viên');
+      setStaffList([]);
+      setLoadError(e.message || 'Không thể tải danh sách nhân viên.');
+      throw e;
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadStaff();
+    loadStaff().catch(() => {});
   }, []);
 
   // Handle click outside to close dropdown
@@ -177,7 +182,7 @@ export function StaffManagement() {
         }
       }
       setModalOpen(false);
-      loadStaff();
+      await loadStaff();
     } catch (err) {
       showError(err.message || 'Lỗi lưu nhân viên');
     } finally {
@@ -189,7 +194,7 @@ export function StaffManagement() {
     try {
       await staffApi.toggleStatus(staff.id);
       showSuccess(`Đã thay đổi trạng thái của ${staff.fullName}`);
-      loadStaff();
+      await loadStaff();
     } catch (err) {
       showError(err.message || 'Không thể đổi trạng thái');
     }
@@ -252,23 +257,25 @@ export function StaffManagement() {
       header: 'Hành Động',
       render: (row) => (
         <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => openEditModal(row)}
-            className="p-1.5 rounded hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors"
-            title="Chỉnh sửa thông tin"
-          >
-            <span className="material-symbols-outlined text-[18px]">edit</span>
-          </button>
-          <button
-            onClick={() => handleToggleStatus(row)}
-            className={`p-1.5 rounded hover:bg-slate-100 transition-colors ${row.status === 'ACTIVE' ? 'text-amber-600 hover:text-amber-700' : 'text-emerald-600 hover:text-emerald-700'
-              }`}
-            title={row.status === 'ACTIVE' ? 'Khóa nhân viên' : 'Kích hoạt lại'}
-          >
-            <span className="material-symbols-outlined text-[18px]">
-              {row.status === 'ACTIVE' ? 'block' : 'check_circle'}
-            </span>
-          </button>
+          {row.role !== 'MANAGER' ? <>
+            <button
+              onClick={() => openEditModal(row)}
+              className="p-1.5 rounded hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors"
+              title="Chỉnh sửa thông tin"
+            >
+              <span className="material-symbols-outlined text-[18px]">edit</span>
+            </button>
+            <button
+              onClick={() => handleToggleStatus(row)}
+              className={`p-1.5 rounded hover:bg-slate-100 transition-colors ${row.status === 'ACTIVE' ? 'text-amber-600 hover:text-amber-700' : 'text-emerald-600 hover:text-emerald-700'
+                }`}
+              title={row.status === 'ACTIVE' ? 'Khóa nhân viên' : 'Kích hoạt lại'}
+            >
+              <span className="material-symbols-outlined text-[18px]">
+                {row.status === 'ACTIVE' ? 'block' : 'check_circle'}
+              </span>
+            </button>
+          </> : <span className="text-xs text-slate-500">Tài khoản quản lý</span>}
         </div>
       )
     }
@@ -326,6 +333,10 @@ export function StaffManagement() {
         searchPlaceholder="Tìm theo tên hoặc ID nhân viên..."
         emptyMessage="Không tìm thấy nhân viên nào phù hợp"
       />
+      {loadError && <div role="alert" className="p-4 rounded-lg bg-red-50 text-red-800 space-y-2">
+        <p>{loadError}</p>
+        <button type="button" className="px-3 py-2 bg-slate-900 text-white rounded-lg text-sm" disabled={loading} onClick={() => loadStaff().catch(() => {})}>Thử tải lại</button>
+      </div>}
 
       {/* Create / Edit Staff Modal */}
       <Modal
