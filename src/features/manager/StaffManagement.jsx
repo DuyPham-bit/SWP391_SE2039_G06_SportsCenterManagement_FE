@@ -1,4 +1,4 @@
-import { staffApi } from '../../services/api.js';
+import { staffApi, classApi } from '../../services/api.js';
 import { useToast } from '../../context/ToastContext.js';
 import { Table, LoadingSpinner } from '../../components/common/Table.js';
 import { Modal } from '../../components/common/Modal.js';
@@ -32,7 +32,11 @@ export function StaffManagement() {
   const [formRole, setFormRole] = useState('COACH');
   const [formSpecialty, setFormSpecialty] = useState('');
   const [formCertification, setFormCertification] = useState('');
+  const [formImageUrl, setFormImageUrl] = useState('');
+  const [formImageFile, setFormImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState('');
   const [saving, setSaving] = useState(false);
+  const imageInputRef = useRef(null);
 
   const loadStaff = async () => {
     setLoading(true);
@@ -52,6 +56,13 @@ export function StaffManagement() {
   useEffect(() => {
     loadStaff().catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!formImageFile) { setImagePreview(''); return; }
+    const url = URL.createObjectURL(formImageFile);
+    setImagePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [formImageFile]);
 
   // Handle click outside to close dropdown
   useEffect(() => {
@@ -74,6 +85,9 @@ export function StaffManagement() {
     setFormRole('COACH');
     setFormSpecialty('');
     setFormCertification('');
+    setFormImageUrl('');
+    setFormImageFile(null);
+    if (imageInputRef.current) imageInputRef.current.value = '';
     setIsDropdownOpen(false);
 
     setFilteredMembers([]);
@@ -108,6 +122,9 @@ export function StaffManagement() {
     setFormRole(staff.role);
     setFormSpecialty(staff.specialty || '');
     setFormCertification(staff.certification || '');
+    setFormImageUrl(staff.avatar || '');
+    setFormImageFile(null);
+    if (imageInputRef.current) imageInputRef.current.value = '';
     setPreviewId(staff.id);
     setModalOpen(true);
   };
@@ -151,14 +168,24 @@ export function StaffManagement() {
     }
 
     setSaving(true);
+    let uploadedImageUrl = null;
+    let nextImageUrl = null;
     try {
+      if (formRole === 'COACH') {
+        if (formImageFile) {
+          const uploaded = await classApi.uploadResourceImage(formImageFile);
+          uploadedImageUrl = uploaded.imageUrl;
+        }
+        nextImageUrl = uploadedImageUrl || formImageUrl.trim() || null;
+      }
       if (editingStaff) {
         await staffApi.update(editingStaff.id, {
           fullName: formName.trim(),
           phone: formPhone.trim(),
           role: formRole,
           specialty: formSpecialty.trim(),
-          certification: formCertification.trim()
+          certification: formCertification.trim(),
+          imageUrl: nextImageUrl
         });
         showSuccess('Cập nhật nhân viên thành công!');
       } else {
@@ -169,7 +196,7 @@ export function StaffManagement() {
           role: formRole,
           specialty: formRole === 'COACH' ? formSpecialty.trim() : '',
           certification: formRole === 'COACH' ? formCertification.trim() : '',
-          avatar: selectedMember?.avatar,
+          imageUrl: nextImageUrl,
           memberId: selectedMember.id,
           selectedAccountId: selectedMember.id
         };
@@ -181,9 +208,15 @@ export function StaffManagement() {
           showSuccess(`Cấp vai trò [${res.role}] thành công với ID [${res.id}]!`);
         }
       }
+      if (editingStaff?.avatar && editingStaff.avatar !== nextImageUrl) {
+        try { await classApi.deleteUnusedResourceImage(editingStaff.avatar); } catch { /* The profile update is already saved. */ }
+      }
       setModalOpen(false);
       await loadStaff();
     } catch (err) {
+      if (uploadedImageUrl) {
+        try { await classApi.deleteUnusedResourceImage(uploadedImageUrl); } catch { /* Keep the original save error. */ }
+      }
       showError(err.message || 'Lỗi lưu nhân viên');
     } finally {
       setSaving(false);
@@ -218,11 +251,7 @@ export function StaffManagement() {
       header: 'Nhân Viên',
       render: (row) => (
         <div className="flex items-center gap-3">
-          <img
-            src={row.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100'}
-            alt=""
-            className="w-9 h-9 rounded-full object-cover border border-slate-200"
-          />
+          {row.avatar ? <img src={row.avatar} alt={`Ảnh ${row.fullName}`} className="w-9 h-9 rounded-full object-cover border border-slate-200" /> : <div aria-hidden="true" className="w-9 h-9 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold">{row.fullName?.trim()?.[0]?.toUpperCase() || '?'}</div>}
           <div>
             <div className="font-bold text-slate-900">{row.fullName}</div>
             <div className="text-xs text-slate-500">{row.email}</div>
@@ -397,11 +426,7 @@ export function StaffManagement() {
                             className="p-2.5 hover:bg-red-50/80 cursor-pointer flex items-center justify-between gap-3 transition-colors"
                           >
                             <div className="flex items-center gap-2.5 min-w-0">
-                              <img
-                                src={member.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100'}
-                                alt=""
-                                className="w-8 h-8 rounded-full object-cover border border-slate-200 flex-shrink-0"
-                              />
+                              {member.avatar ? <img src={member.avatar} alt="" className="w-8 h-8 rounded-full object-cover border border-slate-200 flex-shrink-0" /> : <div aria-hidden="true" className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold flex-shrink-0">{member.fullName?.trim()?.[0]?.toUpperCase() || '?'}</div>}
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                   <span className="font-bold text-slate-900 text-xs truncate">{member.fullName}</span>
@@ -434,11 +459,7 @@ export function StaffManagement() {
                 {selectedMember ? (
                   <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      <img
-                        src={selectedMember.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100'}
-                        alt=""
-                        className="w-11 h-11 rounded-full object-cover border-2 border-emerald-300 flex-shrink-0"
-                      />
+                      {selectedMember.avatar ? <img src={selectedMember.avatar} alt="" className="w-11 h-11 rounded-full object-cover border-2 border-emerald-300 flex-shrink-0" /> : <div aria-hidden="true" className="w-11 h-11 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center text-sm font-bold flex-shrink-0">{selectedMember.fullName?.trim()?.[0]?.toUpperCase() || '?'}</div>}
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-bold text-slate-900 text-sm truncate">{selectedMember.fullName}</span>
@@ -656,6 +677,20 @@ export function StaffManagement() {
               </div>
             </div>
           )}
+
+          {formRole === 'COACH' && <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <label className="block text-xs font-semibold text-slate-700">Ảnh huấn luyện viên
+              <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp" className="mt-1 block w-full text-xs" onChange={e => {
+                const file = e.target.files?.[0] || null;
+                if (file && file.size > 5 * 1024 * 1024) { showError('Ảnh không được lớn hơn 5 MB.'); e.target.value = ''; return; }
+                setFormImageFile(file);
+              }} />
+            </label>
+            <label className="block text-xs text-slate-600">Hoặc URL ảnh
+              <input type="url" maxLength="2048" className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" value={formImageUrl} onChange={e => { setFormImageUrl(e.target.value); setFormImageFile(null); if (imageInputRef.current) imageInputRef.current.value = ''; }} />
+            </label>
+            {(imagePreview || formImageUrl) ? <div className="flex items-center gap-3"><img src={imagePreview || formImageUrl} alt="Xem trước ảnh huấn luyện viên" className="h-20 w-20 rounded-full object-cover" onError={e => { e.currentTarget.hidden = true; }} /><button type="button" className="rounded-lg border px-3 py-2 text-xs" onClick={() => { setFormImageUrl(''); setFormImageFile(null); if (imageInputRef.current) imageInputRef.current.value = ''; }}>Xóa ảnh</button></div> : <p className="text-xs text-slate-500">Chọn ảnh hoặc URL; ảnh sẽ được lưu cùng hồ sơ huấn luyện viên.</p>}
+          </div>}
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
             <button

@@ -52,6 +52,14 @@ export function MemberManagement() {
       showSuccess('Đã cập nhật trạng thái tài khoản.'); setModal(null); setRevision(x => x + 1);
     } catch (e) { showError(e.message); } finally { setBusy(false); }
   };
+  const deleteMember = async () => {
+    setBusy(true);
+    try {
+      await memberApi.deleteAtCenter(modal.row.memberId);
+      showSuccess('Đã ngừng tài khoản hội viên; lịch sử đăng ký được giữ lại.');
+      setModal(null); setRevision(x => x + 1);
+    } catch (e) { showError(e.message); } finally { setBusy(false); }
+  };
   const viewSubscriptions = async row => {
     setBusy(true);
     try { setSubscriptions(await receptionApi.getMemberSubscriptions(row.memberId)); setModal({ type: 'subscriptions', row }); }
@@ -66,6 +74,7 @@ export function MemberManagement() {
       <button className={button} disabled={busy} onClick={() => open(r)}>Sửa hồ sơ</button>
       <button className={button} disabled={busy} onClick={() => viewSubscriptions(r)}>Lịch sử gói</button>
       <button className={button} disabled={busy} onClick={() => setModal({ type: 'status', row: r })}>{isAccountActive(r) ? 'Khóa' : 'Mở khóa'}</button>
+      {isAccountActive(r) && <button className="px-3 py-2 bg-red-700 text-white rounded-lg text-sm disabled:opacity-50" disabled={busy} onClick={() => setModal({ type: 'delete', row: r })}>Xóa</button>}
     </div> }
   ];
   const totalPages = Math.max(1, Math.ceil(data.totalCount / data.pageSize));
@@ -80,7 +89,7 @@ export function MemberManagement() {
       <Table key={`${filter.query}:${filter.page}:${revision}`} columns={columns} data={data.items} pageSize={20} emptyMessage="Chưa có thành viên phù hợp" />
       <div className="flex flex-wrap items-center gap-3 text-sm"><button className={button} disabled={filter.page <= 1} onClick={() => setFilter(f => ({ ...f, page: f.page - 1 }))}>Trang trước</button><span>Trang {filter.page} / {totalPages}</span><button className={button} disabled={filter.page >= totalPages} onClick={() => setFilter(f => ({ ...f, page: f.page + 1 }))}>Trang sau</button></div>
     </>}
-    <Modal isOpen={Boolean(modal)} onClose={() => !busy && setModal(null)} title={modal?.type === 'status' ? 'Trạng thái tài khoản' : modal?.type === 'subscriptions' ? `Lịch sử gói · ${modal.row.fullName}` : modal?.row ? 'Cập nhật thành viên' : 'Thêm thành viên'}>
+    <Modal isOpen={Boolean(modal)} onClose={() => !busy && setModal(null)} title={modal?.type === 'status' ? 'Trạng thái tài khoản' : modal?.type === 'delete' ? 'Xóa hội viên' : modal?.type === 'subscriptions' ? `Lịch sử gói · ${modal.row.fullName}` : modal?.row ? 'Cập nhật thành viên' : 'Thêm thành viên'}>
       {modal?.type === 'edit' && <form className="space-y-3" onSubmit={save}>
         {!modal.row && <><label className="block">Tên đăng nhập<input className={field} name="username" required minLength={3} maxLength={100} pattern="[a-zA-Z0-9._-]+" value={form.username} onChange={change} /></label><label className="block">Mật khẩu ban đầu<input className={field} type="password" autoComplete="new-password" name="password" required minLength={6} maxLength={128} value={form.password} onChange={change} /><span className="text-xs text-slate-500">6–128 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt; không chứa khoảng trắng.</span></label></>}
         <label className="block">Họ tên<input className={field} name="fullName" required maxLength={150} value={form.fullName || ''} onChange={change} /></label>
@@ -91,6 +100,7 @@ export function MemberManagement() {
         <button className={button} type="submit" disabled={busy}>{busy ? 'Đang lưu...' : 'Lưu thành viên'}</button>
       </form>}
       {modal?.type === 'status' && <div className="space-y-4"><p>{isAccountActive(modal.row) ? 'Khóa' : 'Mở khóa'} tài khoản của {modal.row.fullName}?</p><button className={button} disabled={busy} onClick={toggleStatus}>Xác nhận</button></div>}
+      {modal?.type === 'delete' && <div className="space-y-4"><p>Ngừng tài khoản <strong>{modal.row.fullName}</strong>? Tài khoản sẽ không đăng nhập được. Hồ sơ, lịch sử gói và giao dịch vẫn được lưu để đối soát.</p><div className="flex justify-end gap-2"><button className="rounded-lg border px-3 py-2 text-sm" disabled={busy} onClick={() => setModal(null)}>Hủy</button><button className="rounded-lg bg-red-700 px-3 py-2 text-sm text-white disabled:opacity-50" disabled={busy} onClick={deleteMember}>{busy ? 'Đang xử lý...' : 'Xác nhận xóa'}</button></div></div>}
       {modal?.type === 'subscriptions' && <div className="space-y-3">{subscriptions.length ? subscriptions.map(s => <article className="border rounded-lg p-3" key={s.subscriptionId}><strong>{s.packageName}</strong><p>{Number(s.price).toLocaleString('vi-VN')}đ · {s.durationDays} ngày · {s.status}</p><p>{s.startDate || 'Chưa kích hoạt'} – {s.endDate || 'Chưa có ngày hết hạn'}</p></article>) : <p>Chưa có lịch sử đăng ký gói.</p>}</div>}
     </Modal>
   </div>;

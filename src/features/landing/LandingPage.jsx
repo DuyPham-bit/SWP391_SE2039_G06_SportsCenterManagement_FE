@@ -1,19 +1,9 @@
 import { useAuth } from '../../context/AuthContext.js';
 import { publicResourcesApi } from '../../services/backendApi.js';
 import { SUPPORTED_SPORTS } from '../../services/sportsCatalog.js';
-import { FacilitiesSection, SCMS_FACILITIES } from './FacilitiesSection.js';
+import { FacilitiesSection } from './FacilitiesSection.js';
 
 const { useState, useEffect, useRef } = React;
-
-// Danh mục trang chủ và cơ sở tập luyện tương ứng cho từng môn.
-export const LANDING_SPORTS = SUPPORTED_SPORTS.map(sport => ({
-  ...sport,
-  venue: SCMS_FACILITIES.find(facility => facility.id === sport.facilityId).name
-}));
-
-export const SPORT_FACILITY_MAP = Object.fromEntries(
-  LANDING_SPORTS.map(sport => [sport.id, sport.facilityId])
-);
 
 // Component đếm số nhảy động khi mới lướt trúng (chỉ nhảy 1 lần duy nhất khi F5 hay mới vào trang)
 export function AnimatedNumber({ value, duration = 1400, suffix = '', prefix = '', formatThousands = false }) {
@@ -96,7 +86,7 @@ export function AnimatedNumber({ value, duration = 1400, suffix = '', prefix = '
 
 export function LandingPage() {
   const { isAuthenticated, role, logout } = useAuth();
-  const [homeResources, setHomeResources] = useState({ sports: [], rooms: [] });
+  const [homeResources, setHomeResources] = useState({ sports: [], rooms: [], classes: [], coaches: [], packages: [] });
   const [selectedCategory, setSelectedCategory] = useState('Tất cả');
   const [selectedFacilityForModal, setSelectedFacilityForModal] = useState(null);
   const [activeNav, setActiveNav] = useState('trang-chu');
@@ -120,50 +110,35 @@ export function LandingPage() {
     publicResourcesApi.getForHome(controller.signal)
       .then(resources => setHomeResources({
         sports: Array.isArray(resources?.sports) ? resources.sports : [],
-        rooms: Array.isArray(resources?.rooms) ? resources.rooms : []
+        rooms: Array.isArray(resources?.rooms) ? resources.rooms : [],
+        classes: Array.isArray(resources?.classes) ? resources.classes : [],
+        coaches: Array.isArray(resources?.coaches) ? resources.coaches : [],
+        packages: Array.isArray(resources?.packages) ? resources.packages : []
       }))
       .catch(() => {});
     return () => controller.abort();
   }, []);
 
-  const landingSports = LANDING_SPORTS.map(sport => {
-    const imageAliases = {
-      'boi-loi': ['boi loi', 'swimming', 'pool'],
-      'gym-fitness': ['gym', 'fitness'],
-      'yoga-pilates': ['yoga', 'pilates'],
-      'vo-thuat': ['vo thuat', 'boxing', 'kickfit'],
-      'bong-da': ['bong da', 'soccer', 'football'],
-      'cau-long': ['cau long', 'badminton'],
-      'bong-ro': ['bong ro', 'basketball'],
-      'bong-ban': ['bong ban', 'table tennis', 'ping pong'],
-      pickleball: ['pickleball']
-    }[sport.id] || [];
-    const sportImage = homeResources.sports.find(item => {
-      const searchable = normalizeResourceName(item.name);
-      return imageAliases.some(alias => searchable.includes(normalizeResourceName(alias)));
-    })?.imageUrl;
-    return { ...sport, imageUrl: sportImage || null };
+  const landingSports = homeResources.sports.map(resource => {
+    const normalizedName = normalizeResourceName(resource.name);
+    const metadata = SUPPORTED_SPORTS.find(item => normalizeResourceName(item.name) === normalizedName
+      || normalizedName.includes(normalizeResourceName(item.name))
+      || normalizeResourceName(item.name).includes(normalizedName));
+    return {
+      id: String(resource.id), name: resource.name, description: resource.description || '',
+      imageUrl: resource.imageUrl || null, category: metadata?.category || 'Khác',
+      icon: metadata?.icon || 'sports'
+    };
   });
 
   function normalizeResourceName(value = '') {
     return value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
   }
 
-  const leftSports = [
-    { id: 'all', name: 'Tất cả' },
-    { id: 'bong-ban', name: 'Bóng bàn' },
-    { id: 'bong-da', name: 'Bóng đá' },
-    { id: 'bong-ro', name: 'Bóng rổ' },
-    { id: 'boi-loi', name: 'Bơi lội' },
-  ];
-
-  const rightSports = [
-    { id: 'cau-long', name: 'Cầu lông' },
-    { id: 'gym-fitness', name: 'Gym & Fitness' },
-    { id: 'pickleball', name: 'Pickleball' },
-    { id: 'vo-thuat', name: 'Võ thuật & Boxing' },
-    { id: 'yoga-pilates', name: 'Yoga & Pilates' },
-  ];
+  const courseMenuItems = [{ id: 'all', name: 'Tất cả' }, ...landingSports.map(sport => ({ id: sport.id, name: sport.name }))];
+  const courseMenuSplit = Math.ceil(courseMenuItems.length / 2);
+  const leftSports = courseMenuItems.slice(0, courseMenuSplit);
+  const rightSports = courseMenuItems.slice(courseMenuSplit);
 
   const aboutMenuItems = [
     { id: 'gioi-thieu', label: 'Về trung tâm MLC', targetId: 've-chung-toi' },
@@ -182,10 +157,41 @@ export function LandingPage() {
     { id: 'tuyen-sinh', href: '#tuyen-sinh', label: 'TUYỂN SINH', targetId: 'tuyen-sinh' },
   ];
 
-  const handleSportClick = (sport) => {
-    const facility = SCMS_FACILITIES.find(f => f.id === SPORT_FACILITY_MAP[sport.id]);
-    if (facility) setSelectedFacilityForModal(facility);
+  const findRoomForSport = sport => homeResources.rooms.find(room => {
+    const searchable = normalizeResourceName(`${room.name || ''} ${room.type || ''}`);
+    const sportName = normalizeResourceName(sport.name || '');
+    if (sportName.length <= 2 || !searchable.trim()) return false;
+
+    const roomTokens = searchable.split(/\s+/);
+    const sportTokens = normalizeResourceName(sport.name || '').match(/[a-z0-9]+/g) || [];
+    return searchable.includes(sportName)
+      || sportName.includes(searchable.trim())
+      || sportTokens.some(token => token.length > 2 && roomTokens.includes(token));
+  });
+  const navigateToFacilitySection = (room = null) => {
+    setActiveNav('co-so-vat-chat');
+    setIsCoursesDropdownOpen(false);
+    setIsMobileMenuOpen(false);
+
+    if (window.location.hash !== '#co-so-vat-chat') {
+      window.location.hash = '#co-so-vat-chat';
+    }
+
+    const section = document.getElementById('co-so-vat-chat');
+    if (section) {
+      const headerOffset = 80;
+      const elementPosition = section.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+      window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
+    }
+
+    if (room) {
+      window.setTimeout(() => {
+        setSelectedFacilityForModal({ id: String(room.id), name: room.name });
+      }, 450);
+    }
   };
+  const handleSportClick = sport => navigateToFacilitySection(findRoomForSport(sport));
 
   const handleCoursesMouseEnter = () => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
@@ -266,10 +272,10 @@ export function LandingPage() {
         window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
       }
 
-      const facility = SCMS_FACILITIES.find(f => f.id === SPORT_FACILITY_MAP[sport.id]);
-      if (facility) {
+      const room = findRoomForSport(sport);
+      if (room) {
         setTimeout(() => {
-          setSelectedFacilityForModal(facility);
+          setSelectedFacilityForModal({ id: String(room.id), name: room.name });
         }, 350);
       }
 
@@ -378,7 +384,7 @@ export function LandingPage() {
     };
   }, []);
 
-  const categories = ['Tất cả', 'Thể thao đối kháng', 'Bóng & Vợt', 'Sức bền & Tĩnh tâm'];
+  const categories = ['Tất cả', ...new Set(landingSports.map(sport => sport.category).filter(Boolean))];
 
   const filteredSports = selectedCategory === 'Tất cả'
     ? landingSports
@@ -927,7 +933,7 @@ export function LandingPage() {
 
           {/* Subtext */}
           <p className="font-inter text-base sm:text-lg text-slate-200 max-w-2xl mx-auto mt-6 leading-relaxed">
-            Phát triển thể lực, tôi luyện ý chí và bứt phá mọi giới hạn cùng hệ thống {SCMS_FACILITIES.length} cụm sân, phòng tập phục vụ {LANDING_SPORTS.length} bộ môn thể thao.
+            Phát triển thể lực, tôi luyện ý chí và bứt phá mọi giới hạn cùng hệ thống {homeResources.rooms.length} cụm sân, phòng tập phục vụ {landingSports.length} bộ môn thể thao.
           </p>
 
           {/* CTA Buttons */}
@@ -944,7 +950,7 @@ export function LandingPage() {
               className="w-full sm:w-auto bg-white/10 hover:bg-white/20 backdrop-blur-md text-white font-chivo text-xs font-bold uppercase px-8 py-4 border border-white/20 transition-all transform hover:-translate-y-0.5 inline-flex items-center justify-center gap-2"
             >
               <span className="material-symbols-outlined text-[20px]">sports_score</span>
-              <span>KHÁM PHÁ {LANDING_SPORTS.length} MÔN HỌC</span>
+              <span>KHÁM PHÁ {landingSports.length} MÔN HỌC</span>
             </a>
           </div>
         </div>
@@ -1019,7 +1025,7 @@ export function LandingPage() {
             </p>
 
             <div className="w-full space-y-4 mt-8">
-              <div id="huan-luyen-vien" className="flex items-start gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100 hover:border-slate-300 transition-colors scroll-mt-28">
+              <div id={homeResources.coaches.length ? undefined : 'huan-luyen-vien'} className="flex items-start gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100 hover:border-slate-300 transition-colors scroll-mt-28">
                 <div className="w-10 h-10 rounded-lg bg-red-600 text-white flex items-center justify-center shrink-0 shadow-sm">
                   <span className="material-symbols-outlined text-[22px]">workspace_premium</span>
                 </div>
@@ -1063,7 +1069,7 @@ export function LandingPage() {
                   <span className="material-symbols-outlined text-[22px]">stadium</span>
                 </div>
                 <div className="font-chivo text-5xl font-black tracking-tight leading-none text-white">
-                  <AnimatedNumber value={SCMS_FACILITIES.length} duration={1000} />
+                  <AnimatedNumber value={homeResources.rooms.length} duration={1000} />
                 </div>
                 <div className="font-chivo text-base font-extrabold uppercase tracking-wide mt-2">CỤM SÂN &amp; PHÒNG TẬP</div>
                 <div className="text-xs text-white/80 mt-1 font-medium">Tiêu chuẩn thi đấu chuyên nghiệp</div>
@@ -1078,7 +1084,7 @@ export function LandingPage() {
                   <span className="material-symbols-outlined text-[22px]">sports_kabaddi</span>
                 </div>
                 <div className="font-chivo text-5xl font-black tracking-tight leading-none text-white">
-                  <AnimatedNumber value={LANDING_SPORTS.length} duration={1000} />
+                  <AnimatedNumber value={landingSports.length} duration={1000} />
                 </div>
                 <div className="font-chivo text-base font-extrabold uppercase tracking-wide mt-2">MÔN THỂ THAO</div>
                 <div className="text-xs text-white/80 mt-1 font-medium">Đa dạng lựa chọn cho mọi lứa tuổi</div>
@@ -1141,7 +1147,7 @@ export function LandingPage() {
               CHƯƠNG TRÌNH ĐÀO TẠO CHUYÊN NGHIỆP
             </span>
             <h2 className="font-chivo text-3xl sm:text-4xl lg:text-5xl font-black text-white uppercase tracking-wide">
-              {LANDING_SPORTS.length} KHÓA HỌC THỂ THAO ĐA NĂNG
+              {landingSports.length} KHÓA HỌC THỂ THAO ĐA NĂNG
             </h2>
             <p className="text-sm sm:text-base text-slate-300 mt-3">
               Thiết kế đa dạng từ nền tảng đến chuyên sâu thi đấu, đáp ứng mọi nhu cầu rèn luyện thể chất của học viên nhí, thanh thiếu niên và người trưởng thành.
@@ -1168,6 +1174,7 @@ export function LandingPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-5 xl:gap-6 w-full">
             {filteredSports.map(sport => {
               const isHighlighted = highlightedSportId === sport.id;
+              const room = findRoomForSport(sport);
               return (
                 <div
                   key={sport.id}
@@ -1178,7 +1185,7 @@ export function LandingPage() {
                       ? 'border-red-600 ring-4 ring-red-500/50 shadow-2xl shadow-red-500/30 scale-105 z-10'
                       : 'border-slate-100 hover:border-red-400'
                   }`}
-                  title={`Bấm để xem thông tin sân tập ${sport.venue} & đăng ký trải nghiệm`}
+                  title={room ? `Bấm để xem thông tin sân tập ${room.name}` : 'Bấm để xem danh sách sân tập'}
                 >
                   {isHighlighted && (
                     <span className="absolute top-2.5 right-2.5 flex h-3 w-3">
@@ -1205,7 +1212,7 @@ export function LandingPage() {
                     {sport.name}
                   </span>
                   <span className="text-xs text-slate-500 font-medium mt-1">
-                    {sport.venue}
+                    {room?.name || 'Xem danh sách sân tập'}
                   </span>
                   <span className="text-[11px] text-red-600 font-bold opacity-0 group-hover:opacity-100 transition-opacity mt-2 flex items-center gap-0.5">
                     <span>Xem thông tin sân</span>
@@ -1217,10 +1224,7 @@ export function LandingPage() {
 
             {/* Facility booking CTA */}
             <div
-              onClick={() => {
-                const el = document.getElementById('co-so-vat-chat');
-                if (el) el.scrollIntoView({ behavior: 'smooth' });
-              }}
+              onClick={() => navigateToFacilitySection()}
               className="bg-red-600 text-white p-5 rounded-none shadow-lg hover:bg-red-700 transition-all duration-300 flex flex-col items-center justify-center text-center aspect-square group cursor-pointer hover:-translate-y-1"
             >
               <div className="w-12 h-12 rounded-full bg-white text-red-600 flex items-center justify-center mb-3 group-hover:rotate-12 transition-transform shadow-md">
@@ -1230,7 +1234,7 @@ export function LandingPage() {
                 Đặt Thuê Cụm Sân
               </span>
               <span className="text-xs text-white/90 mt-1 font-semibold flex items-center gap-1">
-                Xem {SCMS_FACILITIES.length} cụm sân &amp; đặt chỗ ngay <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                Xem {homeResources.rooms.length} cụm sân &amp; đặt chỗ ngay <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
               </span>
             </div>
           </div>
@@ -1244,32 +1248,55 @@ export function LandingPage() {
         roomResources={homeResources.rooms}
       />
 
-      {/* MEMBERSHIP CALLOUT BANNER & TUYỂN SINH */}
+      {/* ACTIVE MEMBERSHIP PACKAGES FROM THE CENTER API */}
       <section className="w-full bg-slate-100 py-20 px-6 sm:px-10 md:px-14 lg:px-20 scroll-mt-20" id="tuyen-sinh" data-alias="uu-dai">
-        <div className="w-full max-w-[1720px] mx-auto bg-white p-8 md:p-14 shadow-xl flex flex-col lg:flex-row items-center justify-between gap-8 border border-slate-200">
-          <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 text-red-600 font-chivo text-xs uppercase tracking-wider font-bold mb-2">
-              <span className="material-symbols-outlined text-[18px]">bolt</span>
-              ƯU ĐÃI THÀNH VIÊN MỚI 2026
+        <div className="mx-auto grid w-full max-w-[1720px] gap-8 border border-slate-200 bg-white p-8 shadow-xl md:p-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] lg:items-center">
+          <div>
+            <div className="mb-2 inline-flex items-center gap-2 font-chivo text-xs font-bold uppercase tracking-wider text-red-600">
+              <span className="material-symbols-outlined text-[18px]">card_membership</span>
+              Gói tập đang mở
             </div>
-            <h3 className="font-chivo text-2xl sm:text-3xl font-extrabold text-slate-900">
-              Trải nghiệm toàn bộ {LANDING_SPORTS.length} bộ môn với gói All-Access Pass
-            </h3>
-            <p className="text-sm text-slate-600 mt-2 leading-relaxed">
-              Giảm ngay 20% cho học viên đăng ký theo nhóm từ 3 người. Miễn phí kiểm tra thể lực chuyên sâu InBody và định lượng cơ xương khớp cùng huấn luyện viên trưởng SCMS.
-            </p>
+            <h3 className="font-chivo text-2xl font-extrabold text-slate-900 sm:text-3xl">Gói tập tại trung tâm</h3>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">Giá và quyền lợi lấy từ các gói đang hoạt động trong dữ liệu trung tâm.</p>
           </div>
-          <div className="shrink-0">
-            <a
-              href="#/register"
-              className="bg-red-600 hover:bg-red-700 text-white font-chivo text-xs font-bold uppercase px-8 py-4 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2"
-            >
-              <span>NHẬN ƯU ĐÃI NGAY</span>
-              <span className="material-symbols-outlined text-[20px]">card_membership</span>
-            </a>
-          </div>
+          {homeResources.packages.length ? <div className="grid gap-3 sm:grid-cols-2">
+            {homeResources.packages.map(pkg => <article key={pkg.id} className="rounded-xl border border-slate-200 p-4">
+              {pkg.badge && <span className="text-[10px] font-bold uppercase tracking-wider text-red-600">{pkg.badge}</span>}
+              <h4 className="mt-1 font-bold text-slate-900">{pkg.name}</h4>
+              <p className="mt-2 text-lg font-black text-red-600">{Number(pkg.price || 0).toLocaleString('vi-VN')}đ</p>
+              <p className="text-xs text-slate-500">{pkg.durationDays} ngày{pkg.maxClasses ? ` · ${pkg.maxClasses} buổi` : ''}{pkg.accessType ? ` · ${pkg.accessType}` : ''}</p>
+              {pkg.description && <p className="mt-2 line-clamp-2 text-xs text-slate-600">{pkg.description}</p>}
+            </article>)}
+          </div> : <p className="text-sm text-slate-500">Hiện chưa có gói tập nào đang mở.</p>}
+          <a href="#/register" className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-6 py-4 font-chivo text-xs font-bold uppercase text-white shadow-md transition-all hover:bg-red-700 hover:shadow-lg">
+            <span>Đăng ký hội viên</span>
+            <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
+          </a>
         </div>
       </section>
+
+      {(homeResources.classes.length > 0 || homeResources.coaches.length > 0) && <section className="bg-white py-16 sm:py-20">
+        <div className="mx-auto max-w-[1720px] px-6 sm:px-10 md:px-14 lg:px-20 space-y-14">
+          {homeResources.classes.length > 0 && <div>
+            <div className="mb-7"><p className="text-xs font-bold uppercase tracking-widest text-red-600">Lớp học đang mở</p><h2 className="mt-2 text-3xl font-black text-slate-900">Khóa tập tại trung tâm</h2></div>
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {homeResources.classes.map(item => <article key={item.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                {item.imageUrl ? <img src={item.imageUrl} alt={item.name} loading="lazy" className="h-48 w-full object-cover" /> : <div className="flex h-48 items-center justify-center bg-slate-100 text-slate-400"><span className="material-symbols-outlined text-5xl">fitness_center</span></div>}
+                <div className="p-5"><p className="text-xs font-bold uppercase text-red-600">{item.sportName}</p><h3 className="mt-1 text-lg font-bold text-slate-900">{item.name}</h3>{item.description && <p className="mt-2 line-clamp-3 text-sm text-slate-600">{item.description}</p>}</div>
+              </article>)}
+            </div>
+          </div>}
+          {homeResources.coaches.length > 0 && <div id="huan-luyen-vien">
+            <div className="mb-7"><p className="text-xs font-bold uppercase tracking-widest text-red-600">Đội ngũ huấn luyện</p><h2 className="mt-2 text-3xl font-black text-slate-900">Huấn luyện viên</h2></div>
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {homeResources.coaches.map(coach => <article key={coach.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                {coach.imageUrl ? <img src={coach.imageUrl} alt={coach.fullName} loading="lazy" className="h-64 w-full object-cover" /> : <div className="flex h-64 items-center justify-center bg-slate-100 text-slate-400"><span className="material-symbols-outlined text-6xl">person</span></div>}
+                <div className="p-5"><h3 className="text-lg font-bold text-slate-900">{coach.fullName}</h3>{coach.specialization && <p className="mt-1 text-sm text-slate-600">{coach.specialization}</p>}{coach.certification && <p className="mt-2 text-xs text-slate-500">{coach.certification}</p>}</div>
+              </article>)}
+            </div>
+          </div>}
+        </div>
+      </section>}
 
       {/* FOOTER */}
       <footer className="w-full bg-slate-950 text-slate-400 pt-14 pb-8 border-t border-slate-800">
@@ -1295,7 +1322,7 @@ export function LandingPage() {
               </p>
               <div className="inline-flex items-center gap-2 mt-4 px-3 py-1.5 rounded-full border border-slate-800 bg-slate-900/70 text-[11px] font-semibold text-slate-300">
                 <span className="material-symbols-outlined text-red-400 text-[16px]" aria-hidden="true">sports_score</span>
-                <span>{LANDING_SPORTS.length} bộ môn · {SCMS_FACILITIES.length} khu tập luyện</span>
+                <span>{landingSports.length} bộ môn · {homeResources.rooms.length} khu tập luyện</span>
               </div>
             </div>
 
@@ -1351,7 +1378,7 @@ export function LandingPage() {
                 Bộ Môn &amp; Cơ Sở
               </h4>
               <ul className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-                {LANDING_SPORTS.map(sport => (
+                {landingSports.map(sport => (
                   <li key={sport.id} className="min-w-0">
                     <button
                       type="button"

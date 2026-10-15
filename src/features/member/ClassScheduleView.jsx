@@ -138,6 +138,7 @@ export function ClassScheduleView() {
               } p-6`}
             >
               <div>
+                {cls.imageUrl && <img src={cls.imageUrl} alt={cls.name} loading="lazy" className="mb-4 h-40 w-full rounded-xl object-cover" />}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-1.5">
                     <Badge variant="primary" size="sm">{cls.sportName}</Badge>

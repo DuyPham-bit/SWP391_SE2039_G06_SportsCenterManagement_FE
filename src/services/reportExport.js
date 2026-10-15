@@ -30,3 +30,34 @@ export function createReportCsv(metrics, period) {
   ];
   return '\uFEFF' + rows.map(row => row.map(cell).join(',')).join('\r\n');
 }
+
+export function createRevenueAnalyticsCsv(report) {
+  const rows = [
+    ['Báo cáo doanh thu theo thời gian'],
+    ['Từ ngày', report.from],
+    ['Đến ngày', report.to],
+    ['Nhóm theo', report.groupBy],
+    ['Doanh thu gộp', report.gross],
+    ['Hoàn tiền', report.refunds],
+    ['Doanh thu thuần', report.net],
+    ['Giao dịch thành công', report.successfulPaymentCount],
+    [], ['Kỳ', 'Doanh thu gộp', 'Hoàn tiền', 'Doanh thu thuần'],
+    ...(report.periods || []).map(item => [item.periodStart, item.gross, item.refunds, item.net])
+  ];
+
+  const sections = [
+    ['Sân/phòng tập', 'rooms', 'Lượt đặt'],
+    ['Môn tập', 'sports', 'Lượt đặt'],
+    ['Gói tập', 'packages', 'Giao dịch'],
+    ['Huấn luyện viên', 'coaches', 'Lượt đặt'],
+    ['Thành viên', 'members', 'Giao dịch']
+  ];
+  for (const [label, key, activityLabel] of sections) {
+    rows.push([], [label], ['Tên', 'Mã', 'Doanh thu gộp', 'Hoàn tiền', 'Doanh thu thuần', activityLabel]);
+    for (const item of report[key] || []) {
+      rows.push([item.name, item.code, item.gross, item.refunds, item.net, item.activityCount]);
+    }
+  }
+
+  return '\uFEFF' + rows.map(row => row.map(cell).join(',')).join('\r\n');
+}

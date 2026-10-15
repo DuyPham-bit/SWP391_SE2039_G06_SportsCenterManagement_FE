@@ -121,7 +121,7 @@ async function loadCurrentUser(token = getApiToken()) {
 }
 
 function mapPackage(item) {
-  return { ...item, status: String(item.status || '').toUpperCase(), allowedSports: item.allowedSports ?? 1, features: item.features || [] };
+  return { ...item, status: String(item.status || '').toUpperCase(), features: item.features || [] };
 }
 
 function mapSession(item) {
@@ -139,6 +139,7 @@ function mapSession(item) {
     sessionDate: date,
     startTime: item.startTime,
     endTime: item.endTime,
+    imageUrl: item.imageUrl || null,
     dayOfWeek,
     timeSlot: `${String(item.startTime || '').slice(0, 5)} - ${String(item.endTime || '').slice(0, 5)}`,
     coachId: item.coachId,
@@ -273,7 +274,7 @@ export const packageApi = {
         price: Number(pkg.price),
         maxClasses: pkg.maxClasses ? Number(pkg.maxClasses) : null,
         accessType: pkg.accessType || null,
-        allowedSports: Number(pkg.allowedSports || 1),
+        allowedSports: Number(pkg.allowedSports),
         badge: pkg.badge || null,
         features: pkg.features || []
       }
@@ -291,7 +292,7 @@ export const packageApi = {
         price: Number(pkg.price),
         maxClasses: pkg.maxClasses ? Number(pkg.maxClasses) : null,
         accessType: pkg.accessType || null,
-        allowedSports: Number(pkg.allowedSports || 1),
+        allowedSports: Number(pkg.allowedSports),
         badge: pkg.badge || null,
         features: pkg.features || []
       }
@@ -306,6 +307,10 @@ export const packageApi = {
     return mapPackage(await apiRequest(`centers/${centerId()}/membership-packages/${id}/status`, {
       method: 'PATCH', body: { status }
     }));
+  },
+
+  async delete(id) {
+    await apiRequest(`centers/${centerId()}/membership-packages/${id}`, { method: 'DELETE' });
   }
 };
 
@@ -327,7 +332,7 @@ function mapStaff(item) {
     certification: item.certification || '',
     experienceYears: item.experienceYears,
     bio: item.bio,
-    avatar: null
+    avatar: item.imageUrl || null
   };
 }
 
@@ -360,7 +365,8 @@ export const staffApi = {
           hireDate: staffData.hireDate || new Date().toISOString().slice(0, 10),
           specialization: staffData.specialty?.trim() || null,
           certification: staffData.certification?.trim() || null,
-          experienceYears: staffData.experienceYears ?? null, bio: staffData.bio?.trim() || null
+          experienceYears: staffData.experienceYears ?? null, bio: staffData.bio?.trim() || null,
+          imageUrl: staffData.imageUrl || null
         }
       }));
     }
@@ -384,7 +390,8 @@ export const staffApi = {
         specialization: staffData.specialty?.trim() || null,
         certification: staffData.certification?.trim() || null,
         experienceYears: staffData.experienceYears ? Number(staffData.experienceYears) : (roleCapitalized === 'Coach' ? 1 : null),
-        bio: staffData.bio?.trim() || null
+        bio: staffData.bio?.trim() || null,
+        imageUrl: staffData.imageUrl || null
       }
     });
     return mapStaff(result);
@@ -406,7 +413,8 @@ export const staffApi = {
         specialization: staffData.specialty ?? current.specialty ?? null,
         certification: staffData.certification ?? current.certification ?? null,
         experienceYears: staffData.experienceYears ?? current.experienceYears ?? null,
-        bio: staffData.bio ?? current.bio ?? null
+        bio: staffData.bio ?? current.bio ?? null,
+        imageUrl: staffData.imageUrl ?? current.avatar ?? null
       }
     });
     return mapStaff(result);
@@ -429,7 +437,7 @@ export const roomApi = {
 export const publicResourcesApi = {
  async getForHome(signal) {
    const id = Number(readSession()?.centerId || import.meta.env.VITE_SPORTS_CENTER_ID || 1);
-   if (!Number.isSafeInteger(id) || id <= 0) return { sports: [], rooms: [] };
+   if (!Number.isSafeInteger(id) || id <= 0) return { sports: [], rooms: [], classes: [], coaches: [], packages: [] };
    return apiRequest(`public/centers/${id}/resources`, { token: null, signal });
  }
 };
@@ -486,8 +494,9 @@ export const classApi = {
         description: classData.description || null,
         level: classData.level || null,
         capacity: Number(classData.capacity),
-        durationMinutes: Number(classData.durationMinutes || 60),
-        allowWaitlist: classData.allowWaitlist !== false
+        durationMinutes: Number(classData.durationMinutes),
+        allowWaitlist: classData.allowWaitlist !== false,
+        imageUrl: classData.imageUrl || null
       }
     });
     return result;
@@ -508,8 +517,9 @@ export const classApi = {
         description: classData.description || null,
         level: classData.level || null,
         capacity: Number(classData.capacity),
-        durationMinutes: Number(classData.durationMinutes || 60),
-        allowWaitlist: classData.allowWaitlist !== false
+        durationMinutes: Number(classData.durationMinutes),
+        allowWaitlist: classData.allowWaitlist !== false,
+        imageUrl: classData.imageUrl || null
       }
     });
   },
@@ -705,6 +715,10 @@ export const memberApi = {
     return apiRequest(`centers/${centerId()}/members/${id}/status`, { method: 'PATCH', body: { status } });
   },
 
+  async deleteAtCenter(id) {
+    return apiRequest(`centers/${centerId()}/members/${id}`, { method: 'DELETE' });
+  },
+
   async subscribeOnline({ packageId, paymentMethod = 'VNPAY', invoiceNumber, cancelPendingIfAny }) {
     const provider = {
       VNPAY: 'create-vnpay-url',
@@ -749,6 +763,11 @@ export const memberApi = {
 };
 
 export const reportApi = {
+  async getRevenueAnalytics({ from, to, groupBy = 'day' }, signal) {
+    const query = new URLSearchParams({ from, to, groupBy, centerId: String(centerId()) });
+    return apiRequest(`reports/analytics?${query}`, { signal });
+  },
+
   async getOverview(period = 'MONTH') {
     const today = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
     const year = Number(today.slice(0, 4));

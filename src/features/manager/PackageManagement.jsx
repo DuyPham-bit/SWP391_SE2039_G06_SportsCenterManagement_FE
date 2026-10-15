@@ -1,4 +1,4 @@
-import { packageApi } from '../../services/api.js';
+import { packageApi, classApi } from '../../services/api.js';
 import { useToast } from '../../context/ToastContext.js';
 import { Modal } from '../../components/common/Modal.js';
 import { Badge } from '../../components/common/StatCard.js';
@@ -9,6 +9,7 @@ const { useState, useEffect } = React;
 export function PackageManagement() {
   const { showSuccess, showError } = useToast();
   const [packages, setPackages] = useState([]);
+  const [sports, setSports] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Modal State
@@ -17,17 +18,22 @@ export function PackageManagement() {
 
   // Form State
   const [name, setName] = useState('');
-  const [durationDays, setDurationDays] = useState(30);
-  const [price, setPrice] = useState(500000);
-  const [allowedSports, setAllowedSports] = useState(1);
+  const [durationDays, setDurationDays] = useState('');
+  const [price, setPrice] = useState('');
+  const [allowedSports, setAllowedSports] = useState('');
   const [description, setDescription] = useState('');
-  const [badge, setBadge] = useState('TIẾT KIỆM');
+  const [badge, setBadge] = useState('');
+  const [maxClasses, setMaxClasses] = useState('');
+  const [accessType, setAccessType] = useState('');
+  const [featuresText, setFeaturesText] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [saving, setSaving] = useState(false);
 
   const loadPackages = async () => {
     try {
-      const data = await packageApi.getAll();
+      const [data, sportRows] = await Promise.all([packageApi.getAll(), classApi.getManagementSports()]);
       setPackages(data);
+      setSports(sportRows.filter(sport => sport.status === 'Active'));
     } catch (e) {
       showError('Không thể tải danh sách gói tập');
     } finally {
@@ -42,11 +48,14 @@ export function PackageManagement() {
   const openCreateModal = () => {
     setEditingPkg(null);
     setName('');
-    setDurationDays(30);
-    setPrice(650000);
-    setAllowedSports(1);
+    setDurationDays('');
+    setPrice('');
+    setAllowedSports('');
     setDescription('');
-    setBadge('TIẾT KIỆM');
+    setBadge('');
+    setMaxClasses('');
+    setAccessType('');
+    setFeaturesText('');
     setModalOpen(true);
   };
 
@@ -55,9 +64,12 @@ export function PackageManagement() {
     setName(pkg.name);
     setDurationDays(pkg.durationDays);
     setPrice(pkg.price);
-    setAllowedSports(pkg.allowedSports || 1);
+    setAllowedSports(pkg.allowedSports ?? '');
     setDescription(pkg.description || '');
     setBadge(pkg.badge || '');
+    setMaxClasses(pkg.maxClasses ?? '');
+    setAccessType(pkg.accessType || '');
+    setFeaturesText((pkg.features || []).join('\n'));
     setModalOpen(true);
   };
 
@@ -67,35 +79,45 @@ export function PackageManagement() {
       showError('Vui lòng nhập tên gói tập!');
       return;
     }
+    if (!Number.isInteger(Number(allowedSports)) || Number(allowedSports) < 1) {
+      showError('Số môn được phép phải là số nguyên dương.');
+      return;
+    }
 
     setSaving(true);
     try {
+      const payload = {
+        name: name.trim(), durationDays: Number(durationDays), price: Number(price),
+        allowedSports: Number(allowedSports), description: description.trim(), badge: badge.trim(),
+        maxClasses: maxClasses === '' ? null : Number(maxClasses), accessType: accessType.trim() || null,
+        features: featuresText.split(/\r?\n/).map(feature => feature.trim()).filter(Boolean)
+      };
       if (editingPkg) {
-        await packageApi.update(editingPkg.id, {
-          name: name.trim(),
-          durationDays: Number(durationDays),
-          price: Number(price),
-          allowedSports: Number(allowedSports),
-          description: description.trim(),
-          badge: badge.trim()
-        });
+        await packageApi.update(editingPkg.id, payload);
         showSuccess('Cập nhật gói tập thành công!');
       } else {
-        await packageApi.create({
-          name: name.trim(),
-          durationDays: Number(durationDays),
-          price: Number(price),
-          allowedSports: Number(allowedSports),
-          description: description.trim(),
-          badge: badge.trim(),
-          features: ['Toàn quyền sử dụng sân bãi trong gói', 'Tủ đồ thông minh', 'Nước uống điện giải']
-        });
+        await packageApi.create(payload);
         showSuccess('Tạo gói tập mới thành công!');
       }
       setModalOpen(false);
       loadPackages();
     } catch (err) {
       showError(err.message || 'Lỗi lưu gói tập');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeletePackage = async () => {
+    if (!deleteTarget) return;
+    setSaving(true);
+    try {
+      await packageApi.delete(deleteTarget.id);
+      showSuccess(`Đã ngừng bán gói ${deleteTarget.name}; lịch sử đăng ký được giữ lại.`);
+      setDeleteTarget(null);
+      await loadPackages();
+    } catch (err) {
+      showError(err.message || 'Không thể xóa gói tập');
     } finally {
       setSaving(false);
     }
@@ -169,14 +191,14 @@ export function PackageManagement() {
 
               <div className="p-2.5 rounded-lg bg-slate-50 text-xs text-slate-700 font-semibold mb-4 border border-slate-100 flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-red-600 text-[18px]">sports_kabaddi</span>
-                <span>Số môn được tập: {pkg.allowedSports === 15 ? 'Toàn bộ 15 môn' : `${pkg.allowedSports} môn`}</span>
+                <span>Số môn được tập: {sports.length > 0 && pkg.allowedSports >= sports.length ? `Toàn bộ ${sports.length} môn hiện có` : `${pkg.allowedSports} môn`}</span>
               </div>
 
               <p className="text-xs text-slate-600 mb-4 leading-relaxed">
                 {pkg.description}
               </p>
 
-              {pkg.features && (
+              {pkg.features?.length > 0 && (
                 <ul className="space-y-1.5 text-xs text-slate-500 pt-2 border-t border-slate-100 mb-6">
                   {pkg.features.map((feat, idx) => (
                     <li key={idx} className="flex items-start gap-1.5">
@@ -207,6 +229,15 @@ export function PackageManagement() {
                     {pkg.status === 'ACTIVE' ? 'visibility_off' : 'visibility'}
                   </span>
                 </button>
+                <button
+                  onClick={() => setDeleteTarget(pkg)}
+                  className="p-1.5 rounded hover:bg-red-50 text-red-600 disabled:opacity-40"
+                  title="Ngừng bán gói"
+                  aria-label={`Xóa gói ${pkg.name}`}
+                  disabled={saving || pkg.status !== 'ACTIVE'}
+                >
+                  <span className="material-symbols-outlined text-[18px]">delete</span>
+                </button>
               </div>
             </div>
           </div>
@@ -227,7 +258,7 @@ export function PackageManagement() {
             <input
               type="text"
               required
-              placeholder="VD: Gói All-Access Olympic"
+              placeholder="Nhập tên gói tập"
               value={name}
               onChange={e => setName(e.target.value)}
               className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white"
@@ -257,7 +288,6 @@ export function PackageManagement() {
                 type="number"
                 required
                 min="0"
-                step="50000"
                 value={price}
                 onChange={e => setPrice(e.target.value)}
                 className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white"
@@ -268,17 +298,18 @@ export function PackageManagement() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                Số môn được tập (1-15)
+                Số môn được tập (theo danh sách môn đang hoạt động)
               </label>
               <input
                 type="number"
                 min="1"
-                max="15"
+                required
                 value={allowedSports}
                 onChange={e => setAllowedSports(e.target.value)}
                 className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white"
               />
             </div>
+            <p className="col-span-2 text-xs text-slate-500">Trung tâm hiện có {sports.length} môn đang hoạt động.</p>
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
@@ -294,6 +325,15 @@ export function PackageManagement() {
             </div>
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">Giới hạn số buổi (để trống nếu không giới hạn)
+              <input type="number" min="1" value={maxClasses} onChange={e => setMaxClasses(e.target.value)} className="mt-1 w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 bg-white" />
+            </label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">Loại quyền sử dụng
+              <input type="text" maxLength="50" value={accessType} onChange={e => setAccessType(e.target.value)} className="mt-1 w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 bg-white" />
+            </label>
+          </div>
+
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
               Mô tả chi tiết quyền lợi
@@ -305,6 +345,11 @@ export function PackageManagement() {
               onChange={e => setDescription(e.target.value)}
               className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Các quyền lợi hiển thị (mỗi dòng một mục)</label>
+            <textarea rows="4" maxLength="2000" value={featuresText} onChange={e => setFeaturesText(e.target.value)} className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 bg-white" placeholder="Nhập quyền lợi theo chính sách của trung tâm" />
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
@@ -324,6 +369,15 @@ export function PackageManagement() {
             </button>
           </div>
         </form>
+      </Modal>
+      <Modal isOpen={Boolean(deleteTarget)} onClose={() => !saving && setDeleteTarget(null)} title="Ngừng bán gói tập">
+        <div className="space-y-4">
+          <p>Gói <strong>{deleteTarget?.name}</strong> sẽ được chuyển sang ngừng bán. Lịch sử đăng ký vẫn được lưu.</p>
+          <div className="flex justify-end gap-2">
+            <button type="button" className="px-4 py-2 rounded-lg border" disabled={saving} onClick={() => setDeleteTarget(null)}>Hủy</button>
+            <button type="button" className="px-4 py-2 rounded-lg bg-red-700 text-white disabled:opacity-50" disabled={saving} onClick={handleDeletePackage}>{saving ? 'Đang lưu...' : 'Xác nhận'}</button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

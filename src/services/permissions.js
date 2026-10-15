@@ -211,10 +211,11 @@ export function getDynamicNavItems(role) {
         { label: 'VẬN HÀNH & NHÂN SỰ', isHeader: true }
       ];
 
-      if (normalized === 'MANAGER') items.push({ path: '#/manager/members', icon: 'group', label: 'Quản Lý Thành Viên' });
-      if (perms.includes('manage_staff')) items.push({ path: '#/manager/staff', icon: 'badge', label: 'Quản Lý Nhân Viên' });
-      if (perms.includes('manage_packages')) items.push({ path: '#/manager/packages', icon: 'card_membership', label: 'Gói Tập Hội Viên' });
-      if (perms.includes('manage_classes')) items.push({ path: '#/manager/classes-rooms', icon: 'sports_score', label: 'Lớp, Bộ Môn & Phòng' });
+      const isManager = normalized === 'MANAGER';
+      if (isManager) items.push({ path: '#/manager/members', icon: 'group', label: 'Quản Lý Thành Viên' });
+      if (isManager || perms.includes('manage_staff')) items.push({ path: '#/manager/staff', icon: 'badge', label: 'Quản Lý Nhân Viên' });
+      if (isManager || perms.includes('manage_packages')) items.push({ path: '#/manager/packages', icon: 'card_membership', label: 'Gói Tập Hội Viên' });
+      if (isManager || perms.includes('manage_classes')) items.push({ path: '#/manager/classes-rooms', icon: 'sports_score', label: 'Lớp, Bộ Môn & Phòng' });
       if (perms.includes('assign_coach')) items.push({ path: '#/manager/coach-assignment', icon: 'assignment_ind', label: 'Phân Công HLV' });
 
       items.push({ label: 'BÁO CÁO & BẢO MẬT', isHeader: true });

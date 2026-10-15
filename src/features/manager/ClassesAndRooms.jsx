@@ -40,12 +40,13 @@ export function ClassesAndRooms() {
   }, [form.imageFile]);
   const change = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
   const openClass = row => {
-    setForm(row ? { ...row } : { name: '', sportId: data.sports.find(s => s.status === 'Active')?.id || '', roomId: '', capacity: 20, durationMinutes: 60, level: '', description: '', allowWaitlist: true });
+    if (imageInputRef.current) imageInputRef.current.value = '';
+    setForm(row ? { ...row, imageFile: null } : { name: '', sportId: data.sports.find(s => s.status === 'Active')?.id || '', roomId: '', capacity: '', durationMinutes: '', level: '', description: '', allowWaitlist: true, imageUrl: '', imageFile: null });
     setModal({ type: 'class', row });
   };
   const openRoom = row => {
     if (imageInputRef.current) imageInputRef.current.value = '';
-    setForm(row ? { ...row, imageFile: null } : { name: '', type: '', capacity: 30, location: '', imageUrl: '', imageFile: null, status: 'Active' });
+    setForm(row ? { ...row, imageFile: null } : { name: '', type: '', capacity: '', location: '', imageUrl: '', imageFile: null, status: 'Active' });
     setModal({ type: 'room', row });
   };
   const openSport = row => {
@@ -71,8 +72,21 @@ export function ClassesAndRooms() {
     e.preventDefault();
     await action(async () => {
       if (modal.type === 'class') {
-        const body = { ...form, sportId: Number(form.sportId), capacity: Number(form.capacity), durationMinutes: Number(form.durationMinutes) };
-        if (modal.row) await classApi.update(modal.row.id, body); else await classApi.create(body);
+        const upload = form.imageFile ? await classApi.uploadResourceImage(form.imageFile) : null;
+        const imageUrl = upload?.imageUrl || form.imageUrl?.trim() || null;
+        const body = { ...form, sportId: Number(form.sportId), capacity: Number(form.capacity), durationMinutes: Number(form.durationMinutes), imageUrl };
+        delete body.imageFile;
+        try {
+          if (modal.row) await classApi.update(modal.row.id, body); else await classApi.create(body);
+        } catch (error) {
+          if (upload?.imageUrl) {
+            try { await classApi.deleteUnusedResourceImage(upload.imageUrl); } catch { /* Preserve the original save error. */ }
+          }
+          throw error;
+        }
+        if (modal.row?.imageUrl && modal.row.imageUrl !== imageUrl) {
+          try { await classApi.deleteUnusedResourceImage(modal.row.imageUrl); } catch { /* The class update is already saved. */ }
+        }
       } else if (modal.type === 'sport' || modal.type === 'room') {
         const upload = form.imageFile ? await classApi.uploadResourceImage(form.imageFile) : null;
         const imageUrl = upload?.imageUrl || form.imageUrl?.trim() || null;
@@ -90,6 +104,9 @@ export function ClassesAndRooms() {
             try { await classApi.deleteUnusedResourceImage(upload.imageUrl); } catch { /* Preserve the original save error. */ }
           }
           throw error;
+        }
+        if (modal.row?.imageUrl && modal.row.imageUrl !== imageUrl) {
+          try { await classApi.deleteUnusedResourceImage(modal.row.imageUrl); } catch { /* The resource update is already saved. */ }
         }
       } else {
         const body = { ...form, roomId: form.roomId ? Number(form.roomId) : null, dayOfWeek: Number(form.dayOfWeek), startTime: form.startTime + ':00', endTime: form.endTime + ':00' };
@@ -120,8 +137,8 @@ export function ClassesAndRooms() {
     {tab === 'sports' && <p className="text-sm text-slate-500">Sửa hoặc ẩn môn dùng chung sẽ tạo tùy chỉnh riêng cho trung tâm này, không làm thay đổi dữ liệu của trung tâm khác.</p>}
     <div className="grid md:grid-cols-2 gap-4">
       {(data[tab]).map(row => <article key={row.id} className="bg-white border rounded-xl p-5 space-y-3">
-        {['sports','rooms'].includes(tab) && <div className="h-44 overflow-hidden rounded-lg bg-slate-100 flex items-center justify-center">
-          {row.imageUrl ? <img key={row.imageUrl} src={row.imageUrl} alt={`Ảnh ${row.name}`} className="h-full w-full object-cover" onError={e => { e.currentTarget.hidden = true; }} /> : <span className="material-symbols-outlined text-5xl text-slate-400">{tab === 'sports' ? 'sports_score' : 'stadium'}</span>}
+        {['sports','rooms','classes'].includes(tab) && <div className="h-44 overflow-hidden rounded-lg bg-slate-100 flex items-center justify-center">
+          {row.imageUrl ? <img key={row.imageUrl} src={row.imageUrl} alt={`Ảnh ${row.name}`} className="h-full w-full object-cover" onError={e => { e.currentTarget.hidden = true; }} /> : <span className="material-symbols-outlined text-5xl text-slate-400">{tab === 'sports' ? 'sports_score' : tab === 'classes' ? 'fitness_center' : 'stadium'}</span>}
         </div>}
         <h2 className="font-bold">{row.name}</h2>
         {tab === 'sports' ? <><p className="text-sm">{row.description || 'Chưa có mô tả'}</p><p className="text-sm">{row.isShared ? 'Dùng chung' : 'Riêng trung tâm'} · {row.status === 'Active' ? 'Đang hiển thị' : 'Đã ẩn'}</p></> : <p className="text-sm">{row.type || 'Sân tập'} · Sức chứa: {row.capacity} · {row.status === 'Active' ? 'Đang hiển thị' : 'Đã ẩn'}{row.location ? ` · ${row.location}` : ''}</p>}
@@ -154,8 +171,8 @@ export function ClassesAndRooms() {
         {['class','room'].includes(modal?.type) && <label className="block">Sức chứa<input className={field} name="capacity" type="number" min="1" required value={form.capacity || ''} onChange={change} /></label>}
         {modal?.type === 'sport' && <><label className="block">Mô tả<textarea className={field} name="description" maxLength={500} value={form.description || ''} onChange={change} /></label><label className="block">Trạng thái hiển thị<select className={field} name="status" value={form.status} onChange={change}><option value="Active">Đang hiển thị</option><option value="Inactive">Đã ẩn</option></select></label></>}
         {modal?.type === 'room' && <><label className="block">Loại sân/phòng<input className={field} maxLength={100} name="type" value={form.type || ''} onChange={change} /></label><label className="block">Vị trí<input className={field} maxLength={255} name="location" value={form.location || ''} onChange={change} /></label><label className="block">Trạng thái hiển thị<select className={field} name="status" value={form.status || 'Active'} onChange={change}><option value="Active">Đang hiển thị</option><option value="Inactive">Đã ẩn</option></select></label></>}
-        {['sport','room'].includes(modal?.type) && <div className="space-y-2 rounded-lg border border-slate-200 p-3">
-          <label className="block text-sm font-semibold">Ảnh {modal.type === 'sport' ? 'môn thể thao' : 'sân tập'}
+        {['class','sport','room'].includes(modal?.type) && <div className="space-y-2 rounded-lg border border-slate-200 p-3">
+          <label className="block text-sm font-semibold">Ảnh {modal.type === 'sport' ? 'môn thể thao' : modal.type === 'class' ? 'khóa tập' : 'sân tập'}
             <input ref={imageInputRef} className={`${field} mt-1`} type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={e => {
               const file = e.target.files?.[0];
               if (file && file.size > 5 * 1024 * 1024) { showError('Ảnh không được lớn hơn 5 MB.'); e.target.value = ''; return; }
