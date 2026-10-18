@@ -4,6 +4,8 @@
  * Hỗ trợ tải tệp ảnh từ máy, thư viện ảnh đám mây thể thao chất lượng cao, và CDN link.
  */
 
+import { apiRequest, getApiToken, getApiUrl } from './http.js';
+
 // Bộ sưu tập ảnh thể thao đám mây chuẩn Olympic (Curated High-Res Cloud Sport Assets)
 export const CLOUD_SPORT_ASSETS = [
   {
@@ -137,32 +139,100 @@ export const CLOUD_SPORT_ASSETS = [
 ];
 
 /**
- * Xử lý tải ảnh từ File máy tính sang Object Data URL / Cloud Storage
- * Tự động nén kích thước để đảm bảo tải nhanh và hiển thị mượt mà.
+ * Lấy danh sách ảnh trực tiếp từ Google Drive và Database
  */
-export async function uploadMediaFileToCloud(file) {
+export async function fetchDriveFiles() {
+  try {
+    const data = await apiRequest('media/drive-files');
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.warn('Lỗi lấy danh sách ảnh Google Drive:', error);
+    throw error;
+  }
+}
+
+/**
+ * Lấy trạng thái kết nối Google Drive API
+ */
+export async function fetchGoogleDriveStatus() {
+  try {
+    return await apiRequest('media/status');
+  } catch (error) {
+    console.warn('Lỗi kiểm tra Google Drive status:', error);
+    return null;
+  }
+}
+
+/**
+ * Xử lý tải ảnh từ File máy tính lên Google Drive qua Backend API (ASP.NET Core & EF Core Code-First)
+ * Tự động lưu thông tin file vào Database và trả về link Googleusercontent lh3 trực tiếp.
+ */
+export async function uploadMediaFileToCloud(file, allowLocalFallback = false) {
+  if (!file) {
+    throw new Error('Chưa chọn tệp');
+  }
+
+  const isImage = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif'].includes(file.type) && /\.(png|jpe?g|webp|gif|avif)$/i.test(file.name);
+  const isVideo = ['video/mp4', 'video/webm'].includes(file.type) && /\.(mp4|webm)$/i.test(file.name);
+  if (!isImage && !isVideo) {
+    throw new Error('Vui lòng chọn ảnh PNG/JPG/WEBP/GIF/AVIF hoặc video MP4/WEBM.');
+  }
+
+  if (file.size > 50 * 1024 * 1024) {
+    throw new Error('Kích thước media tối đa là 50MB');
+  }
+
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const token = getApiToken();
+    const headers = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(getApiUrl('media/upload'), {
+      method: 'POST',
+      headers,
+      body: formData
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return {
+        url: data.url, // https://lh3.googleusercontent.com/d/{fileId}
+        fileId: data.fileId,
+        id: data.id,
+        name: data.fileName || file.name,
+        size: data.fileSize ? `${Math.round(data.fileSize / 1024)} KB` : `${Math.round(file.size / 1024)} KB`,
+        dimensions: data.fileId?.startsWith('local_') ? 'Thư viện máy chủ' : 'Google Drive Cloud',
+        type: data.mimeType || file.type,
+        uploadedAt: data.createdAt || new Date().toISOString()
+      };
+    }
+
+    const errPayload = await response.json().catch(() => null);
+    const errorMsg = errPayload?.message || `Lỗi tải ảnh lên Google Drive (HTTP ${response.status})`;
+    throw new Error(errorMsg);
+  } catch (backendError) {
+    console.error('Backend Google Drive upload failed:', backendError);
+    if (allowLocalFallback && isImage) {
+      return processLocalImageFallback(file);
+    }
+    throw backendError;
+  }
+}
+
+/**
+ * Fallback xử lý ảnh cục bộ khi chưa bật Backend hoặc mất mạng
+ */
+function processLocalImageFallback(file) {
   return new Promise((resolve, reject) => {
-    if (!file) {
-      reject(new Error('Chưa chọn tệp'));
-      return;
-    }
-
-    if (!file.type.startsWith('image/')) {
-      reject(new Error('Vui lòng chọn tệp hình ảnh (JPEG, PNG, WEBP, v.v.)'));
-      return;
-    }
-
-    // Giới hạn 10MB
-    if (file.size > 10 * 1024 * 1024) {
-      reject(new Error('Kích thước ảnh tối đa là 10MB'));
-      return;
-    }
-
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
-        // Tối ưu hóa kích thước tối đa 1600px để giữ nét mà không nặng
         const maxWidth = 1600;
         const maxHeight = 1200;
         let { width, height } = img;
@@ -179,14 +249,13 @@ export async function uploadMediaFileToCloud(file) {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Xuất chuẩn WEBP / JPEG
         const optimizedDataUrl = canvas.toDataURL('image/webp', 0.88);
 
         resolve({
           url: optimizedDataUrl,
           name: file.name,
-          size: Math.round((optimizedDataUrl.length * 3) / 4),
-          dimensions: `${width}x${height}`,
+          size: `${Math.round((optimizedDataUrl.length * 3) / 4096)} KB`,
+          dimensions: `${width}x${height} (Local Fallback)`,
           type: 'image/webp',
           uploadedAt: new Date().toISOString()
         });

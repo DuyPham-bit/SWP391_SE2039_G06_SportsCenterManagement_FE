@@ -1,6 +1,7 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext.js';
 import { ToastProvider } from './context/ToastContext.js';
+import { LanguageProvider } from './context/LanguageContext.jsx';
 import { ProtectedRoute, RoleGuard } from './components/auth/RoleGuard.js';
 import { AppLayout } from './components/layout/AppLayout.js';
 
@@ -38,6 +39,10 @@ const TrainingPlan = lazy(() => import('./features/coach/TrainingPlan.js').then(
 const WorkoutProgress = lazy(() => import('./features/coach/WorkoutProgress.js').then(m => ({ default: m.WorkoutProgress })));
 const CoachNotifications = lazy(() => import('./features/coach/CoachNotifications.js').then(m => ({ default: m.CoachNotifications })));
 const AIRecommendation = lazy(() => import('./features/coach/AIRecommendation.js').then(m => ({ default: m.AIRecommendation })));
+const CoachSalaryKPI = lazy(() => import('./features/coach/CoachSalaryKPI.jsx').then(m => ({ default: m.CoachSalaryKPI })));
+const CoachResources = lazy(() => import('./features/coach/CoachResources.jsx').then(m => ({ default: m.CoachResources })));
+const CoachProfessionalHub = lazy(() => import('./features/coach/CoachProfessionalHub.jsx').then(m => ({ default: m.CoachProfessionalHub })));
+const ManagerCoachOperations = lazy(() => import('./features/manager/ManagerCoachOperations.jsx').then(m => ({ default: m.ManagerCoachOperations })));
 
 // Member Pages (Lazy Loaded)
 const MemberDashboard = lazy(() => import('./features/member/MemberDashboard.js').then(m => ({ default: m.MemberDashboard })));
@@ -49,6 +54,8 @@ const MyAttendance = lazy(() => import('./features/member/MyAttendance.jsx').the
 const MemberNotifications = lazy(() => import('./features/member/MemberNotifications.jsx').then(m => ({ default: m.MemberNotifications })));
 const MemberAIAssistant = lazy(() => import('./features/member/MemberAIAssistant.js').then(m => ({ default: m.MemberAIAssistant })));
 const PaymentResult = lazy(() => import('./features/member/PaymentResult.js').then(m => ({ default: m.PaymentResult })));
+const MemberCoachPortal = lazy(() => import('./features/member/MemberCoachPortal.jsx').then(m => ({ default: m.MemberCoachPortal })));
+const MySupportRequests = lazy(() => import('./features/shared/MySupportRequests.jsx').then(m => ({ default: m.MySupportRequests })));
 
 function RouteFallback() {
   return (
@@ -76,7 +83,7 @@ function AppRouter() {
     const handleHashChange = () => {
       const hash = window.location.hash || '#/';
       setCurrentHash(hash);
-
+      
       const cleanAnchor = hash.replace(/^#\/?/, '').split('?')[0];
       const targetElement = document.getElementById(cleanAnchor);
       if (targetElement) {
@@ -188,6 +195,8 @@ function AppRouter() {
         return renderManagerRoute(AuditLogs, 'view_audit_logs');
       case '#/manager/home-content':
         return renderManagerRoute(HomeContentManagement, 'manage_landing_content');
+      case '#/manager/coach-operations':
+        return renderManagerRoute(ManagerCoachOperations, 'manage_coach_operations');
 
       // RECEPTIONIST ROUTES (4 chức năng)
       case '#/receptionist/dashboard':
@@ -204,6 +213,9 @@ function AppRouter() {
         return renderReceptionistRoute(CounterInvoices, 'register_counter_package');
       case '#/receptionist/support':
         return renderReceptionistRoute(SupportRequests, 'lookup_member');
+      case '#/member/support':
+      case '#/coach/support':
+        return <AppLayout currentPath={path}><ProtectedRoute><RoleGuard allowedRoles={['MEMBER', 'COACH']}><MySupportRequests /></RoleGuard></ProtectedRoute></AppLayout>;
 
       // COACH ROUTES (8 chức năng)
       case '#/coach/dashboard':
@@ -222,6 +234,14 @@ function AppRouter() {
         return renderCoachRoute(CoachNotifications, 'view_teaching_schedule');
       case '#/coach/ai-recommendation':
         return renderCoachRoute(AIRecommendation, 'get_ai_recommendation');
+      case '#/coach/salary-kpi':
+      case '#/coach/kpi':
+        return renderCoachRoute(CoachSalaryKPI, 'manage_coach_workspace');
+      case '#/coach/resources':
+      case '#/coach/equipment':
+        return renderCoachRoute(CoachResources, 'manage_coach_workspace');
+      case '#/coach/professional':
+        return renderCoachRoute(CoachSalaryKPI, 'manage_coach_workspace');
 
       // MEMBER ROUTES
       case '#/member/dashboard':
@@ -240,6 +260,8 @@ function AppRouter() {
         return renderMemberRoute(MemberNotifications);
       case '#/member/ai-assistant':
         return renderMemberRoute(MemberAIAssistant, 'ask_ai_assistant');
+      case '#/member/coach-portal':
+        return renderMemberRoute(MemberCoachPortal, 'use_coach_portal');
 
       // 404 NOT FOUND ROUTE
       default:
@@ -282,10 +304,12 @@ function AppRouter() {
 
 export default function App() {
   return (
-    <ToastProvider>
-      <AuthProvider>
-        <AppRouter />
-      </AuthProvider>
-    </ToastProvider>
+    <LanguageProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <AppRouter />
+        </AuthProvider>
+      </ToastProvider>
+    </LanguageProvider>
   );
 }

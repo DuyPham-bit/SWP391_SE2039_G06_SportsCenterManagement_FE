@@ -80,6 +80,7 @@ async function loadCurrentUser(token = getApiToken(), version = getAuthVersion()
   assertAuthVersion(version);
   let memberId = null;
   let activeSubscription = null;
+  let scheduledSubscriptions = [];
 
   if (String(profile.role).toUpperCase() === 'MEMBER') {
     const member = await apiRequest('members/me', { token });
@@ -91,6 +92,9 @@ async function loadCurrentUser(token = getApiToken(), version = getAuthVersion()
     const activeSubs = asArray(subscriptions).filter(item => String(item.status).toUpperCase() === 'ACTIVE' && item.startDate && item.endDate && item.startDate <= today && item.endDate >= today);
     activeSubs.sort((a, b) => (b.endDate || '').localeCompare(a.endDate || ''));
     activeSubscription = activeSubs[0] || null;
+    scheduledSubscriptions = asArray(subscriptions)
+      .filter(item => String(item.status).toUpperCase() === 'ACTIVE' && item.startDate > today && item.endDate >= item.startDate)
+      .sort((a, b) => a.startDate.localeCompare(b.startDate) || Number(a.subscriptionId) - Number(b.subscriptionId));
   }
 
   const capabilities = await apiRequest('access/me/capabilities', { token });
@@ -111,6 +115,7 @@ async function loadCurrentUser(token = getApiToken(), version = getAuthVersion()
     packageName: activeSubscription?.packageName || 'Chưa đăng ký gói tập',
     packageExpiry: activeSubscription?.endDate || null,
     packageStatus: activeSubscription ? 'ACTIVE' : 'INACTIVE',
+    scheduledSubscriptions,
     avatar: null
   };
   setAuthUser(user);
@@ -330,6 +335,7 @@ function mapStaff(item) {
     status: String(item.status || '').toUpperCase(),
     hireDate: item.hireDate,
     specialty: item.specialization || '',
+    sportIds: Array.isArray(item.sportIds) ? item.sportIds.map(Number) : [],
     certification: item.certification || '',
     experienceYears: item.experienceYears,
     bio: item.bio,
@@ -367,6 +373,7 @@ export const staffApi = {
           specialization: staffData.specialty?.trim() || null,
           certification: staffData.certification?.trim() || null,
           experienceYears: staffData.experienceYears ?? null, bio: staffData.bio?.trim() || null
+          , sportIds: staffData.sportIds || []
         }
       }));
     }
@@ -390,7 +397,8 @@ export const staffApi = {
         specialization: staffData.specialty?.trim() || null,
         certification: staffData.certification?.trim() || null,
         experienceYears: staffData.experienceYears ? Number(staffData.experienceYears) : (roleCapitalized === 'Coach' ? 1 : null),
-        bio: staffData.bio?.trim() || null
+        bio: staffData.bio?.trim() || null,
+        sportIds: staffData.sportIds || []
       }
     });
     return mapStaff(result);
@@ -412,7 +420,8 @@ export const staffApi = {
         specialization: staffData.specialty ?? current.specialty ?? null,
         certification: staffData.certification ?? current.certification ?? null,
         experienceYears: staffData.experienceYears ?? current.experienceYears ?? null,
-        bio: staffData.bio ?? current.bio ?? null
+        bio: staffData.bio ?? current.bio ?? null,
+        sportIds: staffData.sportIds ?? current.sportIds ?? []
       }
     });
     return mapStaff(result);
@@ -447,6 +456,7 @@ export const classApi = {
  async cancelSchedule(id, sid) { return apiRequest('classes/'+id+'/schedules/'+sid, { method: 'DELETE' }); },
  async publish(id) { return apiRequest('classes/'+id+'/publish', { method: 'POST' }); },
  async cancel(id) { return apiRequest('classes/'+id, { method: 'DELETE' }); },
+ async restore(id) { return apiRequest('classes/'+id+'/restore', { method: 'POST' }); },
   async getAll() {
     const today = new Date().toISOString().slice(0, 10);
     const end = new Date();
@@ -502,7 +512,7 @@ export const classApi = {
 
   async assignCoach(classId, coachId) {
     return apiRequest(`classes/${Number(classId)}/coaches`, {
-      method: 'POST', body: { coachId: Number(coachId), isPrimary: true }
+      method: 'POST', body: { coachId: Number(coachId), isPrimary: true, replacePrimary: true }
     });
   }
 };
@@ -621,6 +631,23 @@ export const receptionApi = {
     return asArray(await apiRequest(`centers/${centerId()}/checkins/today`));
   },
 
+  async requestCheckInReview(identifier, reason, requestedApprover) {
+    const term = String(identifier || '').trim();
+    if (!term || !reason?.trim()) throw new Error('Nhập mã hội viên và lý do cần xử lý ngoại lệ.');
+    const members = await this.lookupMember(term);
+    const normalized = term.toLowerCase();
+    const exact = members.filter(member => [member.id, member.memberCode, member.email, member.phone, member.username]
+      .some(value => String(value || '').toLowerCase() === normalized));
+    const candidates = exact.length ? exact : members;
+    if (candidates.length !== 1) throw new Error('Nhập chính xác mã, email hoặc số điện thoại của một hội viên để lưu yêu cầu.');
+    return this.createSupportRequest({
+      memberId: candidates[0].id,
+      subject: `Yêu cầu xử lý ngoại lệ check-in · ${candidates[0].memberCode}`,
+      description: `Lý do: ${reason.trim()}\nNgười được đề nghị xử lý: ${requestedApprover?.trim() || 'Quản lý trung tâm'}\nĐây là yêu cầu chờ xử lý; chưa phê duyệt check-in hoặc mở cổng.`,
+      priority: 'High'
+    });
+  },
+
   async getCheckInSummary() {
     return apiRequest(`centers/${centerId()}/checkins/summary`);
   },
@@ -679,8 +706,7 @@ export const memberApi = {
   async subscribeOnline({ packageId, paymentMethod = 'VNPAY', invoiceNumber, cancelPendingIfAny }) {
     const provider = {
       VNPAY: 'create-vnpay-url',
-      MOMO: 'create-momo-url',
-      VIETQR: 'create-payos-url'
+      MOMO: 'create-momo-url'
     }[paymentMethod];
     if (!provider) throw new Error('Cổng thanh toán không được hỗ trợ.');
     return apiRequest(`payments/${provider}`, {
@@ -725,6 +751,13 @@ export const reportApi = {
     const year = Number(today.slice(0, 4));
     const month = Number(today.slice(5, 7));
     let from = `${today.slice(0, 7)}-01`;
+    if (period === 'DAY') from = today;
+    if (period === 'WEEK') {
+      const current = new Date(`${today}T00:00:00Z`);
+      const mondayOffset = (current.getUTCDay() + 6) % 7;
+      current.setUTCDate(current.getUTCDate() - mondayOffset);
+      from = current.toISOString().slice(0, 10);
+    }
     if (period === 'YEAR') from = `${year}-01-01`;
     if (period === 'QUARTER') {
       const firstQuarterMonth = Math.floor((month - 1) / 3) * 3 + 1;
@@ -737,31 +770,162 @@ export const reportApi = {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(from || '') || !/^\d{4}-\d{2}-\d{2}$/.test(to || '')
         || !Number.isFinite(startDate.getTime()) || !Number.isFinite(endDate.getTime())
         || startDate.toISOString().slice(0, 10) !== from || endDate.toISOString().slice(0, 10) !== to
-        || from > to || (endDate - startDate) / 86400000 > 366 || !['day', 'month'].includes(groupBy)) {
-      throw new Error('Chọn khoảng ngày hợp lệ, tối đa 367 ngày, nhóm theo ngày hoặc tháng.');
+        || from > to || (endDate - startDate) / 86400000 > 365 || !['day', 'month'].includes(groupBy)) {
+      throw new Error('Chọn khoảng ngày hợp lệ, tối đa 366 ngày, nhóm theo ngày hoặc tháng.');
     }
     const query = new URLSearchParams({ from, to, groupBy, centerId: String(centerId()) });
     const checkinQuery = new URLSearchParams({ from: today, to: today });
-    const [revenue, membership, classes, sessionItems, checkins] = await Promise.all([
+    const [revenue, sportRevenue, membership, classes, sessionItems, checkins, rawRooms, rawClasses] = await Promise.all([
       apiRequest(`reports/revenue?${query}`),
+      apiRequest(`reports/revenue-by-sport?${new URLSearchParams({ from, to, centerId: String(centerId()) })}`),
       apiRequest(`reports/membership?${query}`),
       apiRequest(`reports/classes?${query}`),
       loadSessionsBetween(from, to),
-      apiRequest(`reports/checkins?${checkinQuery}`)
+      apiRequest(`reports/checkins?${checkinQuery}`),
+      apiRequest(`centers/${centerId()}/rooms`).catch(() => []),
+      apiRequest(`centers/${centerId()}/classes/all`).catch(() => [])
     ]);
     const capacity = sessionItems.reduce((sum, item) => sum + (item.capacity || 0), 0);
     const booked = sessionItems.reduce((sum, item) => sum + (item.bookedCount || 0), 0);
     const activeBookingCount = Object.entries(classes.currentStatusCounts || {})
       .filter(([status]) => /book|confirm|wait/i.test(status))
       .reduce((sum, [, count]) => sum + Number(count || 0), 0);
-    const utilization = new Map();
-    for (const item of sessionItems) {
-      const sport = item.sportName || 'Khác';
-      const totals = utilization.get(sport) || { name: sport, capacity: 0, booked: 0 };
-      totals.capacity += item.capacity || 0;
-      totals.booked += item.bookedCount || 0;
-      utilization.set(sport, totals);
+
+    const roomsList = asArray(rawRooms);
+    const classesList = asArray(rawClasses);
+    const roomMap = new Map(roomsList.map(r => [r.id, r]));
+    const classDefMap = new Map(classesList.map(c => [c.id, c]));
+
+    // 1. Seed classes stats
+    const classStatsMap = new Map();
+    for (const c of classesList) {
+      classStatsMap.set(c.id, {
+        id: c.id,
+        name: c.name,
+        sportName: c.sportName,
+        coachName: c.coachName || 'Chưa gán HLV',
+        roomName: c.roomName || roomMap.get(c.roomId)?.name || 'Chưa gán sân',
+        sessionsCount: 0,
+        booked: 0,
+        capacity: 0,
+        occupancyRate: 0
+      });
     }
+
+    // 2. Seed room stats
+    const roomStatsMap = new Map();
+    for (const r of roomsList) {
+      roomStatsMap.set(r.id, {
+        id: r.id,
+        name: r.name,
+        type: r.type || 'Sân/Phòng',
+        location: r.location || '',
+        unitCapacity: r.capacity || 0,
+        sessionsCount: 0,
+        booked: 0,
+        capacity: 0,
+        occupancyRate: 0,
+        classes: new Set()
+      });
+    }
+
+    // 3. Seed sport stats
+    const sportStatsMap = new Map();
+
+    for (const s of sessionItems) {
+      // Class
+      let cStat = classStatsMap.get(s.classId);
+      if (!cStat) {
+        cStat = {
+          id: s.classId,
+          name: s.className,
+          sportName: s.sportName,
+          coachName: s.coachName || 'Chưa gán HLV',
+          roomName: (roomMap.get(s.roomId)?.name) || 'Chưa gán sân',
+          sessionsCount: 0,
+          booked: 0,
+          capacity: 0,
+          occupancyRate: 0
+        };
+        classStatsMap.set(s.classId, cStat);
+      }
+      cStat.sessionsCount += 1;
+      cStat.booked += (s.bookedCount || 0);
+      cStat.capacity += (s.capacity || 0);
+
+      // Room
+      const targetRoomId = s.roomId || classDefMap.get(s.classId)?.roomId;
+      if (targetRoomId) {
+        let rStat = roomStatsMap.get(targetRoomId);
+        if (!rStat) {
+          rStat = {
+            id: targetRoomId,
+            name: `Phòng ${targetRoomId}`,
+            type: 'Sân/Phòng',
+            location: '',
+            unitCapacity: s.capacity || 0,
+            sessionsCount: 0,
+            booked: 0,
+            capacity: 0,
+            occupancyRate: 0,
+            classes: new Set()
+          };
+          roomStatsMap.set(targetRoomId, rStat);
+        }
+        rStat.sessionsCount += 1;
+        rStat.booked += (s.bookedCount || 0);
+        rStat.capacity += (s.capacity || 0);
+        if (s.className) rStat.classes.add(s.className);
+      }
+
+      // Sport
+      const sportName = s.sportName || 'Khác';
+      let spStat = sportStatsMap.get(sportName);
+      if (!spStat) {
+        spStat = {
+          name: sportName,
+          booked: 0,
+          capacity: 0,
+          sessionsCount: 0,
+          classes: new Set()
+        };
+        sportStatsMap.set(sportName, spStat);
+      }
+      spStat.booked += (s.bookedCount || 0);
+      spStat.capacity += (s.capacity || 0);
+      spStat.sessionsCount += 1;
+      if (s.className) spStat.classes.add(s.className);
+    }
+
+    const totalBookedAll = [...sportStatsMap.values()].reduce((sum, sp) => sum + sp.booked, 0);
+
+    const topClasses = [...classStatsMap.values()]
+      .map(c => ({
+        ...c,
+        occupancyRate: c.capacity > 0 ? Math.round((c.booked / c.capacity) * 100) : 0
+      }))
+      .sort((a, b) => b.booked - a.booked || b.occupancyRate - a.occupancyRate || b.sessionsCount - a.sessionsCount);
+
+    const topRooms = [...roomStatsMap.values()]
+      .map(r => ({
+        ...r,
+        classesCount: r.classes.size,
+        classesList: [...r.classes],
+        occupancyRate: r.capacity > 0 ? Math.round((r.booked / r.capacity) * 100) : 0
+      }))
+      .sort((a, b) => b.booked - a.booked || b.sessionsCount - a.sessionsCount || b.occupancyRate - a.occupancyRate);
+
+    const topSports = [...sportStatsMap.values()]
+      .map(sp => ({
+        name: sp.name,
+        booked: sp.booked,
+        capacity: sp.capacity,
+        sessionsCount: sp.sessionsCount,
+        classesCount: sp.classes.size,
+        percentage: sp.capacity > 0 ? Math.round((sp.booked / sp.capacity) * 100) : 0,
+        share: totalBookedAll > 0 ? Math.round((sp.booked / totalBookedAll) * 100) : 0
+      }))
+      .sort((a, b) => b.booked - a.booked || b.percentage - a.percentage);
 
     return {
       from, to, groupBy,
@@ -775,15 +939,30 @@ export const reportApi = {
       totalBookings: activeBookingCount,
       todayCheckins: checkins.count,
       occupancyRate: capacity ? Math.round((booked / capacity) * 100) : 0,
+      netRevenue: revenue.net,
       monthlyRevenue: revenue.net,
+      grossRevenue: revenue.gross,
+      refundedRevenue: revenue.refunds,
       revenueGrowth: null,
       revenuePeriods: revenue.periods || [],
-      utilizationBySport: [...utilization.values()].map(item => ({
+      revenueBySport: sportRevenue.sports || [],
+      allocatedSportRevenue: sportRevenue.allocatedNet || 0,
+      unallocatedSportRevenue: sportRevenue.unallocatedNet || 0,
+      utilizationBySport: topSports.map(item => ({
         name: item.name,
         capacity: item.capacity,
         booked: item.booked,
-        percentage: item.capacity ? Math.round((item.booked / item.capacity) * 100) : 0
-      }))
+        percentage: item.percentage
+      })),
+      topSports,
+      topClasses,
+      topRooms,
+      highlights: {
+        mostPopularClass: topClasses[0] || null,
+        mostPopularSport: topSports[0] || null,
+        highestRevenueSport: (sportRevenue.sports || []).find(item => item.sportId != null) || null,
+        mostBookedRoom: topRooms[0] || null
+      }
     };
   }
 };

@@ -1,11 +1,13 @@
 import { receptionApi } from '../../services/api.js';
 import { useToast } from '../../context/ToastContext.js';
 import { Badge } from '../../components/common/StatCard.js';
+import { BusinessAlert } from '../../components/common/BusinessAlert.jsx';
+import { Modal } from '../../components/common/Modal.js';
 
 const { useState, useEffect } = React;
 
 export function MemberCheckIn() {
-  const { showSuccess, showError } = useToast();
+  const { showSuccess, showError, showWarning } = useToast();
 
   const [identifier, setIdentifier] = useState('');
   const [members, setMembers] = useState([]);
@@ -14,12 +16,20 @@ export function MemberCheckIn() {
   const [checkInError, setCheckInError] = useState(null);
   const [processing, setProcessing] = useState(false);
 
+  // Unhappy Case Override Handling
+  const [overrideModalOpen, setOverrideModalOpen] = useState(false);
+  const [overrideReason, setOverrideReason] = useState('');
+  const [overrideApprover, setOverrideApprover] = useState('Quản lý ca trực');
+  const [failedIdentifier, setFailedIdentifier] = useState('');
+  const [historyError, setHistoryError] = useState('');
+
   const loadData = async () => {
     try {
       const history = await receptionApi.getCheckInHistory();
       setCheckIns(history || []);
-    } catch {
-      // Bỏ qua lỗi kết nối ban đầu
+      setHistoryError('');
+    } catch (error) {
+      setHistoryError(error.message || 'Không thể tải nhật ký check-in từ hệ thống.');
     }
   };
 
@@ -36,13 +46,18 @@ export function MemberCheckIn() {
     const term = (memberToScan?.memberCode || memberToScan?.id || identifier || '').toString().trim();
 
     if (!term) {
-      setCheckInError('Vui lòng quét thẻ hoặc nhập mã hội viên / Số điện thoại / Email.');
+      setCheckInError({
+        message: 'Vui lòng quét thẻ hoặc nhập mã hội viên / Số điện thoại / Email.',
+        code: 'VALIDATION-EMPTY',
+        proposedHandling: 'Sử dụng đầu đọc RFID hoặc gõ chính xác số điện thoại đăng ký của hội viên.'
+      });
       setLastCheckIn(null);
       return;
     }
 
     setProcessing(true);
     setCheckInError(null);
+    setFailedIdentifier(term);
     try {
       const result = await receptionApi.checkInMember(term);
       setLastCheckIn(result);
@@ -50,9 +65,28 @@ export function MemberCheckIn() {
       setIdentifier('');
       await loadData();
     } catch (err) {
-      setCheckInError(err.message);
+      setCheckInError(err);
       setLastCheckIn(null);
-      showError(err.message);
+      showError(err);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleOverrideCheckIn = async (e) => {
+    e.preventDefault();
+    if (!overrideReason.trim()) {
+      showWarning('Vui lòng ghi rõ lý do cần xử lý ngoại lệ check-in.');
+      return;
+    }
+    setProcessing(true);
+    try {
+      const result = await receptionApi.requestCheckInReview(failedIdentifier || identifier, overrideReason, overrideApprover);
+      setOverrideModalOpen(false);
+      setOverrideReason('');
+      showSuccess(`Đã lưu yêu cầu #${result.request.id} vào hệ thống. Theo dõi xử lý tại mục Yêu cầu hỗ trợ.`);
+    } catch (err) {
+      showError(err);
     } finally {
       setProcessing(false);
     }
@@ -151,37 +185,91 @@ export function MemberCheckIn() {
             </div>
           )}
 
-          {/* Result Alert: Error / Expired Feedback */}
+          {/* Result Alert: Error / Expired Feedback with BusinessAlert */}
           {checkInError && (
-            <div className="p-6 rounded-2xl bg-red-50 border-2 border-red-500 text-red-950 space-y-2 animate-in fade-in">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-red-600 text-white flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-[28px]">block</span>
-                </div>
-                <div>
-                  <span className="font-chivo text-[11px] font-black uppercase tracking-widest text-red-700">
-                    CẢNH BÁO TỪ CHỐI CHECK-IN (GATE LOCKED)
-                  </span>
-                  <h3 className="font-chivo text-base font-black text-red-900">
-                    Gói tập không hợp lệ hoặc tài khoản bị khóa!
-                  </h3>
-                </div>
-              </div>
-              <p className="text-xs text-red-800 pl-15 leading-relaxed font-semibold">
-                {checkInError}
-              </p>
-              <div className="pt-2 pl-15">
+            <div className="space-y-3 animate-in fade-in">
+              <BusinessAlert
+                type="error"
+                title="CẢNH BÁO TỪ CHỐI CHECK-IN (GATE LOCKED)"
+                code={checkInError.code || (checkInError.status === 400 ? 'RE-05' : 'CHECKIN-ERR')}
+                message={checkInError.message || String(checkInError)}
+                proposedHandling={checkInError.proposedHandling || 'Kiểm tra xem hội viên có bị trùng lượt quẹt trong 15 phút, tài khoản bị tạm khóa, hoặc gói tập đã quá hạn sử dụng.'}
+              />
+              <div className="flex flex-wrap items-center gap-3 pt-1">
                 <a
                   href="#/receptionist/counter-register"
-                  className="inline-flex items-center gap-1 text-xs font-bold text-red-700 hover:text-red-900 underline"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold transition-colors border border-red-200"
                 >
                   <span className="material-symbols-outlined text-[16px]">point_of_sale</span>
-                  <span>Chuyển sang màn hình gia hạn gói tập tại quầy</span>
+                  <span>Gia hạn / Đăng ký gói tại quầy</span>
                 </a>
+                <button
+                  type="button"
+                  onClick={() => setOverrideModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors shadow-sm"
+                >
+                  <span className="material-symbols-outlined text-[16px]">verified_user</span>
+                  <span>Gửi yêu cầu xử lý ngoại lệ</span>
+                </button>
               </div>
             </div>
           )}
         </div>
+
+        {/* Modal Ghi Đè Ngoại Lệ Check-In */}
+        <Modal
+          isOpen={overrideModalOpen}
+          onClose={() => setOverrideModalOpen(false)}
+          title="Gửi Yêu Cầu Xử Lý Ngoại Lệ Check-in"
+          size="md"
+        >
+          <form onSubmit={handleOverrideCheckIn} className="space-y-4">
+            <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 leading-relaxed">
+              Yêu cầu và lý do được lưu vào hệ thống để theo dõi xử lý. Việc gửi yêu cầu chưa phê duyệt check-in hoặc mở cổng; các điều kiện về tài khoản, gói tập và lượt vào vẫn được kiểm tra.
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                Người được đề nghị xử lý *
+              </label>
+              <input
+                type="text"
+                required
+                value={overrideApprover}
+                onChange={e => setOverrideApprover(e.target.value)}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                Lý do cần xử lý *
+              </label>
+              <textarea
+                required
+                rows={3}
+                placeholder="Nhập lý do ngoại lệ (ví dụ: Học viên quên thẻ cứng, HLV Nguyễn Văn A xác nhận vào tập buổi bù)..."
+                value={overrideReason}
+                onChange={e => setOverrideReason(e.target.value)}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setOverrideModalOpen(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg"
+              >
+                HỦY BỎ
+              </button>
+              <button
+                type="submit"
+                disabled={processing}
+                className="px-5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-lg shadow"
+              >
+                {processing ? 'Đang lưu...' : 'LƯU YÊU CẦU'}
+              </button>
+            </div>
+          </form>
+        </Modal>
 
         {/* Right Column: Today's Check-in Log (5 cols) */}
         <div className="lg:col-span-5 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
@@ -192,6 +280,7 @@ export function MemberCheckIn() {
             <span className="text-xs font-semibold text-emerald-600">Trực tiếp</span>
           </div>
 
+          {historyError && <p role="alert" className="text-sm text-red-700">{historyError}</p>}
           <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto pr-1 space-y-2">
             {checkIns.map(item => (
               <div key={item.id} className="pt-2.5 pb-1 flex items-start justify-between gap-3 text-xs">

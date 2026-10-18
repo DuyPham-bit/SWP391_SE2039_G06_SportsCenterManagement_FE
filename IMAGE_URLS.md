@@ -136,8 +136,8 @@ Thư mục lưu trữ 8 ảnh chụp màn hình UI mẫu chuẩn của dự án 
 
 ### Trong mã nguồn React / JSX:
 ```jsx
-<img
-  src="https://images.unsplash.com/photo-1519315901367-f34ff9154487?q=80&w=1200&auto=format&fit=crop"
+<img 
+  src="https://images.unsplash.com/photo-1519315901367-f34ff9154487?q=80&w=1200&auto=format&fit=crop" 
   alt="Bể bơi tiêu chuẩn SCMS"
   loading="lazy"
   className="w-full h-64 object-cover rounded-xl"
