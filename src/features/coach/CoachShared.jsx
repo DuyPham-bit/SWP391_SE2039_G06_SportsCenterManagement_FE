@@ -1,14 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { classApi } from '../../services/api.js';
 import { coachDate } from './coachOverview.js';
+import { BusinessAlert } from '../../components/common/BusinessAlert.jsx';
+import { useLanguage } from '../../context/LanguageContext.jsx';
 
-export const coachInput = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-red-600';
+export const coachInput = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-xs bg-white focus:ring-2 focus:ring-[#1A3B8B]/20 focus:border-[#1A3B8B] outline-none transition-all';
 
 export function CoachError({ message, retry }) {
+  const { language } = useLanguage();
+  const isEn = language === 'en';
+
   if (!message) return null;
-  return <div role="alert" className="p-4 rounded-xl border border-red-200 bg-red-50 text-sm text-red-800">
-    <p>{message}</p>{retry && <button type="button" onClick={retry} className="font-bold underline mt-2">Thử lại</button>}
-  </div>;
+  const isObj = message && typeof message === 'object';
+  const text = isObj ? (message.message || String(message)) : String(message);
+  const code = isObj ? message.code : null;
+  const proposedHandling = isObj ? message.proposedHandling : null;
+
+  return (
+    <BusinessAlert
+      type="error"
+      title={isEn ? "Action Error Notice" : "Thông báo lỗi thao tác"}
+      code={code}
+      message={text}
+      proposedHandling={proposedHandling}
+      actionText={retry ? (isEn ? "Retry" : "Thử lại") : undefined}
+      onAction={retry}
+      className="my-3"
+    />
+  );
 }
 
 export function useTeachingSessions(endOffset = 30, anchorDate = null) {
@@ -37,10 +56,25 @@ export function useTeachingSessions(endOffset = 30, anchorDate = null) {
 }
 
 export function CoachPeriod({ schedule }) {
-  return <form onSubmit={e => { e.preventDefault(); schedule.reload(); }} className="flex flex-wrap items-end gap-3 p-4 rounded-xl border border-slate-200 bg-white">
-    <label className="text-xs font-semibold">Từ ngày<input aria-label="Từ ngày" type="date" required className={coachInput} value={schedule.from} onChange={e => schedule.setFrom(e.target.value)} /></label>
-    <label className="text-xs font-semibold">Đến ngày<input aria-label="Đến ngày" type="date" required className={coachInput} value={schedule.to} onChange={e => schedule.setTo(e.target.value)} /></label>
-    <button disabled={schedule.loading} className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm disabled:opacity-50">Xem lịch</button>
-    <span className="text-xs text-slate-500">Tối đa 92 ngày mỗi lần xem.</span>
-  </form>;
+  const { language } = useLanguage();
+  const isEn = language === 'en';
+
+  return (
+    <form onSubmit={e => { e.preventDefault(); schedule.reload(); }} className="flex flex-wrap items-end gap-3 p-4 rounded-2xl border border-slate-200/90 bg-white shadow-xs">
+      <label className="text-xs font-semibold text-slate-600">
+        {isEn ? "From Date" : "Từ ngày"}
+        <input aria-label={isEn ? "From Date" : "Từ ngày"} type="date" required className={coachInput} value={schedule.from} onChange={e => schedule.setFrom(e.target.value)} />
+      </label>
+      <label className="text-xs font-semibold text-slate-600">
+        {isEn ? "To Date" : "Đến ngày"}
+        <input aria-label={isEn ? "To Date" : "Đến ngày"} type="date" required className={coachInput} value={schedule.to} onChange={e => schedule.setTo(e.target.value)} />
+      </label>
+      <button disabled={schedule.loading} className="px-4 py-2 rounded-lg bg-[#1A3B8B] hover:bg-[#142F70] text-white font-semibold text-xs shadow-xs transition-all disabled:opacity-50 cursor-pointer">
+        {schedule.loading ? (isEn ? "Loading..." : "Đang tải...") : (isEn ? "View Schedule" : "Xem lịch")}
+      </button>
+      <span className="text-xs text-slate-400 pb-2">
+        {isEn ? "Maximum 92 days per query." : "Tối đa 92 ngày mỗi lần xem."}
+      </span>
+    </form>
+  );
 }

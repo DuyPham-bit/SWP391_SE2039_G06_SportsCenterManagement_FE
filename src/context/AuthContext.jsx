@@ -1,39 +1,32 @@
 import { authApi } from '../services/api.js';
 import { getApiToken } from '../services/http.js';
+import { assertAuthUser, getAuthVersion } from '../services/authState.js';
 
 const { createContext, useContext, useState, useEffect } = React;
 
 const AuthContext = createContext(null);
 
-const SESSION_KEY = 'SCMS_AUTH_SESSION';
-
 export function AuthProvider({ children }) {
-  const [currentUser, setCurrentUser] = useState(() => {
-    try {
-      if (!getApiToken()) {
-        localStorage.removeItem(SESSION_KEY);
-        return null;
-      }
-      const saved = localStorage.getItem(SESSION_KEY);
-      if (saved) return JSON.parse(saved);
-      // Default to null so user starts at Landing page / Login
-      return null;
-    } catch (e) {
-      return null;
-    }
-  });
+  const [currentUser, setCurrentUser] = useState(null);
 
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(() => Boolean(getApiToken()));
   const [initializationError, setInitializationError] = useState('');
 
+  const applyUser = user => {
+    assertAuthUser(user);
+    setCurrentUser(user);
+    return user;
+  };
+
   useEffect(() => {
     let active = true;
     if (!getApiToken()) { setInitializing(false); return; }
+    const version = getAuthVersion();
     authApi.getCurrentUser().then(user => {
-      if (active) setCurrentUser(user);
+      if (active) applyUser(user);
     }).catch(error => {
-      if (!active) return;
+      if (!active || version !== getAuthVersion()) return;
       setCurrentUser(null);
       if (error.status !== 401) setInitializationError(error.message);
     }).finally(() => { if (active) setInitializing(false); });
@@ -41,32 +34,22 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem(SESSION_KEY, JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem(SESSION_KEY);
-    }
-  }, [currentUser]);
-
-  useEffect(() => {
-    const handleExpiredSession = () => setCurrentUser(null);
-    window.addEventListener('scms:session-expired', handleExpiredSession);
-    return () => window.removeEventListener('scms:session-expired', handleExpiredSession);
+    const handleExpiredToken = () => setCurrentUser(null);
+    window.addEventListener('scms:auth-expired', handleExpiredToken);
+    return () => window.removeEventListener('scms:auth-expired', handleExpiredToken);
   }, []);
 
   const refreshUser = async () => {
     if (!currentUser) return;
     const fresh = await authApi.getCurrentUser();
-    if (fresh) setCurrentUser(fresh);
-    return fresh;
+    return applyUser(fresh);
   };
 
   const login = async (email, password) => {
     setLoading(true);
     try {
       const res = await authApi.login(email, password);
-      setCurrentUser(res.user);
-      return res.user;
+      return applyUser(res.user);
     } finally {
       setLoading(false);
     }
@@ -76,8 +59,7 @@ export function AuthProvider({ children }) {
     setLoading(true);
     try {
       const newUser = await authApi.register(userData);
-      setCurrentUser(newUser);
-      return newUser;
+      return applyUser(newUser);
     } finally {
       setLoading(false);
     }
@@ -87,8 +69,7 @@ export function AuthProvider({ children }) {
     setLoading(true);
     try {
       const res = await authApi.loginWithGoogle(googleUser);
-      setCurrentUser(res.user);
-      return res.user;
+      return applyUser(res.user);
     } finally {
       setLoading(false);
     }
@@ -102,15 +83,13 @@ export function AuthProvider({ children }) {
   const updateProfile = async (profileData) => {
     if (!currentUser) return;
     const updated = await authApi.updateProfile(currentUser.id, profileData);
-    setCurrentUser(updated);
-    return updated;
+    return applyUser(updated);
   };
 
   const changePassword = async (currentPassword, newPassword) => {
     if (!currentUser) return;
     const updated = await authApi.changePassword(currentUser.id, currentPassword, newPassword);
-    setCurrentUser(updated);
-    return updated;
+    return applyUser(updated);
   };
 
   const value = {

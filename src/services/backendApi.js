@@ -1,17 +1,8 @@
 import { apiRequest, clearApiToken, createIdempotencyKey, getApiToken, setApiToken } from './http.js';
-
-const SESSION_KEY = 'SCMS_AUTH_SESSION';
-
-function readSession() {
-  try {
-    return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
-  } catch {
-    return null;
-  }
-}
+import { assertAuthVersion, beginAuthOperation, getAuthUser, getAuthVersion, setAuthUser } from './authState.js';
 
 function centerId() {
-  const id = readSession()?.centerId || import.meta.env.VITE_SPORTS_CENTER_ID;
+  const id = getAuthUser()?.centerId || import.meta.env.VITE_SPORTS_CENTER_ID;
   if (!id || !Number.isSafeInteger(Number(id)) || Number(id) <= 0) {
     throw new Error('Chưa xác định trung tâm. Hãy đăng nhập tài khoản được gán centerId hoặc cấu hình VITE_SPORTS_CENTER_ID.');
   }
@@ -83,24 +74,32 @@ function mapMember(member) {
   };
 }
 
-async function loadCurrentUser(token = getApiToken()) {
+async function loadCurrentUser(token = getApiToken(), version = getAuthVersion()) {
   if (!token) return null;
   const profile = await apiRequest('profile/me', { token });
+  assertAuthVersion(version);
   let memberId = null;
   let activeSubscription = null;
+  let scheduledSubscriptions = [];
 
   if (String(profile.role).toUpperCase() === 'MEMBER') {
     const member = await apiRequest('members/me', { token });
+    assertAuthVersion(version);
     memberId = member.memberId;
     const subscriptions = await apiRequest(`members/${memberId}/subscriptions`, { token });
+    assertAuthVersion(version);
     const today = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
     const activeSubs = asArray(subscriptions).filter(item => String(item.status).toUpperCase() === 'ACTIVE' && item.startDate && item.endDate && item.startDate <= today && item.endDate >= today);
     activeSubs.sort((a, b) => (b.endDate || '').localeCompare(a.endDate || ''));
     activeSubscription = activeSubs[0] || null;
+    scheduledSubscriptions = asArray(subscriptions)
+      .filter(item => String(item.status).toUpperCase() === 'ACTIVE' && item.startDate > today && item.endDate >= item.startDate)
+      .sort((a, b) => a.startDate.localeCompare(b.startDate) || Number(a.subscriptionId) - Number(b.subscriptionId));
   }
 
   const capabilities = await apiRequest('access/me/capabilities', { token });
-  return {
+  assertAuthVersion(version);
+  const user = {
     capabilities,
     id: profile.userId,
     memberId,
@@ -116,12 +115,29 @@ async function loadCurrentUser(token = getApiToken()) {
     packageName: activeSubscription?.packageName || 'Chưa đăng ký gói tập',
     packageExpiry: activeSubscription?.endDate || null,
     packageStatus: activeSubscription ? 'ACTIVE' : 'INACTIVE',
+    scheduledSubscriptions,
     avatar: null
   };
+  setAuthUser(user);
+  return user;
+}
+
+async function loginAndLoad(path, body) {
+  let version = beginAuthOperation();
+  const result = await apiRequest(path, { method: 'POST', token: null, body });
+  assertAuthVersion(version);
+  setApiToken(result.accessToken);
+  version = getAuthVersion();
+  try {
+    return { token: result.accessToken, user: await loadCurrentUser(result.accessToken, version) };
+  } catch (error) {
+    if (version === getAuthVersion()) clearApiToken();
+    throw error;
+  }
 }
 
 function mapPackage(item) {
-  return { ...item, status: String(item.status || '').toUpperCase(), features: item.features || [] };
+  return { ...item, status: String(item.status || '').toUpperCase(), allowedSports: item.allowedSports ?? 1, features: item.features || [] };
 }
 
 function mapSession(item) {
@@ -139,7 +155,6 @@ function mapSession(item) {
     sessionDate: date,
     startTime: item.startTime,
     endTime: item.endTime,
-    imageUrl: item.imageUrl || null,
     dayOfWeek,
     timeSlot: `${String(item.startTime || '').slice(0, 5)} - ${String(item.endTime || '').slice(0, 5)}`,
     coachId: item.coachId,
@@ -178,14 +193,7 @@ function mapBooking(item) {
 
 export const authApi = {
   async login(email, password) {
-    const result = await apiRequest('auth/login', { method: 'POST', body: { email: email.trim(), password } });
-    setApiToken(result.accessToken);
-    try {
-      return { token: result.accessToken, user: await loadCurrentUser(result.accessToken) };
-    } catch (error) {
-      clearApiToken();
-      throw error;
-    }
+    return loginAndLoad('auth/login', { email: email.trim(), password });
   },
 
   async register({ fullName, email, phone, password }) {
@@ -196,8 +204,9 @@ export const authApi = {
     }
     const localPart = cleanEmail.split('@')[0];
     const username = localPart.length >= 3 ? localPart : `user-${localPart}`;
+    const version = beginAuthOperation();
     await apiRequest('auth/register', {
-      method: 'POST',
+      method: 'POST', token: null,
       body: {
         username,
         email: cleanEmail,
@@ -207,18 +216,14 @@ export const authApi = {
         centerId: registeredCenterId
       }
     });
+    assertAuthVersion(version);
     return (await this.login(cleanEmail, password)).user;
   },
 
   async loginWithGoogle({ credential }) {
-    const result = await apiRequest('auth/google', {
-      method: 'POST', token: null,
-      body: { idToken: credential, centerId: Number(import.meta.env.VITE_SPORTS_CENTER_ID) || null }
+    return loginAndLoad('auth/google', {
+      idToken: credential, centerId: Number(import.meta.env.VITE_SPORTS_CENTER_ID) || null
     });
-    setApiToken(result.accessToken);
-    try {
-      return { token: result.accessToken, user: await loadCurrentUser(result.accessToken) };
-    } catch (error) { clearApiToken(); throw error; }
   },
 
   async linkGoogle(credential, currentPassword) {
@@ -235,20 +240,25 @@ export const authApi = {
   },
 
   async changePassword(_userId, currentPassword, newPassword) {
+    const version = beginAuthOperation();
     const result = await apiRequest('auth/change-password', {
       method: 'POST',
       body: { currentPassword, newPassword }
     });
+    assertAuthVersion(version);
     setApiToken(result.accessToken);
     return loadCurrentUser(result.accessToken);
   },
 
   async updateProfile(_userId, profileData) {
+    const version = getAuthVersion();
+    const token = getApiToken();
     await apiRequest('profile/me', {
-      method: 'PATCH',
+      method: 'PATCH', token,
       body: { fullName: profileData.fullName, phone: profileData.phone || null }
     });
-    return loadCurrentUser();
+    assertAuthVersion(version);
+    return loadCurrentUser(token, version);
   },
 
   getCurrentUser: loadCurrentUser,
@@ -258,7 +268,7 @@ export const authApi = {
 export const packageApi = {
   async getAll() {
     const id = centerId();
-    const role = String(readSession()?.role || '').toUpperCase();
+    const role = String(getAuthUser()?.role || '').toUpperCase();
     const suffix = role === 'MANAGER' || role === 'ADMIN' ? '/all' : '';
     const packages = await apiRequest(`centers/${id}/membership-packages${suffix}`);
     return asArray(packages).map(mapPackage);
@@ -274,7 +284,7 @@ export const packageApi = {
         price: Number(pkg.price),
         maxClasses: pkg.maxClasses ? Number(pkg.maxClasses) : null,
         accessType: pkg.accessType || null,
-        allowedSports: Number(pkg.allowedSports),
+        allowedSports: Number(pkg.allowedSports || 1),
         badge: pkg.badge || null,
         features: pkg.features || []
       }
@@ -292,7 +302,7 @@ export const packageApi = {
         price: Number(pkg.price),
         maxClasses: pkg.maxClasses ? Number(pkg.maxClasses) : null,
         accessType: pkg.accessType || null,
-        allowedSports: Number(pkg.allowedSports),
+        allowedSports: Number(pkg.allowedSports || 1),
         badge: pkg.badge || null,
         features: pkg.features || []
       }
@@ -307,10 +317,6 @@ export const packageApi = {
     return mapPackage(await apiRequest(`centers/${centerId()}/membership-packages/${id}/status`, {
       method: 'PATCH', body: { status }
     }));
-  },
-
-  async delete(id) {
-    await apiRequest(`centers/${centerId()}/membership-packages/${id}`, { method: 'DELETE' });
   }
 };
 
@@ -329,10 +335,11 @@ function mapStaff(item) {
     status: String(item.status || '').toUpperCase(),
     hireDate: item.hireDate,
     specialty: item.specialization || '',
+    sportIds: Array.isArray(item.sportIds) ? item.sportIds.map(Number) : [],
     certification: item.certification || '',
     experienceYears: item.experienceYears,
     bio: item.bio,
-    avatar: item.imageUrl || null
+    avatar: null
   };
 }
 
@@ -353,7 +360,7 @@ export const staffApi = {
   },
 
   previewRoleId() {
-    return 'Do hệ thống cấp sau khi lưu';
+    return 'Backend cấp mã nhân viên';
   },
 
   async create(staffData) {
@@ -365,8 +372,8 @@ export const staffApi = {
           hireDate: staffData.hireDate || new Date().toISOString().slice(0, 10),
           specialization: staffData.specialty?.trim() || null,
           certification: staffData.certification?.trim() || null,
-          experienceYears: staffData.experienceYears ?? null, bio: staffData.bio?.trim() || null,
-          imageUrl: staffData.imageUrl || null
+          experienceYears: staffData.experienceYears ?? null, bio: staffData.bio?.trim() || null
+          , sportIds: staffData.sportIds || []
         }
       }));
     }
@@ -391,7 +398,7 @@ export const staffApi = {
         certification: staffData.certification?.trim() || null,
         experienceYears: staffData.experienceYears ? Number(staffData.experienceYears) : (roleCapitalized === 'Coach' ? 1 : null),
         bio: staffData.bio?.trim() || null,
-        imageUrl: staffData.imageUrl || null
+        sportIds: staffData.sportIds || []
       }
     });
     return mapStaff(result);
@@ -414,7 +421,7 @@ export const staffApi = {
         certification: staffData.certification ?? current.certification ?? null,
         experienceYears: staffData.experienceYears ?? current.experienceYears ?? null,
         bio: staffData.bio ?? current.bio ?? null,
-        imageUrl: staffData.imageUrl ?? current.avatar ?? null
+        sportIds: staffData.sportIds ?? current.sportIds ?? []
       }
     });
     return mapStaff(result);
@@ -430,18 +437,8 @@ export const staffApi = {
 export const roomApi = {
  async getAll() { return asArray(await apiRequest('centers/'+centerId()+'/rooms')); },
  async create(body) { return apiRequest('centers/'+centerId()+'/rooms', { method: 'POST', body }); },
- async update(id, body) { return apiRequest('centers/'+centerId()+'/rooms/'+id, { method: 'PUT', body }); },
- async delete(id) { return apiRequest('centers/'+centerId()+'/rooms/'+id, { method: 'DELETE' }); }
+ async update(id, body) { return apiRequest('centers/'+centerId()+'/rooms/'+id, { method: 'PUT', body }); }
 };
-
-export const publicResourcesApi = {
- async getForHome(signal) {
-   const id = Number(readSession()?.centerId || import.meta.env.VITE_SPORTS_CENTER_ID || 1);
-   if (!Number.isSafeInteger(id) || id <= 0) return { sports: [], rooms: [], classes: [], coaches: [], packages: [] };
-   return apiRequest(`public/centers/${id}/resources`, { token: null, signal });
- }
-};
-
 export const classApi = {
  async getTeachingSchedule(from, to) {
    const query = new URLSearchParams({ from, to, includeHistory: 'true' });
@@ -452,16 +449,6 @@ export const classApi = {
  async getManagementSports() { return asArray(await apiRequest('centers/'+centerId()+'/sports/all')); },
  async createSport(body) { return apiRequest('centers/'+centerId()+'/sports', { method: 'POST', body }); },
  async updateSport(id, body) { return apiRequest('centers/'+centerId()+'/sports/'+id, { method: 'PUT', body }); },
- async deleteSport(id) { return apiRequest('centers/'+centerId()+'/sports/'+id, { method: 'DELETE' }); },
- async uploadResourceImage(file) {
-   const body = new FormData();
-   body.append('file', file);
-   return apiRequest(`centers/${centerId()}/resources/images`, { method: 'POST', body });
- },
- async deleteUnusedResourceImage(imageUrl) {
-   const query = new URLSearchParams({ imageUrl });
-   return apiRequest(`centers/${centerId()}/resources/images?${query}`, { method: 'DELETE' });
- },
  async getCoaches() { return asArray(await apiRequest('centers/'+centerId()+'/coaches')); },
  async getSchedules(id) { return asArray(await apiRequest('classes/'+id+'/schedules')); },
  async createSchedule(id, body) { return apiRequest('classes/'+id+'/schedules', { method: 'POST', body }); },
@@ -469,12 +456,13 @@ export const classApi = {
  async cancelSchedule(id, sid) { return apiRequest('classes/'+id+'/schedules/'+sid, { method: 'DELETE' }); },
  async publish(id) { return apiRequest('classes/'+id+'/publish', { method: 'POST' }); },
  async cancel(id) { return apiRequest('classes/'+id, { method: 'DELETE' }); },
+ async restore(id) { return apiRequest('classes/'+id+'/restore', { method: 'POST' }); },
   async getAll() {
     const today = new Date().toISOString().slice(0, 10);
     const end = new Date();
     end.setDate(end.getDate() + 90);
     const query = new URLSearchParams({ from: today, to: end.toISOString().slice(0, 10), page: '1', pageSize: '100' });
-    const isCoach = String(readSession()?.role || '').toUpperCase() === 'COACH';
+    const isCoach = String(getAuthUser()?.role || '').toUpperCase() === 'COACH';
     const path = isCoach ? `coaches/me/teaching-schedule?from=${today}&to=${end.toISOString().slice(0, 10)}` : `class-sessions?${query}`;
     const result = isCoach ? await apiRequest(path) : await loadSessionsBetween(today, end.toISOString().slice(0, 10));
     return asArray(result).map(mapSession);
@@ -494,9 +482,8 @@ export const classApi = {
         description: classData.description || null,
         level: classData.level || null,
         capacity: Number(classData.capacity),
-        durationMinutes: Number(classData.durationMinutes),
-        allowWaitlist: classData.allowWaitlist !== false,
-        imageUrl: classData.imageUrl || null
+        durationMinutes: Number(classData.durationMinutes || 60),
+        allowWaitlist: classData.allowWaitlist !== false
       }
     });
     return result;
@@ -517,16 +504,15 @@ export const classApi = {
         description: classData.description || null,
         level: classData.level || null,
         capacity: Number(classData.capacity),
-        durationMinutes: Number(classData.durationMinutes),
-        allowWaitlist: classData.allowWaitlist !== false,
-        imageUrl: classData.imageUrl || null
+        durationMinutes: Number(classData.durationMinutes || 60),
+        allowWaitlist: classData.allowWaitlist !== false
       }
     });
   },
 
   async assignCoach(classId, coachId) {
     return apiRequest(`classes/${Number(classId)}/coaches`, {
-      method: 'POST', body: { coachId: Number(coachId), isPrimary: true }
+      method: 'POST', body: { coachId: Number(coachId), isPrimary: true, replacePrimary: true }
     });
   }
 };
@@ -645,6 +631,23 @@ export const receptionApi = {
     return asArray(await apiRequest(`centers/${centerId()}/checkins/today`));
   },
 
+  async requestCheckInReview(identifier, reason, requestedApprover) {
+    const term = String(identifier || '').trim();
+    if (!term || !reason?.trim()) throw new Error('Nhập mã hội viên và lý do cần xử lý ngoại lệ.');
+    const members = await this.lookupMember(term);
+    const normalized = term.toLowerCase();
+    const exact = members.filter(member => [member.id, member.memberCode, member.email, member.phone, member.username]
+      .some(value => String(value || '').toLowerCase() === normalized));
+    const candidates = exact.length ? exact : members;
+    if (candidates.length !== 1) throw new Error('Nhập chính xác mã, email hoặc số điện thoại của một hội viên để lưu yêu cầu.');
+    return this.createSupportRequest({
+      memberId: candidates[0].id,
+      subject: `Yêu cầu xử lý ngoại lệ check-in · ${candidates[0].memberCode}`,
+      description: `Lý do: ${reason.trim()}\nNgười được đề nghị xử lý: ${requestedApprover?.trim() || 'Quản lý trung tâm'}\nĐây là yêu cầu chờ xử lý; chưa phê duyệt check-in hoặc mở cổng.`,
+      priority: 'High'
+    });
+  },
+
   async getCheckInSummary() {
     return apiRequest(`centers/${centerId()}/checkins/summary`);
   },
@@ -689,22 +692,7 @@ export const receptionApi = {
 export const memberApi = {
   async getCenterMembers(query = '', page = 1) {
     const params = new URLSearchParams({ query: query.trim(), page: String(page), pageSize: '20' });
-    const result = await apiRequest(`centers/${centerId()}/members?${params}`);
-    const items = asArray(result).map(item => {
-      const rawStatus = item.accountStatus ?? item.AccountStatus ?? item.status ?? item.Status ?? 'Active';
-      return {
-        ...item,
-        memberId: item.memberId ?? item.MemberId,
-        accountStatus: String(rawStatus).toLowerCase() === 'active' ? 'Active' : 'Disabled'
-      };
-    });
-    return {
-      ...result,
-      items,
-      page: result?.page ?? result?.Page ?? page,
-      pageSize: result?.pageSize ?? result?.PageSize ?? 20,
-      totalCount: result?.totalCount ?? result?.TotalCount ?? items.length
-    };
+    return apiRequest(`centers/${centerId()}/members?${params}`);
   },
 
   async updateAtCenter(id, body) {
@@ -715,15 +703,10 @@ export const memberApi = {
     return apiRequest(`centers/${centerId()}/members/${id}/status`, { method: 'PATCH', body: { status } });
   },
 
-  async deleteAtCenter(id) {
-    return apiRequest(`centers/${centerId()}/members/${id}`, { method: 'DELETE' });
-  },
-
   async subscribeOnline({ packageId, paymentMethod = 'VNPAY', invoiceNumber, cancelPendingIfAny }) {
     const provider = {
       VNPAY: 'create-vnpay-url',
-      MOMO: 'create-momo-url',
-      VIETQR: 'create-payos-url'
+      MOMO: 'create-momo-url'
     }[paymentMethod];
     if (!provider) throw new Error('Cổng thanh toán không được hỗ trợ.');
     return apiRequest(`payments/${provider}`, {
@@ -763,16 +746,18 @@ export const memberApi = {
 };
 
 export const reportApi = {
-  async getRevenueAnalytics({ from, to, groupBy = 'day' }, signal) {
-    const query = new URLSearchParams({ from, to, groupBy, centerId: String(centerId()) });
-    return apiRequest(`reports/analytics?${query}`, { signal });
-  },
-
   async getOverview(period = 'MONTH') {
     const today = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
     const year = Number(today.slice(0, 4));
     const month = Number(today.slice(5, 7));
     let from = `${today.slice(0, 7)}-01`;
+    if (period === 'DAY') from = today;
+    if (period === 'WEEK') {
+      const current = new Date(`${today}T00:00:00Z`);
+      const mondayOffset = (current.getUTCDay() + 6) % 7;
+      current.setUTCDate(current.getUTCDate() - mondayOffset);
+      from = current.toISOString().slice(0, 10);
+    }
     if (period === 'YEAR') from = `${year}-01-01`;
     if (period === 'QUARTER') {
       const firstQuarterMonth = Math.floor((month - 1) / 3) * 3 + 1;
@@ -785,31 +770,162 @@ export const reportApi = {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(from || '') || !/^\d{4}-\d{2}-\d{2}$/.test(to || '')
         || !Number.isFinite(startDate.getTime()) || !Number.isFinite(endDate.getTime())
         || startDate.toISOString().slice(0, 10) !== from || endDate.toISOString().slice(0, 10) !== to
-        || from > to || (endDate - startDate) / 86400000 > 366 || !['day', 'month'].includes(groupBy)) {
-      throw new Error('Chọn khoảng ngày hợp lệ, tối đa 367 ngày, nhóm theo ngày hoặc tháng.');
+        || from > to || (endDate - startDate) / 86400000 > 365 || !['day', 'month'].includes(groupBy)) {
+      throw new Error('Chọn khoảng ngày hợp lệ, tối đa 366 ngày, nhóm theo ngày hoặc tháng.');
     }
     const query = new URLSearchParams({ from, to, groupBy, centerId: String(centerId()) });
     const checkinQuery = new URLSearchParams({ from: today, to: today });
-    const [revenue, membership, classes, sessionItems, checkins] = await Promise.all([
+    const [revenue, sportRevenue, membership, classes, sessionItems, checkins, rawRooms, rawClasses] = await Promise.all([
       apiRequest(`reports/revenue?${query}`),
+      apiRequest(`reports/revenue-by-sport?${new URLSearchParams({ from, to, centerId: String(centerId()) })}`),
       apiRequest(`reports/membership?${query}`),
       apiRequest(`reports/classes?${query}`),
       loadSessionsBetween(from, to),
-      apiRequest(`reports/checkins?${checkinQuery}`)
+      apiRequest(`reports/checkins?${checkinQuery}`),
+      apiRequest(`centers/${centerId()}/rooms`).catch(() => []),
+      apiRequest(`centers/${centerId()}/classes/all`).catch(() => [])
     ]);
     const capacity = sessionItems.reduce((sum, item) => sum + (item.capacity || 0), 0);
     const booked = sessionItems.reduce((sum, item) => sum + (item.bookedCount || 0), 0);
     const activeBookingCount = Object.entries(classes.currentStatusCounts || {})
       .filter(([status]) => /book|confirm|wait/i.test(status))
       .reduce((sum, [, count]) => sum + Number(count || 0), 0);
-    const utilization = new Map();
-    for (const item of sessionItems) {
-      const sport = item.sportName || 'Khác';
-      const totals = utilization.get(sport) || { name: sport, capacity: 0, booked: 0 };
-      totals.capacity += item.capacity || 0;
-      totals.booked += item.bookedCount || 0;
-      utilization.set(sport, totals);
+
+    const roomsList = asArray(rawRooms);
+    const classesList = asArray(rawClasses);
+    const roomMap = new Map(roomsList.map(r => [r.id, r]));
+    const classDefMap = new Map(classesList.map(c => [c.id, c]));
+
+    // 1. Seed classes stats
+    const classStatsMap = new Map();
+    for (const c of classesList) {
+      classStatsMap.set(c.id, {
+        id: c.id,
+        name: c.name,
+        sportName: c.sportName,
+        coachName: c.coachName || 'Chưa gán HLV',
+        roomName: c.roomName || roomMap.get(c.roomId)?.name || 'Chưa gán sân',
+        sessionsCount: 0,
+        booked: 0,
+        capacity: 0,
+        occupancyRate: 0
+      });
     }
+
+    // 2. Seed room stats
+    const roomStatsMap = new Map();
+    for (const r of roomsList) {
+      roomStatsMap.set(r.id, {
+        id: r.id,
+        name: r.name,
+        type: r.type || 'Sân/Phòng',
+        location: r.location || '',
+        unitCapacity: r.capacity || 0,
+        sessionsCount: 0,
+        booked: 0,
+        capacity: 0,
+        occupancyRate: 0,
+        classes: new Set()
+      });
+    }
+
+    // 3. Seed sport stats
+    const sportStatsMap = new Map();
+
+    for (const s of sessionItems) {
+      // Class
+      let cStat = classStatsMap.get(s.classId);
+      if (!cStat) {
+        cStat = {
+          id: s.classId,
+          name: s.className,
+          sportName: s.sportName,
+          coachName: s.coachName || 'Chưa gán HLV',
+          roomName: (roomMap.get(s.roomId)?.name) || 'Chưa gán sân',
+          sessionsCount: 0,
+          booked: 0,
+          capacity: 0,
+          occupancyRate: 0
+        };
+        classStatsMap.set(s.classId, cStat);
+      }
+      cStat.sessionsCount += 1;
+      cStat.booked += (s.bookedCount || 0);
+      cStat.capacity += (s.capacity || 0);
+
+      // Room
+      const targetRoomId = s.roomId || classDefMap.get(s.classId)?.roomId;
+      if (targetRoomId) {
+        let rStat = roomStatsMap.get(targetRoomId);
+        if (!rStat) {
+          rStat = {
+            id: targetRoomId,
+            name: `Phòng ${targetRoomId}`,
+            type: 'Sân/Phòng',
+            location: '',
+            unitCapacity: s.capacity || 0,
+            sessionsCount: 0,
+            booked: 0,
+            capacity: 0,
+            occupancyRate: 0,
+            classes: new Set()
+          };
+          roomStatsMap.set(targetRoomId, rStat);
+        }
+        rStat.sessionsCount += 1;
+        rStat.booked += (s.bookedCount || 0);
+        rStat.capacity += (s.capacity || 0);
+        if (s.className) rStat.classes.add(s.className);
+      }
+
+      // Sport
+      const sportName = s.sportName || 'Khác';
+      let spStat = sportStatsMap.get(sportName);
+      if (!spStat) {
+        spStat = {
+          name: sportName,
+          booked: 0,
+          capacity: 0,
+          sessionsCount: 0,
+          classes: new Set()
+        };
+        sportStatsMap.set(sportName, spStat);
+      }
+      spStat.booked += (s.bookedCount || 0);
+      spStat.capacity += (s.capacity || 0);
+      spStat.sessionsCount += 1;
+      if (s.className) spStat.classes.add(s.className);
+    }
+
+    const totalBookedAll = [...sportStatsMap.values()].reduce((sum, sp) => sum + sp.booked, 0);
+
+    const topClasses = [...classStatsMap.values()]
+      .map(c => ({
+        ...c,
+        occupancyRate: c.capacity > 0 ? Math.round((c.booked / c.capacity) * 100) : 0
+      }))
+      .sort((a, b) => b.booked - a.booked || b.occupancyRate - a.occupancyRate || b.sessionsCount - a.sessionsCount);
+
+    const topRooms = [...roomStatsMap.values()]
+      .map(r => ({
+        ...r,
+        classesCount: r.classes.size,
+        classesList: [...r.classes],
+        occupancyRate: r.capacity > 0 ? Math.round((r.booked / r.capacity) * 100) : 0
+      }))
+      .sort((a, b) => b.booked - a.booked || b.sessionsCount - a.sessionsCount || b.occupancyRate - a.occupancyRate);
+
+    const topSports = [...sportStatsMap.values()]
+      .map(sp => ({
+        name: sp.name,
+        booked: sp.booked,
+        capacity: sp.capacity,
+        sessionsCount: sp.sessionsCount,
+        classesCount: sp.classes.size,
+        percentage: sp.capacity > 0 ? Math.round((sp.booked / sp.capacity) * 100) : 0,
+        share: totalBookedAll > 0 ? Math.round((sp.booked / totalBookedAll) * 100) : 0
+      }))
+      .sort((a, b) => b.booked - a.booked || b.percentage - a.percentage);
 
     return {
       from, to, groupBy,
@@ -823,15 +939,30 @@ export const reportApi = {
       totalBookings: activeBookingCount,
       todayCheckins: checkins.count,
       occupancyRate: capacity ? Math.round((booked / capacity) * 100) : 0,
+      netRevenue: revenue.net,
       monthlyRevenue: revenue.net,
+      grossRevenue: revenue.gross,
+      refundedRevenue: revenue.refunds,
       revenueGrowth: null,
       revenuePeriods: revenue.periods || [],
-      utilizationBySport: [...utilization.values()].map(item => ({
+      revenueBySport: sportRevenue.sports || [],
+      allocatedSportRevenue: sportRevenue.allocatedNet || 0,
+      unallocatedSportRevenue: sportRevenue.unallocatedNet || 0,
+      utilizationBySport: topSports.map(item => ({
         name: item.name,
         capacity: item.capacity,
         booked: item.booked,
-        percentage: item.capacity ? Math.round((item.booked / item.capacity) * 100) : 0
-      }))
+        percentage: item.percentage
+      })),
+      topSports,
+      topClasses,
+      topRooms,
+      highlights: {
+        mostPopularClass: topClasses[0] || null,
+        mostPopularSport: topSports[0] || null,
+        highestRevenueSport: (sportRevenue.sports || []).find(item => item.sportId != null) || null,
+        mostBookedRoom: topRooms[0] || null
+      }
     };
   }
 };
@@ -842,9 +973,9 @@ export const systemApi = {
   },
 
   async getAuditPage(page = 1) {
-    const session = readSession();
+    const user = getAuthUser();
     const params = new URLSearchParams({ page: String(page), pageSize: '50' });
-    const isAdmin = String(session?.role || '').toUpperCase() === 'ADMIN';
+    const isAdmin = String(user?.role || '').toUpperCase() === 'ADMIN';
     const path = isAdmin
       ? `admin/audit-logs?${params}`
       : `centers/${centerId()}/audit-logs?${params}`;
@@ -878,7 +1009,7 @@ export const systemApi = {
   },
 
   async getPermissions() {
-    const isManager = String(readSession()?.role || '').toUpperCase() === 'MANAGER';
+    const isManager = String(getAuthUser()?.role || '').toUpperCase() === 'MANAGER';
     if (isManager) return asArray(await apiRequest(`centers/${centerId()}/roles`));
     const [matrix, catalog] = await Promise.all([apiRequest('admin/roles'), apiRequest('admin/permissions')]);
     return asArray(matrix).map(row => ({ ...row, availablePermissions: asArray(catalog) }));
@@ -886,7 +1017,7 @@ export const systemApi = {
 
   // Cập nhật quyền theo roleId (PUT /api/admin/roles/{roleId}/permissions)
   async updatePermissions(roleId, permissionCodes, capabilityIds = []) {
-    const isManager = String(readSession()?.role || '').toUpperCase() === 'MANAGER';
+    const isManager = String(getAuthUser()?.role || '').toUpperCase() === 'MANAGER';
     return apiRequest(isManager ? `centers/${centerId()}/roles/${roleId}/permissions` : `admin/roles/${roleId}/permissions`, {
       method: 'PUT',
       body: isManager ? { permissionCodes, capabilityIds } : { permissionCodes }

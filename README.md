@@ -48,7 +48,7 @@ Frontend của Hệ thống Quản lý Trung tâm Thể thao SCMS chịu trách 
 
 4. **Dữ liệu qua API và SQL Server:**
    - `api.js`/`backendApi.js` gọi backend qua `http.js`, gửi Bearer JWT và hiển thị lỗi HTTP. Giáo án, tiến độ, thông báo và lịch sử AI lưu ở server.
-   - localStorage giữ token/phiên giao diện; backend kiểm tra tài khoản và quyền từ database. `dbStorage.js` là mã mô phỏng cũ, không được service hiện tại sử dụng.
+   - Xác thực bằng JWT Bearer. JWT lưu trong sessionStorage riêng từng tab để F5 vẫn đăng nhập; sau reload, hồ sơ/quyền/trung tâm được tải lại từ API. Backend xác minh chữ ký, thời hạn và tài khoản/quyền trong SQL Server. Đăng xuất hoặc HTTP 401 xóa JWT của tab hiện tại; tab khác giữ đăng nhập riêng. localStorage chỉ giữ tùy chọn Ghi nhớ email. Chi tiết: [JWT và đăng nhập nhiều tab](docs/jwt-auth-fix.md).
 
 ---
 
@@ -529,8 +529,11 @@ Gồm 8 màn hình, cùng luồng đăng ký tài khoản và chỉnh sửa hồ
 ### 10.2 UC-41 Mua & Gia Hạn Gói Tập Trực Tuyến (Member Packages)
 - Route: `#/member/packages` | Component: `MemberPackages.jsx` | Đăng nhập vai trò Member
 - Xem danh sách các gói cước đang mở bán.
-- Mở Checkout Modal, chọn VNPay, MoMo hoặc PayOS/VietQR và chuyển tới URL thanh toán do backend trả về.
+- Mở Checkout Modal, chọn VNPay hoặc MoMo; cổng thanh toán mở trong cửa sổ riêng để giữ đăng nhập trên trang gói tập. VietQR đã được gỡ khỏi thanh toán mới.
+- Hủy/hoàn tất thanh toán đưa về tab gói tập ban đầu và tải lại hóa đơn/hồ sơ qua API. Đóng cửa sổ thủ công cũng cập nhật hóa đơn; nếu popup bị chặn, thông báo trước khi gọi API tạo thanh toán.
 - Gói được kích hoạt sau khi backend xác minh thanh toán. Cổng cần cấu hình riêng; FE không tự tạo giao dịch hoặc kích hoạt gói.
+
+Kiểm tra hồi quy: `npm test` và `npm run test:payment:browser` (cần Chrome; có thể đặt `CHROME_PATH`). Browser test dùng API/cổng thanh toán giả lập cục bộ và lưu report ở `.validation/payment-checkout/`. Chi tiết: [sửa luồng quay về khi hủy thanh toán](docs/payment-cancel-return-fix.md).
 
 ### 10.3 UC-42 & UC-43 Tra Cứu Lịch & Đặt Chỗ Lớp Học (Class Schedule & Booking)
 - Route: `#/member/schedule` | Component: `ClassScheduleView.jsx` | Capability: `book_class`

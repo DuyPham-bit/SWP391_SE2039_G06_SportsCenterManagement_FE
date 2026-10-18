@@ -3,6 +3,7 @@ import { useToast } from '../../context/ToastContext.js';
 import { Modal } from '../../components/common/Modal.js';
 import { Badge } from '../../components/common/StatCard.js';
 import { LoadingSpinner } from '../../components/common/Table.js';
+import { MAX_PACKAGE_PRICE, sortMembershipPackages, validatePackagePrice } from './packageManagementForm.js';
 
 const { useState, useEffect } = React;
 
@@ -31,9 +32,8 @@ export function PackageManagement() {
 
   const loadPackages = async () => {
     try {
-      const [data, sportRows] = await Promise.all([packageApi.getAll(), classApi.getManagementSports()]);
-      setPackages(data);
-      setSports(sportRows.filter(sport => sport.status === 'Active'));
+      const data = await packageApi.getAll();
+      setPackages(sortMembershipPackages(data));
     } catch (e) {
       showError('Không thể tải danh sách gói tập');
     } finally {
@@ -76,7 +76,39 @@ export function PackageManagement() {
   const handleSavePackage = async (e) => {
     e.preventDefault();
     if (!name.trim()) {
-      showError('Vui lòng nhập tên gói tập!');
+      showError({
+        message: 'Vui lòng nhập tên gói tập!',
+        code: 'VAL-PKG-NAME',
+        proposedHandling: 'Đặt tên gợi nhớ rõ ràng (ví dụ: Gói Bơi Olympic Tháng, Gói Hội Viên Bạch Kim).'
+      });
+      return;
+    }
+
+    const priceValidation = validatePackagePrice(price);
+    if (!priceValidation.valid) {
+      showError({
+        message: priceValidation.message,
+        code: 'VAL-PKG-PRICE',
+        proposedHandling: `Nhập số tiền lớn hơn 0 và không vượt quá ${MAX_PACKAGE_PRICE.toLocaleString('vi-VN')} VNĐ; không bắt buộc theo bước 50.000 VNĐ.`
+      });
+      return;
+    }
+
+    if (Number(durationDays) <= 0) {
+      showError({
+        message: 'Thời hạn sử dụng gói phải từ 1 ngày trở lên.',
+        code: 'VAL-PKG-DURATION',
+        proposedHandling: 'Quy định thời hạn phổ biến: 30 ngày (1 tháng), 90 ngày (3 tháng), 365 ngày (1 năm).'
+      });
+      return;
+    }
+
+    if (Number(allowedSports) <= 0) {
+      showError({
+        message: 'Số bộ môn thể thao được phép tập phải từ 1 môn trở lên.',
+        code: 'VAL-PKG-SPORTS',
+        proposedHandling: 'Chọn số môn tối thiểu là 1 môn (hoặc 15 môn cho gói All-Access).'
+      });
       return;
     }
     if (!Number.isInteger(Number(allowedSports)) || Number(allowedSports) < 1) {
@@ -93,16 +125,31 @@ export function PackageManagement() {
         features: featuresText.split(/\r?\n/).map(feature => feature.trim()).filter(Boolean)
       };
       if (editingPkg) {
-        await packageApi.update(editingPkg.id, payload);
+        await packageApi.update(editingPkg.id, {
+          name: name.trim(),
+          durationDays: Number(durationDays),
+          price: priceValidation.value,
+          allowedSports: Number(allowedSports),
+          description: description.trim(),
+          badge: badge.trim()
+        });
         showSuccess('Cập nhật gói tập thành công!');
       } else {
-        await packageApi.create(payload);
+        await packageApi.create({
+          name: name.trim(),
+          durationDays: Number(durationDays),
+          price: priceValidation.value,
+          allowedSports: Number(allowedSports),
+          description: description.trim(),
+          badge: badge.trim(),
+          features: ['Toàn quyền sử dụng sân bãi trong gói', 'Tủ đồ thông minh', 'Nước uống điện giải']
+        });
         showSuccess('Tạo gói tập mới thành công!');
       }
       setModalOpen(false);
       loadPackages();
     } catch (err) {
-      showError(err.message || 'Lỗi lưu gói tập');
+      showError(err);
     } finally {
       setSaving(false);
     }
@@ -124,12 +171,17 @@ export function PackageManagement() {
   };
 
   const handleToggleStatus = async (pkg) => {
+    if (pkg.status === 'Active') {
+      const confirmed = window.confirm(`Cảnh báo: Bạn có chắc chắn muốn ngưng phát hành gói "${pkg.name}"?\nCác hội viên đã mua gói này trước đó vẫn được bảo lưu thời hạn đến ngày kết thúc.`);
+      if (!confirmed) return;
+    }
+
     try {
       await packageApi.toggleStatus(pkg.id);
       showSuccess(`Đã thay đổi trạng thái của gói ${pkg.name}`);
       loadPackages();
     } catch (err) {
-      showError(err.message || 'Lỗi cập nhật');
+      showError(err);
     }
   };
 
@@ -287,11 +339,18 @@ export function PackageManagement() {
               <input
                 type="number"
                 required
-                min="0"
+                min="0.01"
+                max={MAX_PACKAGE_PRICE}
+                step="0.01"
+                inputMode="decimal"
                 value={price}
                 onChange={e => setPrice(e.target.value)}
+                aria-describedby="package-price-hint"
                 className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white"
               />
+              <p id="package-price-hint" className="mt-1 text-[11px] leading-4 text-slate-500">
+                Có thể nhập mọi mức giá hợp lệ (tối đa 2 số lẻ), không bắt buộc theo bội số 50.000 VNĐ.
+              </p>
             </div>
           </div>
 

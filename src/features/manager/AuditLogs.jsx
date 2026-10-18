@@ -301,10 +301,7 @@ export function AuditLogs() {
       </div>
 
       {/* Audit Log Table */}
-      {error ? <div role="alert" className="p-4 rounded-lg bg-red-50 text-red-800 space-y-2">
-        <p>{error}</p>
-        <button type="button" className="px-3 py-2 rounded-lg bg-slate-900 text-white text-sm" onClick={() => setRevision(x => x + 1)}>Thử tải lại nhật ký</button>
-      </div> : <Table
+      {error ? <p role="alert" className="text-red-700">{error}</p> : <Table
         key={`${page}:${actionFilter}:${revision}`}
         columns={columns}
         data={filteredLogs}
