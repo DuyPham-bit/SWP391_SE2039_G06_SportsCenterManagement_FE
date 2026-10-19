@@ -92,65 +92,75 @@ export function Sidebar({ isOpen, onClose, currentPath }) {
     if (normalizedRole === 'COACH') {
       return [
         {
-          category: isEn ? 'TEACHING & SCHEDULE' : 'GIẢNG DẠY & HỌC VIÊN',
+          category: isEn ? 'SCHEDULE & ATTENDANCE' : 'LỊCH & ĐIỂM DANH',
           items: [
             {
               id: 'coach_dashboard',
-              label: isEn ? 'Coach Overview' : 'Tổng quan HLV',
+              label: isEn ? 'Coach Overview' : 'Tổng quan Dashboard',
               icon: 'dashboard',
               path: '#/coach/dashboard'
             },
             {
               id: 'coach_schedule_group',
-              label: isEn ? 'Schedule & Leave' : 'Lịch & Nghỉ phép',
+              label: isEn ? 'Schedule & Attendance' : 'Lịch & Điểm danh',
               icon: 'calendar_month',
               subItems: [
                 { label: isEn ? 'Teaching Schedule' : 'Lịch giảng dạy', path: '#/coach/schedule' },
-                { label: isEn ? 'Attendance Report' : 'Báo cáo điểm danh', path: '#/coach/attendance' },
+                { label: isEn ? 'Attendance Check-in' : 'Điểm danh học viên', path: '#/coach/attendance' },
                 { label: isEn ? 'Leave Requests' : 'Xin nghỉ phép', path: '#/coach/support' }
               ]
             },
             {
               id: 'coach_members',
-              label: isEn ? 'Students' : 'Học viên',
+              label: isEn ? 'Students & Goals' : 'Học viên & Mục tiêu',
               icon: 'group',
               path: '#/coach/members'
             }
           ]
         },
         {
-          category: isEn ? 'PROFESSIONAL' : 'CHUYÊN MÔN',
+          category: isEn ? 'TRAINING & PROGRESS' : 'GIÁO ÁN & TIẾN ĐỘ',
           items: [
             {
               id: 'coach_plans_group',
-              label: isEn ? 'Lesson Plans & Nutrition' : 'Giáo án & Dinh dưỡng',
+              label: isEn ? 'Workout Plans & Journal' : 'Giáo án & Tiến độ',
               icon: 'fitness_center',
               subItems: [
-                { label: isEn ? 'Create Workout Plans' : 'Tạo giáo án rèn luyện', path: '#/coach/training-plan' },
-                { label: isEn ? 'Track Progress' : 'Ghi nhận tiến độ', path: '#/coach/progress' },
-                { label: isEn ? 'AI Suggestions' : 'Gợi ý AI', path: '#/coach/ai-recommendation' }
+                { label: isEn ? 'Create Workout Plans' : 'Tạo kế hoạch tập luyện', path: '#/coach/training-plan' },
+                { label: isEn ? 'Session Journal & Progress' : 'Nhật ký & Đánh giá tiến độ', path: '#/coach/progress' }
               ]
             }
           ]
         },
         {
-          category: isEn ? 'OPERATIONS & FINANCE' : 'TƯƠNG TÁC & VẬN HÀNH',
+          category: isEn ? 'AI ASSISTANT' : 'TRỢ LÝ AI',
+          items: [
+            {
+              id: 'coach_ai_recommendation',
+              label: isEn ? 'AI Lesson Assistant' : 'Gợi ý giáo án AI',
+              icon: 'neurology',
+              path: '#/coach/ai-recommendation'
+            }
+          ]
+        },
+        {
+          category: isEn ? 'INTERACTION & OPS' : 'TƯƠNG TÁC & VẬN HÀNH',
           items: [
             {
               id: 'coach_notifications',
-              label: isEn ? 'Interaction & Chat' : 'Tương tác & Chat',
+              label: isEn ? 'Notices & Homework' : 'Tương tác & Bài tập về nhà',
               icon: 'forum',
               path: '#/coach/notifications'
             },
             {
-              id: 'coach_salary_kpi',
-              label: isEn ? 'KPI & Income' : 'KPI & Thu nhập',
+              id: 'coach_performance',
+              label: isEn ? 'Teaching Performance' : 'Thống kê hiệu suất',
               icon: 'monitoring',
-              path: '#/coach/salary-kpi'
+              path: '#/coach/performance'
             },
             {
               id: 'coach_resources',
-              label: isEn ? 'Resources & Equipment' : 'Tài nguyên & Thiết bị',
+              label: isEn ? 'Resources & Facilities' : 'Tài nguyên & Thiết bị',
               icon: 'inventory_2',
               path: '#/coach/resources'
             }
@@ -346,12 +356,12 @@ export function Sidebar({ isOpen, onClose, currentPath }) {
                         onClick={() => toggleGroup(item.id)}
                         className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
                           isAnyChildActive
-                            ? 'text-[#1A3B8B] dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/20'
-                            : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-[#1A3B8B] dark:hover:text-blue-400'
+                            ? 'text-[#2D6A4F] dark:text-emerald-300 bg-[#81B29A]/15 dark:bg-emerald-950/40 border border-[#81B29A]/20'
+                            : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-[#81B29A] dark:hover:text-emerald-400'
                         }`}
                       >
                         <div className="flex items-center gap-2.5 truncate">
-                          <span className={`material-symbols-outlined text-[19px] shrink-0 ${isAnyChildActive ? 'text-[#1A3B8B] dark:text-blue-400' : 'text-slate-400'}`}>
+                          <span className={`material-symbols-outlined text-[19px] shrink-0 ${isAnyChildActive ? 'text-[#81B29A] dark:text-emerald-400' : 'text-slate-400'}`}>
                             {item.icon}
                           </span>
                           <span className="truncate">{item.label}</span>
@@ -377,11 +387,11 @@ export function Sidebar({ isOpen, onClose, currentPath }) {
                                 onClick={onClose}
                                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                                   isChildActive
-                                    ? 'bg-[#EBF2FC] dark:bg-blue-900/40 text-[#1A3B8B] dark:text-blue-300 font-bold'
+                                    ? 'bg-[#81B29A]/15 dark:bg-emerald-900/40 text-[#2D6A4F] dark:text-emerald-300 font-bold border border-[#81B29A]/30'
                                     : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
                                 }`}
                               >
-                                <span className={`text-[10px] ${isChildActive ? 'text-[#1A3B8B] dark:text-blue-300' : 'text-slate-300 dark:text-slate-600'}`}>
+                                <span className={`text-[10px] ${isChildActive ? 'text-[#81B29A] dark:text-emerald-400 font-black' : 'text-slate-300 dark:text-slate-600'}`}>
                                   •
                                 </span>
                                 <span className="truncate">{sub.label}</span>
@@ -414,19 +424,19 @@ export function Sidebar({ isOpen, onClose, currentPath }) {
                     }}
                     className={`flex items-center justify-between px-3 py-2 rounded-[8px] text-xs transition-colors ${
                       isActive
-                        ? 'bg-[#f1f5f9] dark:bg-slate-800 text-[#1e3a8a] dark:text-blue-400 font-bold shadow-2xs'
-                        : 'text-slate-700 dark:text-slate-300 font-medium hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-[#1e3a8a] dark:hover:text-blue-400'
+                        ? 'bg-[#81B29A]/15 dark:bg-emerald-950/40 text-[#2D6A4F] dark:text-emerald-300 font-bold border border-[#81B29A]/30 shadow-2xs'
+                        : 'text-slate-700 dark:text-slate-300 font-medium hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-[#81B29A] dark:hover:text-emerald-400'
                     }`}
                   >
                     <div className="flex items-center gap-2.5 truncate">
-                      <span className={`material-symbols-outlined text-[19px] shrink-0 ${isActive ? 'text-[#1A3B8B] dark:text-blue-400' : 'text-slate-400'}`}>
+                      <span className={`material-symbols-outlined text-[19px] shrink-0 ${isActive ? 'text-[#81B29A] dark:text-emerald-400' : 'text-slate-400'}`}>
                         {item.icon}
                       </span>
                       <span className="truncate">{item.label}</span>
                     </div>
 
                     {item.isPopup && (
-                      <span className="px-1.5 py-0.2 rounded bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 text-[9px] font-bold uppercase border border-red-200 dark:border-red-800">
+                      <span className="px-1.5 py-0.2 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 text-[9px] font-bold uppercase border border-amber-200 dark:border-amber-800">
                         AI
                       </span>
                     )}
@@ -441,7 +451,7 @@ export function Sidebar({ isOpen, onClose, currentPath }) {
         <div className="p-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/70">
           <div className="p-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between shadow-2xs">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-[#1A3B8B] dark:text-blue-400 text-[18px]">verified</span>
+              <span className="material-symbols-outlined text-[#81B29A] dark:text-emerald-400 text-[18px]">verified</span>
               <div className="flex flex-col">
                 <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 leading-tight">Olympic Arena</span>
                 <span className="text-[9px] text-slate-400 dark:text-slate-500">
