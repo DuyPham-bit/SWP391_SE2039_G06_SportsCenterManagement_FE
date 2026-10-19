@@ -182,7 +182,7 @@ export function ProfileModal({ isOpen, onClose }) {
             />
           </div>
 
-          {currentUser?.packageName && (
+          {currentUser?.role === 'MEMBER' && currentUser?.packageName && (
             <div className="p-3 rounded-lg bg-blue-50/60 border border-blue-100 flex items-center justify-between text-xs">
               <div>
                 <span className="font-bold text-slate-800">

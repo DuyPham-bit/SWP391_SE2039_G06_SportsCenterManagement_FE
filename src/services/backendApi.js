@@ -111,10 +111,10 @@ async function loadCurrentUser(token = getApiToken(), version = getAuthVersion()
     memberCode: profile.memberCode,
     centerId: profile.centerId,
     createdAt: profile.createdAt,
-    packageId: activeSubscription?.packageId || null,
-    packageName: activeSubscription?.packageName || 'Chưa đăng ký gói tập',
-    packageExpiry: activeSubscription?.endDate || null,
-    packageStatus: activeSubscription ? 'ACTIVE' : 'INACTIVE',
+    packageId: String(profile.role).toUpperCase() === 'MEMBER' ? (activeSubscription?.packageId || null) : null,
+    packageName: String(profile.role).toUpperCase() === 'MEMBER' ? (activeSubscription?.packageName || 'Chưa đăng ký gói tập') : null,
+    packageExpiry: String(profile.role).toUpperCase() === 'MEMBER' ? (activeSubscription?.endDate || null) : null,
+    packageStatus: String(profile.role).toUpperCase() === 'MEMBER' ? (activeSubscription ? 'ACTIVE' : 'INACTIVE') : null,
     scheduledSubscriptions,
     avatar: null
   };
