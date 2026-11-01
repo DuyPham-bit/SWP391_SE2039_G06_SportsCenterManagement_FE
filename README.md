@@ -1,9 +1,9 @@
 # Sports Center Management System (SCMS)
 ## Frontend Flow & Architecture Document – React + JavaScript (Vite)
 
-> **Tài liệu đặc tả luồng giao diện Frontend SCMS**
-> **Cập nhật 11/10/2026:** Giao diện dùng API backend và JWT. Kết quả kiểm chứng và giới hạn tích hợp nằm trong [api-jwt-integration.md](../Backend/Backend/docs/requirements/api-jwt-integration.md).
-> **Nền tảng công nghệ:** React 18, JavaScript (ES6+), Vite, Tailwind CSS (Chivo & Inter typography, Dark Olympic theme, Material Symbols Outlined).
+> **Tài liệu đặc tả luồng giao diện Frontend SCMS**  
+> **Cập nhật 11/10/2026:** Giao diện dùng API backend và JWT. Kết quả kiểm chứng và giới hạn tích hợp nằm trong [api-jwt-integration.md](../Backend/docs/requirements/api-jwt-integration.md).
+> **Nền tảng công nghệ:** React 18, JavaScript (ES6+), Vite, Tailwind CSS (Chivo & Inter typography, Dark Olympic theme, Material Symbols Outlined).  
 > **Nguồn gốc Use Case:** Đối chiếu với tài liệu nghiệp vụ *Use Cases - Copy(2).docx*.
 
 ## 0. Cài Đặt và Chạy Frontend
@@ -24,7 +24,7 @@ npm ci
 npm run dev
 ```
 
-Chạy backend theo [README gốc](../README.md), sao chép `.env.example` thành `.env.local` và đặt `VITE_SPORTS_CENTER_ID` đúng database. Mở `http://localhost:3004/` theo cấu hình Vite. Google/AI cần cấu hình riêng theo [hướng dẫn miễn phí](../Backend/Backend/docs/requirements/free-google-gemini-setup.md).
+Chạy backend theo [README gốc](../README.md), sao chép `.env.example` thành `.env.local` và đặt `VITE_SPORTS_CENTER_ID` đúng database. Mở `http://localhost:3004/` theo cấu hình Vite. Google/AI cần cấu hình riêng theo [hướng dẫn miễn phí](../Backend/docs/requirements/free-google-gemini-setup.md).
 
 ---
 
@@ -48,7 +48,7 @@ Frontend của Hệ thống Quản lý Trung tâm Thể thao SCMS chịu trách 
 
 4. **Dữ liệu qua API và SQL Server:**
    - `api.js`/`backendApi.js` gọi backend qua `http.js`, gửi Bearer JWT và hiển thị lỗi HTTP. Giáo án, tiến độ, thông báo và lịch sử AI lưu ở server.
-   - Xác thực bằng JWT Bearer cho toàn bộ API được bảo vệ. JWT chỉ giữ trong bộ nhớ của từng tab; hồ sơ/quyền/trung tâm lấy từ API và giữ trong bộ nhớ, không dùng Session, sessionStorage, localStorage hay cookie để xác thực. Các tab đăng nhập tài khoản khác nhau độc lập; đăng xuất hoặc HTTP 401 ở một tab không ảnh hưởng tab khác. F5, mở tab mới hoặc Duplicate Tab cần đăng nhập lại. Backend kiểm tra chữ ký, thời hạn JWT và tài khoản/quyền trong database. localStorage chỉ giữ tùy chọn Ghi nhớ email; dữ liệu đăng nhập lưu theo cơ chế cũ được bỏ qua. `dbStorage.js` là mã mô phỏng cũ, không được service hiện tại sử dụng. Chi tiết: [JWT và đăng nhập nhiều tab](docs/jwt-auth-fix.md).
+   - Xác thực bằng JWT Bearer. JWT lưu trong sessionStorage riêng từng tab để F5 vẫn đăng nhập; sau reload, hồ sơ/quyền/trung tâm được tải lại từ API. Backend xác minh chữ ký, thời hạn và tài khoản/quyền trong SQL Server. Đăng xuất hoặc HTTP 401 xóa JWT của tab hiện tại; tab khác giữ đăng nhập riêng. localStorage chỉ giữ tùy chọn Ghi nhớ email. Chi tiết: [JWT và đăng nhập nhiều tab](docs/jwt-auth-fix.md).
 
 ---
 
@@ -162,9 +162,9 @@ src/
 │
 └── services/
     ├── api.js                          # Tầng Service API hợp nhất toàn bộ 24+ Use Case
-    ├── dbStorage.js                    # Cơ sở dữ liệu IndexedDB / LocalStorage Client-side
-    ├── permissions.js                  # Định nghĩa SYSTEM_CAPABILITIES, hasCapability, dynamic navigation
-    └── mockData.js                     # Bộ dữ liệu mẫu chuẩn Olympic (Users, Packages, Classes, Rooms...)
+    ├── backendApi.js                   # API nghiệp vụ theo trung tâm và ánh xạ DTO
+    ├── http.js                         # HTTP, Bearer JWT và lỗi từ backend
+    └── permissions.js                  # Định nghĩa SYSTEM_CAPABILITIES, hasCapability, dynamic navigation
 ```
 
 ---
@@ -446,7 +446,7 @@ Gồm 4 màn hình phục vụ trực tiếp tại bàn lễ tân:
 - **Quy trình thanh toán 4 bước trực quan:**
   - **Bước 1 (Chọn hội viên):** Chọn từ danh sách hoặc tìm kiếm nhanh.
   - **Bước 2 (Chọn gói tập):** Hiển thị danh mục gói tập kèm giá tiền và thời hạn.
-  - **Bước 3 (Thanh toán):** Chọn phương thức thanh toán: *Tiền mặt*, *Quẹt thẻ POS*, hoặc *Chuyển khoản QR*. Xác nhận tổng tiền.
+  - **Bước 3 (Thanh toán):** Chọn *Tiền mặt* để thu tại quầy hoặc *VNPay* để mở cửa sổ thanh toán trực tuyến và chờ backend xác minh callback.
   - **Bước 4 (Biên nhận & Kích hoạt):** Gọi `receptionApi.registerCounterPackage` -> Tự động sinh mã giao dịch `TXN-xxxxxx`, cập nhật thời hạn mới cho hội viên, in/hiển thị biên nhận thành công.
 
 ### 8.4 UC-22 Check-in Quét Thẻ Vào Sân (Member Check-In)
@@ -529,8 +529,11 @@ Gồm 8 màn hình, cùng luồng đăng ký tài khoản và chỉnh sửa hồ
 ### 10.2 UC-41 Mua & Gia Hạn Gói Tập Trực Tuyến (Member Packages)
 - Route: `#/member/packages` | Component: `MemberPackages.jsx` | Đăng nhập vai trò Member
 - Xem danh sách các gói cước đang mở bán.
-- Mở Checkout Modal, chọn VNPay, MoMo hoặc PayOS/VietQR và chuyển tới URL thanh toán do backend trả về.
+- Mở Checkout Modal, chọn VNPay hoặc MoMo; cổng thanh toán mở trong cửa sổ riêng để giữ đăng nhập trên trang gói tập. VietQR đã được gỡ khỏi thanh toán mới.
+- Hủy/hoàn tất thanh toán đưa về tab gói tập ban đầu và tải lại hóa đơn/hồ sơ qua API. Đóng cửa sổ thủ công cũng cập nhật hóa đơn; nếu popup bị chặn, thông báo trước khi gọi API tạo thanh toán.
 - Gói được kích hoạt sau khi backend xác minh thanh toán. Cổng cần cấu hình riêng; FE không tự tạo giao dịch hoặc kích hoạt gói.
+
+Kiểm tra hồi quy: `npm test` và `npm run test:payment:browser` (cần Chrome; có thể đặt `CHROME_PATH`). Browser test dùng API/cổng thanh toán giả lập cục bộ và lưu report ở `.validation/payment-checkout/`. Chi tiết: [sửa luồng quay về khi hủy thanh toán](docs/payment-cancel-return-fix.md).
 
 ### 10.3 UC-42 & UC-43 Tra Cứu Lịch & Đặt Chỗ Lớp Học (Class Schedule & Booking)
 - Route: `#/member/schedule` | Component: `ClassScheduleView.jsx` | Capability: `book_class`
@@ -624,7 +627,7 @@ Toàn bộ ứng dụng sử dụng cơ chế Hash Routing mượt mà, không y
 
 Backend ASP.NET Core/EF Core lưu nghiệp vụ trong SQL Server. Frontend gửi JWT HS256 tới API; server kiểm tra chữ ký, issuer, audience, thời hạn, trạng thái tài khoản và quyền theo trung tâm. Sau khi tải lại trang, AuthContext xác minh phiên với server trước khi mở màn hình nghiệp vụ.
 
-`dbStorage.js` và `mockData.js` còn trong cây mã nguồn từ bản mô phỏng cũ. Các service nghiệp vụ hiện tại không dùng chúng làm database hoặc trả thành công giả khi API lỗi.
+`dbStorage.js` và `mockData.js` đã được gỡ. Dữ liệu nghiệp vụ đi theo luồng `api.js`/`backendApi.js` → `http.js` → ASP.NET Core API → EF Core → SQL Server. API lỗi được báo về giao diện; không thay bằng dữ liệu mẫu. Backend đã gỡ mã seed dữ liệu nghiệp vụ, chỉ đồng bộ schema/quyền và giữ các bản ghi đã có trong database. Danh mục trang chủ đọc từ public catalog API; CMS chỉ gắn ảnh và ẩn/hiện cho ID thật. Hướng dẫn cấu hình và kiểm chứng: [Kết nối DB thật](docs/real-database.md).
 
 ### 12.2 Service API
 
@@ -670,7 +673,7 @@ Hệ thống hiển thị thông báo góc trên bên phải màn hình qua hook
 |---|---|---|---|---|---|
 | **UC-01** | Đăng nhập hệ thống | `src/features/auth/LoginPage.jsx` | `#/login` | `authApi.login` | **Có giao diện và service** |
 | **UC-01+**| Đăng nhập bằng Google | `src/features/auth/GoogleLoginModal.jsx` | Modal tại `#/login` | `authApi.loginWithGoogle` | **Có giao diện và service** |
-| **UC-02** | Đăng xuất hệ thống | `src/components/layout/Header.jsx` | Nút đăng xuất header | `AuthContext.logout` | **Có giao diện và service** |
+| **UC-02** | Đăng xuất hệ thống | `src/layouts/Header.jsx` | Nút đăng xuất header | `AuthContext.logout` | **Có giao diện và service** |
 | **UC-03** | Xem hồ sơ & Đổi mật khẩu | `src/features/auth/ProfileModal.jsx` | Modal tại Header | `authApi.changePassword` | **Có giao diện và service** |
 | **UC-04** | Khôi phục mật khẩu (OTP) | `src/features/auth/ForgotPasswordModal.jsx`| Modal tại `#/login` | `authApi.resetPassword` | **Có giao diện và service** |
 | **UC-10** | Quản lý tài khoản nhân viên | `src/features/manager/StaffManagement.jsx` | `#/manager/staff` | `staffApi` | **Có giao diện và service** |
@@ -704,6 +707,6 @@ Hệ thống hiển thị thông báo góc trên bên phải màn hình qua hook
 
 ## 15. Tài liệu tham chiếu
 
-Bảng trên dùng để tra cứu màn hình/service, không thay thế bằng chứng chạy kiểm thử. Trạng thái triển khai, cấu hình còn thiếu và lệnh kiểm tra được ghi trong [tài liệu tích hợp API/JWT](../Backend/Backend/docs/requirements/api-jwt-integration.md).
+Bảng trên dùng để tra cứu màn hình/service, không thay thế bằng chứng chạy kiểm thử. Trạng thái triển khai, cấu hình còn thiếu và lệnh kiểm tra được ghi trong [tài liệu tích hợp API/JWT](../Backend/docs/requirements/api-jwt-integration.md).
 
 Đối chiếu yêu cầu và bằng chứng cho 8 nhóm chức năng Coach: [coach-feature-audit.md](docs/coach-feature-audit.md). Kết quả mới có thể gắn với buổi học đã kết thúc; ngữ cảnh AI lấy hồ sơ và tối đa 10 kết quả gần nhất từ server. Không cần migration database.

@@ -1,58 +1,193 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { getLandingContent, LANDING_CONTENT_CHANGE_EVENT } from '../../services/landingContentService.js';
-import { SCMS_FACILITIES } from '../../services/facilitiesCatalog.js';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useLandingContent } from '../../hooks/useLandingContent.js';
+import { usePublicCatalog } from '../../hooks/usePublicCatalog.js';
+import { getLandingPresentation } from '../../services/landingPresentation.js';
+import { useLanguage } from '../../context/LanguageContext.jsx';
+import { useAuth } from '../../context/AuthContext.js';
+import { getMembershipAction, getMembershipBanner } from '../../services/membershipEntry.js';
+import { packageApi } from '../../services/api.js';
+import {
+  translateLandingContent,
+  translateFacilityName,
+  translateFacilityCategory,
+  translateFacilityBadge,
+  translateLocation,
+  translateFacilityHighlight,
+  translateFacilityDescription,
+  translateSpecLabel,
+  translateSpecValue,
+  translateAmenity,
+  translateMetricLabel,
+  translateMetricValue,
+  translateZoneName,
+  translateZoneItem,
+  translateCapacityString,
+  translateOpenHours
+} from '../../services/i18nHelper.js';
 
-export { SCMS_FACILITIES };
+const DEFAULT_PACKAGES = [
+  {
+    id: 1,
+    name: 'Gói Basic Thể Thao',
+    nameEn: 'Basic Sport Pass',
+    price: 650000,
+    durationDays: 30,
+    badge: 'Khởi đầu',
+    badgeEn: 'Starter',
+    accessType: '1 môn tự chọn',
+    accessTypeEn: '1 Selected Sport',
+    allowedSports: 1,
+    features: ['1 bộ môn tự chọn', 'Sân bãi tiêu chuẩn Olympic', 'Tủ đồ & tiện ích cơ bản']
+  },
+  {
+    id: 2,
+    name: 'Gói Pro Bứt Phá',
+    nameEn: 'Pro Dynamic Pass',
+    price: 1800000,
+    durationDays: 90,
+    badge: 'Phổ biến nhất',
+    badgeEn: 'Most Popular',
+    popular: true,
+    accessType: '3 môn tự chọn',
+    accessTypeEn: '3 Selected Sports',
+    allowedSports: 3,
+    features: ['3 bộ môn kết hợp', 'Ưu tiên giữ ca học tại sân', 'Kèm 1 buổi phân tích InBody']
+  },
+  {
+    id: 3,
+    name: 'Gói Elite Chuyên Nghiệp',
+    nameEn: 'Elite Performance Pass',
+    price: 3200000,
+    durationDays: 180,
+    badge: 'Chuyên sâu',
+    badgeEn: 'Intensive',
+    accessType: '6 môn tự chọn',
+    accessTypeEn: '6 Selected Sports',
+    allowedSports: 6,
+    features: ['6 bộ môn thể thao', 'Quyền dùng phòng Sauna & Phục hồi', 'Hỗ trợ giáo trình HLV riêng']
+  },
+  {
+    id: 4,
+    name: 'Gói All-Access Olympic Pass',
+    nameEn: 'Olympic VIP All-Access',
+    price: 5800000,
+    durationDays: 365,
+    badge: 'VIP Toàn Năng',
+    badgeEn: 'VIP All-Access',
+    accessType: 'Toàn quyền 10+ môn',
+    accessTypeEn: 'All Disciplines & Courts',
+    allowedSports: 15,
+    features: ['Toàn quyền 10+ môn & cụm sân', 'Huấn luyện viên đồng hành', 'Full quyền lợi VIP không giới hạn']
+  }
+];
 
 export function FacilitiesSection({ externalFacility = null, onModalClose = null } = {}) {
-  const [landingContent, setLandingContent] = useState(() => getLandingContent());
+  const { isAuthenticated, role } = useAuth();
+  const { language } = useLanguage();
+  const isEn = language === 'en';
+  const membershipAction = getMembershipAction(isAuthenticated, role, isEn);
+  const isMember = isAuthenticated && role === 'MEMBER';
+  const editorialContent = useLandingContent();
+  const { catalog, loading: catalogLoading, error: catalogError } = usePublicCatalog();
+  const rawLandingContent = getLandingPresentation(editorialContent, catalog);
+  const landingContent = useMemo(() => isEn ? translateLandingContent(rawLandingContent, true) : rawLandingContent, [rawLandingContent, isEn]);
+  const membershipBanner = getMembershipBanner(landingContent.ctaAndFooter, isEn);
+  const contactPhone = landingContent.ctaAndFooter?.contactPhone || catalog?.center.phone;
+  const contactEmail = landingContent.ctaAndFooter?.contactEmail || catalog?.center.email;
   const [activeCategory, setActiveCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFacility, setSelectedFacility] = useState(null);
-  const [activeModalTab, setActiveModalTab] = useState('booking'); // 'booking' | 'specs' | 'photos'
-  const [bookingType, setBookingType] = useState('rent'); // 'rent' (thuê sân) | 'tour' (tham quan trải nghiệm)
+  const [activeModalTab, setActiveModalTab] = useState('packages');
+  const [packages, setPackages] = useState(DEFAULT_PACKAGES);
 
   useEffect(() => {
-    const handleSync = (e) => {
-      if (e.detail) setLandingContent(e.detail);
-      else setLandingContent(getLandingContent());
+    let active = true;
+    packageApi.getAll()
+      .then((res) => {
+        if (active && Array.isArray(res) && res.length > 0) {
+          setPackages(res);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
     };
-    window.addEventListener(LANDING_CONTENT_CHANGE_EVENT, handleSync);
-    return () => window.removeEventListener(LANDING_CONTENT_CHANGE_EVENT, handleSync);
   }, []);
 
-  const facilitiesList = landingContent.facilitiesSection?.facilitiesList || SCMS_FACILITIES;
+  const facilityClasses = useMemo(() => {
+    if (!catalog?.classes || !selectedFacility) return [];
+    const byRoom = catalog.classes.filter((c) => String(c.roomId) === String(selectedFacility.id));
+    if (byRoom.length > 0) return byRoom;
+
+    const facName = (selectedFacility.name || '').toLowerCase();
+    const facCat = (selectedFacility.category || '').toLowerCase();
+
+    return catalog.classes.filter((cls) => {
+      const sport = (catalog.sports || []).find((s) => s.id === cls.sportId);
+      const sName = (sport?.name || '').toLowerCase();
+      const cName = (cls.name || '').toLowerCase();
+
+      if (facCat.includes('aquatic') || facCat.includes('pool') || facName.includes('bơi')) {
+        return sName.includes('bơi') || cName.includes('bơi');
+      }
+      if (facCat.includes('combat') || facName.includes('võ') || facName.includes('boxing')) {
+        return sName.includes('boxing') || sName.includes('võ') || cName.includes('boxing');
+      }
+      if (facCat.includes('fitness') || facCat.includes('gym') || facName.includes('gym') || facName.includes('tạ')) {
+        return sName.includes('gym') || sName.includes('fitness') || cName.includes('gym');
+      }
+      if (facCat.includes('yoga') || facName.includes('yoga') || facName.includes('pilates')) {
+        return sName.includes('yoga') || sName.includes('pilates') || cName.includes('yoga');
+      }
+      if (facCat.includes('golf') || facName.includes('golf')) {
+        return sName.includes('golf') || cName.includes('golf');
+      }
+      if (facName.includes('cầu lông') || facName.includes('badminton')) {
+        return sName.includes('cầu lông') || cName.includes('cầu lông');
+      }
+      if (facName.includes('bóng đá') || facCat.includes('soccer') || facCat.includes('football')) {
+        return cName.includes('bóng đá') || sName.includes('bóng đá');
+      }
+      return false;
+    });
+  }, [catalog, selectedFacility]);
+
+  // Carousel State
+  const [facilityCarouselIndex, setFacilityCarouselIndex] = useState(0);
+  const facilityCarouselRef = useRef(null);
+  const isFacilityProgrammaticScrollRef = useRef(false);
+  const facilityScrollTimeoutRef = useRef(null);
+
+  const facilitiesList = landingContent.facilitiesSection.facilitiesList;
   // Lọc chỉ những cụm sân có isVisible !== false (manager chủ động ẩn/hiện)
   const visibleFacilities = useMemo(() => {
     return facilitiesList.filter(f => f.isVisible !== false);
   }, [facilitiesList]);
   
-  // Booking Form State
-  const [formState, setFormState] = useState({
-    fullName: '',
-    phone: '',
-    email: '',
-    organization: '',
-    expectedDate: '',
-    timeSlot: 'Sáng (08:00 - 11:30)',
-    rentalPurpose: 'Tập luyện thể thao thường xuyên',
-    extraServices: ['Nước uống đóng chai'],
-    notes: ''
-  });
-  const [submitted, setSubmitted] = useState(false);
-  const [showFacilityPicker, setShowFacilityPicker] = useState(false);
-
   const categories = useMemo(() => [
-    { id: 'all', label: `Tất cả (${visibleFacilities.length} cụm sân)`, icon: 'grid_view' },
-    { id: 'team-sports', label: 'Sân bóng & Vợt', icon: 'sports_soccer' },
-    { id: 'aquatics', label: 'Bơi lội', icon: 'pool' },
-    { id: 'fitness', label: 'Gym, Yoga & Pilates', icon: 'fitness_center' },
-    { id: 'combat-studio', label: 'Võ thuật & Boxing', icon: 'sports_mma' }
-  ], [visibleFacilities.length]);
+    { id: 'all', label: isEn ? 'ALL' : 'TẤT CẢ', count: visibleFacilities.length, icon: 'grid_view' },
+    ...[...new Set(visibleFacilities.map(f => f.category).filter(Boolean))].map(category => {
+      const sample = visibleFacilities.find(f => f.category === category);
+      const rawLabel = sample?.categoryName || category;
+      const icon = category === 'golf' ? 'golf_course'
+        : category === 'aquatics' || category === 'pool' ? 'pool'
+        : category === 'fitness' ? 'fitness_center'
+        : category === 'combat-studio' || category === 'martial-arts' ? 'sports_kabaddi'
+        : category === 'team-sports' ? 'sports_soccer'
+        : 'stadium';
+      return {
+        id: category,
+        label: (isEn ? translateFacilityCategory(rawLabel, true) : rawLabel).toUpperCase(),
+        count: visibleFacilities.filter(f => f.category === category).length,
+        icon
+      };
+    })
+  ], [visibleFacilities, isEn]);
 
   const filteredFacilities = useMemo(() => {
     return visibleFacilities.filter(fac => {
-      const matchCat = activeCategory === 'all' || fac.category === activeCategory;
+      const matchCat = activeCategory === 'all' || fac.category === activeCategory ||
+        (activeCategory === 'combat-studio' && (fac.category === 'combat-studio' || fac.category === 'martial-arts'));
       const matchSearch = !searchQuery.trim() || 
         fac.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         fac.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -62,27 +197,77 @@ export function FacilitiesSection({ externalFacility = null, onModalClose = null
     });
   }, [visibleFacilities, activeCategory, searchQuery]);
 
-  const handleOpenModal = (facility, initialTab = 'rent') => {
+  const handleFacilityScroll = () => {
+    if (isFacilityProgrammaticScrollRef.current) return;
+    const el = facilityCarouselRef.current;
+    if (!el) return;
+    const scrollLeft = el.scrollLeft;
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    const items = el.querySelectorAll('[data-facility-carousel-item]');
+    if (!items.length) return;
+
+    // Nếu đã cuộn gần chạm mép phải (thẻ cuối cùng đang hiển thị đầy đủ)
+    if (scrollLeft >= maxScroll - 25) {
+      setFacilityCarouselIndex(items.length - 1);
+      return;
+    }
+
+    // Tìm thẻ có mép trái gần sát vị trí đầu container nhất
+    let closestIdx = 0;
+    let minDiff = Infinity;
+    const containerLeft = el.getBoundingClientRect().left;
+
+    items.forEach((item, idx) => {
+      const itemRect = item.getBoundingClientRect();
+      const diff = Math.abs(itemRect.left - containerLeft);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestIdx = idx;
+      }
+    });
+
+    setFacilityCarouselIndex(closestIdx);
+  };
+
+  const handleScrollFacilityToIndex = (idx) => {
+    const el = facilityCarouselRef.current;
+    if (!el) return;
+    const items = el.querySelectorAll('[data-facility-carousel-item]');
+    if (!items[idx]) return;
+
+    isFacilityProgrammaticScrollRef.current = true;
+    setFacilityCarouselIndex(idx);
+
+    const targetItem = items[idx];
+    const scrollTarget = targetItem.offsetLeft - el.offsetLeft;
+
+    el.scrollTo({
+      left: Math.max(0, scrollTarget),
+      behavior: 'smooth'
+    });
+
+    if (facilityScrollTimeoutRef.current) clearTimeout(facilityScrollTimeoutRef.current);
+    facilityScrollTimeoutRef.current = setTimeout(() => {
+      isFacilityProgrammaticScrollRef.current = false;
+    }, 450);
+  };
+
+  useEffect(() => {
+    setFacilityCarouselIndex(0);
+    if (facilityCarouselRef.current) {
+      facilityCarouselRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+    }
+  }, [activeCategory, searchQuery, filteredFacilities.length]);
+
+  const handleOpenModal = (facility, initialTab = 'packages') => {
     setSelectedFacility(facility);
-    setBookingType('rent');
-    const targetTab = (initialTab === 'rent' || initialTab === 'booking') ? 'booking' : 'specs';
+    const targetTab = initialTab === 'specs' || initialTab === 'photos' ? initialTab : 'packages';
     setActiveModalTab(targetTab);
-    setSubmitted(false);
-    setShowFacilityPicker(false);
   };
 
   const handleCloseModal = () => {
     setSelectedFacility(null);
-    setSubmitted(false);
-    setShowFacilityPicker(false);
     if (onModalClose) onModalClose();
-  };
-
-  const handleChangeFacility = (facilityId) => {
-    const facility = SCMS_FACILITIES.find(f => f.id === facilityId);
-    if (!facility) return;
-    setSelectedFacility(facility);
-    setShowFacilityPicker(false);
   };
 
   // Sync when parent component (LandingPage) requests to open a specific facility -> open specs
@@ -96,288 +281,325 @@ export function FacilitiesSection({ externalFacility = null, onModalClose = null
   useEffect(() => {
     const handleCustomOpen = (e) => {
       const { facility, facilityId, type } = e.detail || {};
-      const target = facility || SCMS_FACILITIES.find(f => f.id === facilityId);
+      const target = facility || facilitiesList.find(f => f.id === facilityId);
       if (target) {
         handleOpenModal(target, type || 'specs');
       }
     };
     window.addEventListener('SCMS_OPEN_FACILITY', handleCustomOpen);
     return () => window.removeEventListener('SCMS_OPEN_FACILITY', handleCustomOpen);
-  }, []);
+  }, [catalog, editorialContent]);
 
-  const handleToggleExtraService = (service) => {
-    setFormState(prev => {
-      const exists = prev.extraServices.includes(service);
-      return {
-        ...prev,
-        extraServices: exists 
-          ? prev.extraServices.filter(s => s !== service)
-          : [...prev.extraServices, service]
-      };
-    });
+  const getFacilityCategoryMeta = fac => {
+    const cat = (fac.category || '').toLowerCase();
+    const name = (fac.name || '').toLowerCase();
+    const icon = cat === 'golf' || name.includes('golf') ? 'golf_course'
+      : cat === 'aquatics' || cat === 'pool' || name.includes('bơi') ? 'pool'
+      : cat === 'fitness' || name.includes('gym') ? 'fitness_center'
+      : cat === 'combat-studio' || cat === 'martial-arts' || name.includes('võ') || name.includes('boxing') ? 'sports_kabaddi'
+      : cat === 'team-sports' || name.includes('bóng đá') || name.includes('bóng rổ') ? 'sports_soccer'
+      : name.includes('cầu lông') ? 'sports_tennis'
+      : 'stadium';
+    return {
+      label: (isEn ? translateFacilityCategory(fac.categoryName || fac.category || 'Phòng / sân', true) : (fac.categoryName || 'Phòng / sân')).toUpperCase(),
+      icon
+    };
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!formState.fullName.trim() || !formState.phone.trim()) {
-      alert('Vui lòng điền đầy đủ họ tên và số điện thoại liên hệ!');
-      return;
-    }
-    setSubmitted(true);
+  const renderFacilityCard = (fac, isCarousel = false) => {
+    const catMeta = getFacilityCategoryMeta(fac);
+    const highlightSpec = isEn ? translateCapacityString(fac.capacity, true) : (fac.capacity || (isEn ? 'Not updated' : 'Chưa cập nhật'));
+    const displayHours = fac.openHours ? (isEn ? translateOpenHours(fac.openHours, true) : fac.openHours.replace('hàng ngày', '').trim()) : (isEn ? 'Not updated' : 'Chưa cập nhật');
+    const displayName = isEn ? translateFacilityName(fac.name, true) : fac.name;
+    const displayLocation = isEn ? translateLocation(fac.location, true) : fac.location;
+    const displayBadge = isEn ? translateFacilityBadge(fac.badge, true) : (fac.badge || '');
+    const displayHighlight = isEn ? (translateFacilityHighlight(fac.highlights, true) || translateFacilityDescription(fac.description, true)) : (fac.highlights || fac.description);
+    const displayPrice = isEn ? 'Included in Packages' : 'Bao gồm trong gói tập';
+
+    return (
+      <div
+        key={fac.id}
+        data-facility-carousel-item={isCarousel ? true : undefined}
+        style={{
+          width: 'clamp(300px, 85vw, 410px)',
+          flexShrink: 0,
+          scrollSnapAlign: 'start',
+          display: 'flex',
+          flexDirection: 'column'
+        }}
+      >
+        <div
+          id={`facility-card-${fac.id}`}
+          onClick={() => handleOpenModal(fac, 'packages')}
+          className="tiya-course-card"
+        >
+          {/* Card Image Area */}
+          <div className="tiya-course-card__image-wrap">
+            {fac.image || fac.secondaryImage ? <img src={fac.image || fac.secondaryImage} alt={displayName} loading="lazy" /> : <div className="h-full grid place-items-center bg-slate-100 text-slate-500 text-sm">{isEn ? 'No image' : 'Chưa có ảnh'}</div>}
+
+            {/* Top Bar Badges */}
+            <div style={{ position: 'absolute', top: '12px', left: '12px', right: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', zIndex: 2 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '100px', background: 'rgba(0,0,0,0.65)', color: 'var(--white-color)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', backdropFilter: 'blur(4px)' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>{catMeta.icon}</span>
+                {catMeta.label}
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '100px', background: 'rgba(129,178,154,0.9)', color: 'var(--white-color)', fontSize: '10px', fontWeight: 700, backdropFilter: 'blur(4px)' }}>
+                {displayBadge}
+              </span>
+            </div>
+
+            {/* Bottom Right Price Pill */}
+            <div style={{ position: 'absolute', bottom: '10px', right: '12px', padding: '4px 12px', borderRadius: '8px', background: 'rgba(0,0,0,0.7)', color: 'var(--custom-btn-bg-color)', fontSize: '12px', fontWeight: 700, backdropFilter: 'blur(4px)' }}>
+              <span style={{ color: 'inherit' }}>{displayPrice}</span>
+            </div>
+          </div>
+
+          {/* Card Body */}
+          <div className="tiya-course-card__body">
+            {/* Title & Rating */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '6px', minHeight: '30px' }}>
+              <h3 className="tiya-course-card__title" style={{ margin: 0, fontSize: '18px' }}>{displayName}</h3>
+            </div>
+
+            {/* Location */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--primary-color)', marginBottom: '10px', minHeight: '20px' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: '15px', flexShrink: 0 }}>location_on</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayLocation}</span>
+            </div>
+
+            {/* Description */}
+            <p style={{ fontSize: '13px', lineHeight: 1.6, color: 'var(--p-color)', marginBottom: '14px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', minHeight: '42px' }}>
+              {displayHighlight}
+            </p>
+
+            {/* 2 Specs / Info Chips */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '16px', fontSize: '11px', color: 'var(--p-color)', minHeight: '36px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 8px', background: '#F9FAFB', borderRadius: '6px' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: '15px', color: 'var(--primary-color)' }}>sports</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{highlightSpec}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 8px', background: '#F9FAFB', borderRadius: '6px' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: '15px', color: 'var(--custom-btn-bg-color)' }}>schedule</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayHours}</span>
+              </div>
+            </div>
+
+            {/* Action Button */}
+            <button
+              type="button"
+              className="custom-border-btn"
+              style={{ width: '100%', justifyContent: 'center' }}
+              onClick={(e) => { e.stopPropagation(); handleOpenModal(fac, 'packages'); }}
+            >
+              {isEn ? 'View Details & Packages' : 'Xem Chi Tiết & Gói Tập'}
+              <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>arrow_forward</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
-    <section id="co-so-vat-chat" className="w-full bg-slate-50 text-slate-900 font-inter min-h-screen py-24 px-6 sm:px-10 md:px-14 lg:px-20 relative overflow-hidden flex flex-col justify-center">
+    <section id="co-so-vat-chat" className="w-full bg-white text-slate-900 font-sans min-h-screen pt-20 pb-0 px-6 sm:px-10 md:px-14 lg:px-20 relative overflow-hidden flex flex-col justify-center">
       
       {/* Decorative ambient elements */}
-      <div className="pointer-events-none absolute -top-40 -right-40 w-96 h-96 bg-red-500/5 rounded-full blur-3xl" />
-      <div className="pointer-events-none absolute top-1/2 -left-40 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl" />
+      <div className="pointer-events-none absolute -top-40 -right-40 w-96 h-96 bg-[var(--primary-color)]/5 rounded-full blur-3xl" />
+      <div className="pointer-events-none absolute top-1/2 -left-40 w-96 h-96 bg-[var(--custom-btn-bg-color)]/5 rounded-full blur-3xl" />
 
-      <div className="w-full max-w-[1720px] mx-auto relative z-10">
+      <div className="w-full max-w-[1360px] mx-auto relative z-10">
+        {catalogLoading && !editorialContent.facilitiesSection?.facilitiesList?.length && <p role="status">{isEn ? 'Loading facilities...' : 'Đang tải phòng / sân...'}</p>}
+        {(editorialContent._loadError || (catalogError && !editorialContent.facilitiesSection?.facilitiesList?.length)) && <p role="alert">{editorialContent._loadError || catalogError}</p>}
+        {!catalogLoading && !catalogError && facilitiesList.length === 0 && <p role="status">{isEn ? 'No venues currently operating.' : 'Chưa có phòng / sân đang hoạt động.'}</p>}
         
         {/* SECTION HEADER: BẢN SẮC THỂ THAO SCMS TIÊU CHUẨN */}
-        <div className="text-center max-w-3xl mx-auto mb-12">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-red-100 text-red-700 text-xs font-chivo font-black uppercase tracking-widest mb-4">
-            <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />
-            {landingContent.facilitiesSection?.badge || 'HẠ TẦNG THỂ THAO TIÊU CHUẨN'}
+        <div className="text-center max-w-3xl mx-auto mb-12 tiya-reveal">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[rgba(129,178,154,0.15)] text-[var(--primary-color)] text-xs font-sans font-bold uppercase tracking-widest mb-4 border border-[rgba(129,178,154,0.4)]">
+            <span className="w-2 h-2 rounded-full bg-[var(--primary-color)] animate-pulse" />
+            {isEn ? 'STANDARD ATHLETIC INFRASTRUCTURE' : (landingContent.facilitiesSection?.badge || 'HẠ TẦNG THỂ THAO TIÊU CHUẨN')}
           </div>
-          <h2 className="font-chivo text-3xl sm:text-4xl lg:text-5xl font-black uppercase text-slate-900 tracking-tight leading-tight">
-            {landingContent.facilitiesSection?.title || 'HỆ THỐNG CƠ SỞ VẬT CHẤT TIỆN NGHI & CHẤT LƯỢNG'}
+          <h2 className="font-sans text-3xl sm:text-4xl lg:text-5xl font-bold uppercase text-slate-900 tracking-tight leading-tight">
+            {isEn ? 'MODERN & QUALITY OLYMPIC FACILITY COMPLEX' : (landingContent.facilitiesSection?.title || 'HỆ THỐNG CƠ SỞ VẬT CHẤT TIỆN NGHI & CHẤT LƯỢNG')}
           </h2>
-          <p className="font-inter text-slate-600 text-sm sm:text-base mt-4 leading-relaxed">
-            {landingContent.facilitiesSection?.description || `Khu liên hợp thể thao rộng rãi, sạch đẹp với ${visibleFacilities.length} cụm sân bãi và phòng tập dành cho các bộ môn chuẩn Olympic.`}
+          <p className="font-sans text-slate-600 text-sm sm:text-base mt-4 leading-relaxed">
+            {isEn
+              ? 'Spacious, clean, and modern athletic complex featuring 9 courts and training studios for Swimming, Gym & Fitness, Yoga & Pilates, Martial Arts & Boxing, Football, Badminton, Basketball, Table Tennis, and Pickleball. Catering to fitness, club activities, and friendly tournaments.'
+              : (landingContent.facilitiesSection?.description || '')}
           </p>
         </div>
 
         {/* 4 CORE HIGHLIGHT METRICS (CON SỐ THỰC TẾ ĐỘNG TỪ MANAGER) */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
-          {(landingContent.facilitiesSection?.metrics || [
-            { icon: 'domain', value: '3.500m²', label: 'Tổng diện tích mặt sàn' },
-            { icon: 'verified', value: `${visibleFacilities.length} Khu Vực`, label: 'Đa dạng môn tập luyện' },
-            { icon: 'groups', value: '600+', label: 'Lượt tập luyện/ngày' },
-            { icon: 'cleaning_services', value: '100%', label: 'Vệ sinh & Bảo trì định kỳ' }
-          ]).map((metric, idx) => {
+          {(landingContent.facilitiesSection?.metrics || []).map((metric, idx) => {
             const colors = [
-              { bg: 'bg-red-50', text: 'text-red-600' },
-              { bg: 'bg-blue-50', text: 'text-blue-600' },
-              { bg: 'bg-emerald-50', text: 'text-emerald-600' },
-              { bg: 'bg-amber-50', text: 'text-amber-600' }
+              { bg: 'bg-[#81B29A]/15', text: 'text-[var(--primary-color)]' },
+              { bg: 'bg-[#F2CC8F]/30', text: 'text-[#3D405B]' },
+              { bg: 'bg-[#3D405B]/10', text: 'text-[#3D405B]' },
+              { bg: 'bg-[#81B29A]/15', text: 'text-[var(--primary-color)]' }
             ];
             const color = colors[idx % colors.length];
 
             return (
-              <div key={metric.id || idx} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all flex items-center gap-4 group">
+              <div key={metric.id || idx} className={`bg-white p-6 rounded-[20px] border border-slate-200/90 shadow-sm hover:shadow-md transition-all flex items-center gap-4 group tiya-reveal tiya-delay-${idx + 1}`}>
                 <div className={`w-12 h-12 rounded-xl ${color.bg} ${color.text} flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform`}>
                   <span className="material-symbols-outlined text-[28px]">{metric.icon || 'domain'}</span>
                 </div>
                 <div>
-                  <div className="font-chivo text-2xl sm:text-3xl font-black text-slate-900">{metric.value}</div>
-                  <div className="text-xs text-slate-500 font-semibold uppercase tracking-wider mt-0.5">{metric.label}</div>
+                  <div className="font-sans text-2xl sm:text-3xl font-bold text-slate-900">{isEn ? translateMetricValue(metric.value, true) : metric.value}</div>
+                  <div className="text-xs text-slate-500 font-semibold uppercase tracking-wider mt-0.5">{isEn ? translateMetricLabel(metric.label, true) : metric.label}</div>
                 </div>
               </div>
             );
           })}
         </div>
 
-        {/* SEARCH & CATEGORY FILTER BAR */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm mb-10 flex flex-col md:flex-row items-center justify-between gap-4">
-          
-          {/* Category Tabs */}
-          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-            {categories.map(cat => (
-              <button
-                key={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
-                className={`px-4 py-2 rounded-xl font-chivo text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all ${
-                  activeCategory === cat.id
-                    ? 'bg-red-600 text-white shadow-md shadow-red-600/30'
-                    : 'bg-slate-100 text-slate-700 hover:text-red-600 hover:bg-slate-200'
-                }`}
-              >
-                <span className="material-symbols-outlined text-[17px]">{cat.icon}</span>
-                <span>{cat.label}</span>
-              </button>
-            ))}
-          </div>
+        {/* Category Filter Tabs (Tiya Pill Style matching Image 1) */}
+        <div className="courses-filter-tabs" style={{ marginBottom: '20px' }}>
+          {categories.map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => setActiveCategory(cat.id)}
+              className={`courses-filter-tab ${activeCategory === cat.id ? 'active' : ''}`}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>{cat.icon}</span>
+              {cat.label}
+              <span className="courses-filter-tab__count">{cat.count}</span>
+            </button>
+          ))}
+        </div>
 
-          {/* Quick Search Field */}
-          <div className="relative w-full md:w-72">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">
-              search
-            </span>
-            <input
-              type="text"
-              placeholder="Tìm theo tên sân, môn tập..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs font-medium rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-600"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              >
-                <span className="material-symbols-outlined text-[16px]">close</span>
-              </button>
-            )}
-          </div>
+        {/* Sleek Search Pill */}
+        <div style={{ maxWidth: '420px', margin: '0 auto 28px', position: 'relative' }}>
+          <span className="material-symbols-outlined" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', fontSize: '18px' }}>
+            search
+          </span>
+          <input
+            type="text"
+            placeholder={isEn ? "Search by venue, court, discipline..." : "Tìm theo tên sân, môn tập..."}
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '10px 40px 10px 44px',
+              borderRadius: '100px',
+              border: '1px solid rgba(0,0,0,0.1)',
+              background: 'var(--white-color)',
+              fontSize: '13px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+              outline: 'none'
+            }}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent', color: '#94A3B8', cursor: 'pointer' }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>close</span>
+            </button>
+          )}
         </div>
 
         {/* RESULTS COUNT & STATUS */}
         <div className="flex items-center justify-between mb-6 text-xs text-slate-500 font-semibold px-1">
           <div>
-            Hiển thị <strong>{filteredFacilities.length}</strong> / {SCMS_FACILITIES.length} cụm sân và phòng chức năng
+            {isEn ? (
+              <>Showing <strong>{filteredFacilities.length}</strong> / {visibleFacilities.length} courts and venues</>
+            ) : (
+              <>Hiển thị <strong>{filteredFacilities.length}</strong> / {visibleFacilities.length} cụm sân và phòng chức năng</>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse" />
-            <span className="text-emerald-700">Tất cả cụm sân đều sẵn sàng phục vụ</span>
+            <span className="text-emerald-700">{isEn ? 'All venues included in training packages' : 'Tất cả cụm sân phục vụ theo gói tập'}</span>
           </div>
         </div>
 
-        {/* FACILITIES ATHLETIC CARDS GRID */}
+        {/* FACILITIES CAROUSEL RENDERING */}
         {filteredFacilities.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 p-8">
+          <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 p-8 mb-16 shadow-sm">
             <span className="material-symbols-outlined text-5xl text-slate-300 mb-3 block">search_off</span>
-            <h3 className="font-chivo text-lg font-bold text-slate-700">Không tìm thấy cụm sân phù hợp</h3>
-            <p className="text-xs text-slate-500 mt-1">Hãy thử tìm với từ khóa khác như "bơi lội", "bóng đá", "cầu lông", hoặc chọn mục Tất cả.</p>
+            <h3 className="font-chivo text-lg font-bold text-slate-700">{isEn ? 'No venues match your search' : 'Không tìm thấy cụm sân phù hợp'}</h3>
+            <p className="text-xs text-slate-500 mt-1">{isEn ? 'Try keywords like "swimming", "football", "badminton", or select All.' : 'Hãy thử tìm với từ khóa khác như "bơi lội", "bóng đá", "cầu lông", hoặc chọn mục Tất cả.'}</p>
             <button
+              type="button"
               onClick={() => { setActiveCategory('all'); setSearchQuery(''); }}
-              className="mt-4 px-4 py-2 bg-red-600 text-white text-xs font-bold uppercase rounded-lg font-chivo"
+              className="mt-4 px-5 py-2.5 bg-[var(--primary-color)] text-white text-xs font-bold uppercase rounded-full cursor-pointer hover:opacity-90 transition-opacity"
             >
-              Xem tất cả
+              {isEn ? 'View All' : 'Xem tất cả'}
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-16">
-            {filteredFacilities.map(fac => (
-              <div
-                key={fac.id}
-                className="bg-white rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col overflow-hidden group"
-              >
-                {/* Visual Header with Photography */}
-                <div className="relative aspect-[16/10] w-full overflow-hidden bg-slate-950">
-                  <img
-                    src={fac.image}
-                    alt={fac.name}
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                    loading="lazy"
+          <div className="relative w-full mb-16">
+            {/* Scroll Track */}
+            <div
+              ref={facilityCarouselRef}
+              onScroll={handleFacilityScroll}
+              style={{
+                display: 'flex',
+                gap: '24px',
+                overflowX: 'auto',
+                scrollBehavior: 'smooth',
+                scrollSnapType: 'x mandatory',
+                paddingBottom: '20px',
+                paddingTop: '4px',
+                msOverflowStyle: 'none',
+                scrollbarWidth: 'none'
+              }}
+            >
+              {filteredFacilities.map(fac => renderFacilityCard(fac, true))}
+            </div>
+
+            {/* Carousel Bottom Interactive Indicator Dots */}
+            {filteredFacilities.length > 1 && (
+              <div className="tiya-carousel-dots" style={{ display: 'flex', justifyContent: 'center', gap: '8px', paddingTop: '16px' }}>
+                {filteredFacilities.map((fac, idx) => (
+                  <button
+                    key={fac.id}
+                    type="button"
+                    onClick={() => handleScrollFacilityToIndex(idx)}
+                    aria-label={`Chuyển tới cụm sân ${idx + 1}: ${fac.name}`}
+                    className={`tiya-carousel-dot ${facilityCarouselIndex === idx ? 'active' : ''}`}
+                    style={{
+                      height: '8px',
+                      borderRadius: '100px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease',
+                      width: facilityCarouselIndex === idx ? '36px' : '8px',
+                      background: facilityCarouselIndex === idx ? 'var(--primary-color)' : 'rgba(0,0,0,0.15)'
+                    }}
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/20 to-transparent" />
-                  
-                  {/* Certification Badge */}
-                  <span className={`absolute left-3.5 top-3.5 px-3 py-1 rounded-full text-white text-[11px] font-chivo font-black tracking-wider uppercase shadow-md ${fac.badgeColor}`}>
-                    {fac.badge}
-                  </span>
-
-                  {/* Zone Tag */}
-                  <span className="absolute right-3.5 top-3.5 px-2.5 py-1 rounded-full bg-slate-950/75 backdrop-blur-md text-slate-200 text-[11px] font-semibold flex items-center gap-1 border border-white/10">
-                    <span className="material-symbols-outlined text-[14px] text-red-500">pin_drop</span>
-                    <span>{fac.location}</span>
-                  </span>
-
-                  {/* Live Status Chip & Capacity */}
-                  <div className="absolute left-3.5 bottom-3 right-3.5 flex items-center justify-between text-white text-xs">
-                    <div className="flex items-center gap-1.5 font-medium drop-shadow">
-                      <span className="material-symbols-outlined text-[16px] text-red-400">group</span>
-                      <span>Sức chứa: <strong>{fac.capacity}</strong></span>
-                    </div>
-                    <span className="inline-flex items-center gap-1 text-[11px] bg-emerald-950/80 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-semibold backdrop-blur-sm">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      Mở cửa
-                    </span>
-                  </div>
-                </div>
-
-                {/* Card Content */}
-                <div className="p-6 flex-1 flex flex-col justify-between">
-                  <div>
-                    {/* Facility Name & Price Rate */}
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-chivo text-lg font-black text-slate-900 group-hover:text-red-600 transition-colors leading-snug">
-                        {fac.name}
-                      </h3>
-                    </div>
-
-                    <div className="text-xs text-red-600 font-bold mt-1.5 flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[15px]">payments</span>
-                      <span>{fac.priceRate}</span>
-                    </div>
-
-                    {/* Highlights pill */}
-                    <div className="text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200/80 rounded-lg p-2.5 mt-3 leading-relaxed">
-                      <strong className="text-red-600 font-semibold block mb-0.5">Đặc điểm nổi bật:</strong>
-                      {fac.highlights}
-                    </div>
-
-                    <p className="text-xs text-slate-600 mt-3 line-clamp-3 leading-relaxed">
-                      {fac.description}
-                    </p>
-
-                    {/* Key Technical Specs Chips */}
-                    <div className="grid grid-cols-2 gap-1.5 mt-4 pt-3 border-t border-slate-100">
-                      {fac.specs.slice(0, 2).map((s, idx) => (
-                        <div key={idx} className="bg-slate-50/80 rounded px-2 py-1 text-[11px]">
-                          <span className="text-slate-400 block text-[10px] uppercase font-bold">{s.label}</span>
-                          <span className="text-slate-800 font-semibold truncate block">{s.value}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="mt-5 pt-4 border-t border-slate-100 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenModal(fac, 'rent')}
-                      className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-chivo text-xs font-bold uppercase rounded-lg shadow-sm transition-colors flex items-center justify-center gap-1.5"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">calendar_today</span>
-                      <span>Đặt Thuê Sân</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleOpenModal(fac, 'specs')}
-                      className="px-3.5 py-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 font-chivo text-xs font-bold uppercase transition-colors flex items-center gap-1"
-                      title="Xem thông số kỹ thuật &amp; Tiện ích sân"
-                    >
-                      <span className="material-symbols-outlined text-[17px]">info</span>
-                      <span>Chi tiết</span>
-                    </button>
-                  </div>
-                </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         )}
 
         {/* CAMPUS ARCHITECTURE & ZONE DIRECTORY (SƠ ĐỒ PHÂN BỐ KHU VỰC) */}
-        <div className="bg-slate-900 text-white rounded-3xl p-8 sm:p-12 border border-slate-800 shadow-2xl relative overflow-hidden mb-16">
-          <div className="pointer-events-none absolute -right-20 -bottom-20 w-96 h-96 rounded-full bg-red-600/10 blur-3xl" />
+        <div className="tiya-campus-directory tiya-reveal--scale">
+          <div className="pointer-events-none absolute -right-20 -bottom-20 w-96 h-96 rounded-full bg-[var(--primary-color)]/10 blur-3xl" />
           
           <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
             <div className="lg:col-span-5">
-              <span className="text-red-500 font-chivo text-xs font-black uppercase tracking-widest block mb-2">
-                {landingContent.zonesLayout?.badge || 'BỐ TRÍ KHÔNG GIAN THUẬN TIỆN'}
+              <span className="tiya-campus-directory__badge">
+                {isEn ? 'CONVENIENT SPATIAL LAYOUT' : (landingContent.zonesLayout?.badge || 'BỐ TRÍ KHÔNG GIAN THUẬN TIỆN')}
               </span>
-              <h3 className="font-chivo text-2xl sm:text-3xl font-black uppercase text-white leading-tight">
-                {landingContent.zonesLayout?.title || 'SƠ ĐỒ CÁC KHU VỰC TẬP LUYỆN'}
+              <h3 className="tiya-campus-directory__title">
+                {isEn ? 'TRAINING & MATCH ZONE MAP' : (landingContent.zonesLayout?.title || 'SƠ ĐỒ CÁC KHU VỰC TẬP LUYỆN')}
               </h3>
-              <p className="text-slate-300 text-xs sm:text-sm mt-3 leading-relaxed">
-                {landingContent.zonesLayout?.description || `${visibleFacilities.length} cụm sân bãi và phòng tập được quy hoạch gọn gàng, lối đi thông thoáng, biển báo chỉ dẫn rõ ràng.`}
+              <p className="tiya-campus-directory__desc">
+                {isEn
+                  ? '9 neatly planned courts and training studios with open corridors, clear navigation signs, and dedicated front desks for seamless booking in person or online.'
+                  : (landingContent.zonesLayout?.description || '')}
               </p>
 
               {/* Added Service Amenities */}
-              <div className="mt-6 space-y-3">
-                {(landingContent.zonesLayout?.serviceAmenities || [
-                  { icon: 'badge', text: 'Tủ cất đồ cá nhân có chìa khóa an toàn, thuận tiện sử dụng' },
-                  { icon: 'shower', text: 'Phòng thay đồ và khu vực tắm tráng nóng lạnh sạch sẽ' },
-                  { icon: 'local_cafe', text: 'Quầy căn-tin nước giải khát, nước khoáng phục vụ nhanh' },
-                  { icon: 'medical_services', text: 'Tủ thuốc y tế và dụng cụ sơ cứu ban đầu luôn sẵn sàng' }
-                ]).map((amenity, idx) => (
-                  <div key={amenity.id || idx} className="flex items-center gap-3 text-xs text-slate-300">
-                    <span className="material-symbols-outlined text-red-500 text-[20px]">{amenity.icon}</span>
-                    <span>{amenity.text}</span>
+              <div className="space-y-2.5">
+                {(landingContent.zonesLayout?.serviceAmenities || []).map((amenity, idx) => (
+                  <div key={amenity.id || idx} className="tiya-campus-amenity-item">
+                    <span className="material-symbols-outlined">{amenity.icon}</span>
+                    <span>{isEn ? translateAmenity(amenity.text, true) : amenity.text}</span>
                   </div>
                 ))}
               </div>
@@ -385,44 +607,15 @@ export function FacilitiesSection({ externalFacility = null, onModalClose = null
 
             {/* 4 Zones Map Columns */}
             <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              {(landingContent.zonesLayout?.zones || [
-                {
-                  id: 'zone-a',
-                  name: 'Khu A: Bơi Lội, Gym & Fitness',
-                  icon: 'pool',
-                  color: 'text-red-400',
-                  items: ['Tầng 1: Bể bơi 4 mùa 25m trong nhà nước ấm', 'Tầng 2: Phòng tập Gym & Fitness', 'Tầng 3: Khu thay đồ & tắm tráng nóng lạnh']
-                },
-                {
-                  id: 'zone-b',
-                  name: 'Khu B: Bóng Rổ, Cầu Lông & Bóng Bàn',
-                  icon: 'sports_basketball',
-                  color: 'text-blue-400',
-                  items: ['Tầng 1: Sân bóng rổ tiêu chuẩn phong trào có mái che', 'Tầng 2: Cụm 4 sân cầu lông thảm cao su chống trượt', 'Tầng 3: Khu bóng bàn trong nhà với 4 bàn tập']
-                },
-                {
-                  id: 'zone-c',
-                  name: 'Khu C: Võ Thuật, Boxing, Yoga & Pilates',
-                  icon: 'self_improvement',
-                  color: 'text-purple-400',
-                  items: ['Tầng 1: Phòng tập võ thuật & Boxing, thảm và bao cát', 'Tầng 3: Phòng tập Yoga & Pilates, khu thảm và máy Reformer', 'Tủ đồ cá nhân và khu thay đồ phục vụ học viên']
-                },
-                {
-                  id: 'zone-d',
-                  name: 'Khu Ngoài Trời: Bóng Đá & Pickleball',
-                  icon: 'stadium',
-                  color: 'text-emerald-400',
-                  items: ['Cụm sân bóng đá cỏ nhân tạo (sân 5 và sân 7)', 'Cụm 4 sân Pickleball, có lưới riêng và vạch khu vực bếp', 'Dàn đèn pha LED chiếu sáng ban đêm rõ nét']
-                }
-              ]).map((zone, idx) => (
-                <div key={zone.id || idx} className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-red-500/50 transition-colors">
-                  <div className={`flex items-center gap-2 ${zone.color || 'text-red-400'} font-chivo text-xs font-bold uppercase mb-1.5`}>
-                    <span className="material-symbols-outlined text-[18px]">{zone.icon}</span>
-                    <span>{zone.name}</span>
+              {(landingContent.zonesLayout?.zones || []).map((zone, idx) => (
+                <div key={zone.id || idx} className="tiya-zone-card">
+                  <div className="tiya-zone-card__header" style={{ color: zone.color || '#F87171' }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>{zone.icon}</span>
+                    <span>{isEn ? translateZoneName(zone.name, true) : zone.name}</span>
                   </div>
-                  <ul className="text-xs text-slate-300 space-y-1">
+                  <ul className="tiya-zone-card__list">
                     {(zone.items || []).map((item, itemIdx) => (
-                      <li key={itemIdx}>• {item}</li>
+                      <li key={itemIdx}>• {isEn ? translateZoneItem(item, true) : item}</li>
                     ))}
                   </ul>
                 </div>
@@ -431,408 +624,316 @@ export function FacilitiesSection({ externalFacility = null, onModalClose = null
           </div>
         </div>
 
-        {/* CALL TO ACTION: RENTAL & EVENT BANNER */}
-        <div className="bg-gradient-to-r from-red-600 via-red-600 to-red-700 text-white rounded-3xl p-8 sm:p-12 shadow-xl flex flex-col lg:flex-row items-center justify-between gap-8">
+        {/* CALL TO ACTION: RENTAL & EVENT BANNER (Tiya Slate Navy & Gold) */}
+        <div className="tiya-rental-banner tiya-reveal flex flex-col lg:flex-row items-center justify-between gap-8">
           <div className="max-w-2xl">
-            <span className="inline-block px-3 py-1 rounded bg-black/20 text-white font-chivo text-[11px] font-black uppercase tracking-wider mb-2">
-              {landingContent.ctaAndFooter?.ctaBadge || 'DÀNH CHO ĐỘI NHÓM & TỔ CHỨC SỰ KIỆN'}
+            <span className="tiya-rental-banner__badge">
+              {membershipBanner.ctaBadge}
             </span>
-            <h3 className="font-chivo text-2xl sm:text-3xl font-black uppercase text-white">
-              {landingContent.ctaAndFooter?.ctaTitle || 'Liên Hệ Đặt Thuê Sân Tập & Tổ Chức Giải Đấu'}
+            <h3 className="tiya-rental-banner__title">
+              {membershipBanner.ctaTitle}
             </h3>
-            <p className="text-white/90 text-xs sm:text-sm mt-2 leading-relaxed">
-              {landingContent.ctaAndFooter?.ctaDescription || 'Bạn đang tìm sân tập thường xuyên cho đội nhóm hoặc cần thuê sân tổ chức giao lưu, giải đấu phong trào? Hãy liên hệ ngay với chúng tôi để chọn khung giờ đẹp và nhận mức giá ưu đãi nhất.'}
+            <p className="tiya-rental-banner__desc">
+              {membershipBanner.ctaDescription}
             </p>
           </div>
 
           <div className="shrink-0 flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-            <button
-              type="button"
-              onClick={() => handleOpenModal(visibleFacilities[0] || SCMS_FACILITIES[0], 'rent')}
-              className="w-full sm:w-auto px-7 py-3.5 bg-white hover:bg-slate-100 text-red-600 font-chivo text-xs font-black uppercase tracking-wider rounded-xl shadow-lg transition-transform hover:-translate-y-0.5 flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-[19px]">calendar_today</span>
-              <span>{landingContent.ctaAndFooter?.ctaPrimaryText || 'Đặt Thuê Cụm Sân Ngay'}</span>
-            </button>
             <a
-              href={landingContent.ctaAndFooter?.ctaSecondaryLink || '#/login'}
-              className="w-full sm:w-auto px-6 py-3.5 bg-red-900/40 hover:bg-red-900 text-white font-chivo text-xs font-bold uppercase tracking-wider rounded-xl border border-white/20 transition-colors flex items-center justify-center gap-2"
+              href={membershipAction.href}
+              className="tiya-rental-banner__btn-primary w-full sm:w-auto cursor-pointer"
             >
-              <span>{landingContent.ctaAndFooter?.ctaSecondaryText || 'Xem Bảng Giá Gói Tập'}</span>
-              <span className="material-symbols-outlined text-[17px]">arrow_forward</span>
+              <span className="material-symbols-outlined" style={{ fontSize: '19px' }}>calendar_today</span>
+              <span>{membershipAction.label}</span>
+            </a>
+            <a
+              href={isMember ? '#/member/schedule' : '#khoa-hoc'}
+              className="tiya-rental-banner__btn-secondary w-full sm:w-auto"
+            >
+              <span>{isMember ? (isEn ? 'View Class Schedule' : 'Xem lịch lớp') : (isEn ? 'Explore Sports' : 'Khám phá bộ môn')}</span>
+              <span className="material-symbols-outlined" style={{ fontSize: '17px' }}>arrow_forward</span>
             </a>
           </div>
         </div>
 
       </div>
 
-      {/* DETAIL & BOOKING MODAL */}
+      {/* DETAIL & BOOKING MODAL (Tiya Design System) */}
       {selectedFacility && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
-          <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden max-h-[92vh] flex flex-col">
+        <div
+          className="tiya-modal-backdrop"
+          onClick={e => {
+            if (e.target === e.currentTarget) handleCloseModal();
+          }}
+        >
+          <div className="tiya-modal-container" onClick={e => e.stopPropagation()}>
             
-            {/* Modal Header */}
-            <div className="p-5 sm:p-6 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
-              <div className="flex items-center gap-3">
-                <span className="w-10 h-10 rounded-xl bg-red-600 flex items-center justify-center text-white shrink-0">
-                  <span className="material-symbols-outlined text-[22px]">domain</span>
-                </span>
-                <div>
-                  <span className="font-chivo text-[10px] font-black uppercase tracking-widest text-red-400 block">
-                    {selectedFacility.location} • {selectedFacility.badge}
+            {/* Modal Header (Tiya Slate Navy & Gold Accent) */}
+            <div className="tiya-modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div className="tiya-modal-header__icon-box">
+                  <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>
+                    {getFacilityCategoryMeta(selectedFacility).icon || 'domain'}
                   </span>
-                  <h3 className="font-chivo text-lg sm:text-xl font-black uppercase text-white leading-tight mt-0.5">
-                    {selectedFacility.name}
+                </div>
+                <div>
+                  <span className="tiya-modal-header__badge">
+                    {isEn ? translateLocation(selectedFacility.location, true) : selectedFacility.location} • {isEn ? translateFacilityBadge(selectedFacility.badge, true) : (selectedFacility.badge || '')}
+                  </span>
+                  <h3 className="tiya-modal-title">
+                    {isEn ? translateFacilityName(selectedFacility.name, true) : selectedFacility.name}
                   </h3>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={handleCloseModal}
-                className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
-                title="Đóng modal"
+                className="tiya-modal-close-btn"
+                title={isEn ? "Close modal" : "Đóng cửa sổ"}
+                aria-label={isEn ? "Close modal" : "Đóng cửa sổ"}
               >
-                <span className="material-symbols-outlined text-[18px]">close</span>
+                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>close</span>
               </button>
             </div>
 
-            {/* Modal Navigation Tabs */}
-            <div className="flex items-center bg-slate-100 border-b border-slate-200 px-6 shrink-0">
+            {/* Modal Navigation Tabs (Tiya Pill / Underline Tabs) */}
+            <div className="tiya-modal-tabs">
               <button
-                onClick={() => setActiveModalTab('booking')}
-                className={`py-3 px-4 font-chivo text-xs font-bold uppercase border-b-2 flex items-center gap-1.5 transition-colors ${
-                  activeModalTab === 'booking'
-                    ? 'border-red-600 text-red-600 bg-white'
-                    : 'border-transparent text-slate-600 hover:text-slate-900'
-                }`}
+                type="button"
+                onClick={() => setActiveModalTab('packages')}
+                className={`tiya-modal-tab ${activeModalTab === 'packages' ? 'active' : ''}`}
               >
-                <span className="material-symbols-outlined text-[16px]">edit_calendar</span>
-                <span>Đặt thuê cụm sân</span>
+                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>edit_calendar</span>
+                <span>{isEn ? 'Membership Packages' : 'Gói tập & Lịch lớp'}</span>
               </button>
               <button
+                type="button"
                 onClick={() => setActiveModalTab('specs')}
-                className={`py-3 px-4 font-chivo text-xs font-bold uppercase border-b-2 flex items-center gap-1.5 transition-colors ${
-                  activeModalTab === 'specs'
-                    ? 'border-red-600 text-red-600 bg-white'
-                    : 'border-transparent text-slate-600 hover:text-slate-900'
-                }`}
+                className={`tiya-modal-tab ${activeModalTab === 'specs' ? 'active' : ''}`}
               >
-                <span className="material-symbols-outlined text-[16px]">straighten</span>
-                <span>Thông số &amp; Tiện ích</span>
+                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>straighten</span>
+                <span>{isEn ? 'Specs & Amenities' : 'Thông số & Tiện ích'}</span>
               </button>
               <button
+                type="button"
                 onClick={() => setActiveModalTab('photos')}
-                className={`py-3 px-4 font-chivo text-xs font-bold uppercase border-b-2 flex items-center gap-1.5 transition-colors ${
-                  activeModalTab === 'photos'
-                    ? 'border-red-600 text-red-600 bg-white'
-                    : 'border-transparent text-slate-600 hover:text-slate-900'
-                }`}
+                className={`tiya-modal-tab ${activeModalTab === 'photos' ? 'active' : ''}`}
               >
-                <span className="material-symbols-outlined text-[16px]">photo_library</span>
-                <span>Hình ảnh thực tế</span>
+                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>photo_library</span>
+                <span>{isEn ? 'Actual Photos' : 'Hình ảnh thực tế'}</span>
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 overflow-y-auto space-y-6 flex-1">
-              {submitted ? (
-                <div className="p-8 rounded-2xl bg-emerald-50 border-2 border-emerald-500 text-emerald-950 text-center space-y-3">
-                  <div className="w-16 h-16 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto shadow-md">
-                    <span className="material-symbols-outlined text-3xl">check</span>
-                  </div>
-                  <h4 className="font-chivo text-xl font-black text-emerald-900 uppercase">
-                    Gửi Yêu Cầu Đặt Thuê Sân Thành Công!
-                  </h4>
-                  <p className="text-xs text-emerald-800 leading-relaxed max-w-md mx-auto">
-                    Cảm ơn <strong>{formState.fullName}</strong>! Nhân viên phụ trách cụm sân <strong>{selectedFacility.name}</strong> sẽ liên hệ trực tiếp qua số <strong>{formState.phone}</strong> trong thời gian sớm nhất để xác nhận giờ tập và hỗ trợ nhận sân.
-                  </p>
-                  <div className="pt-2">
-                    <button
-                      type="button"
-                      onClick={handleCloseModal}
-                      className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-chivo text-xs font-bold uppercase rounded-lg shadow transition-colors"
-                    >
-                      Hoàn Tất &amp; Đóng
-                    </button>
-                  </div>
-                </div>
-              ) : activeModalTab === 'specs' ? (
+            <div className="tiya-modal-body">
+              {activeModalTab === 'specs' ? (
                 /* SPECS & AMENITIES TAB */
-                <div className="space-y-5">
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                    <h4 className="font-chivo text-xs font-bold uppercase text-slate-900 mb-3 flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-red-600 text-[18px]">verified</span>
-                      <span>Thông số kỹ thuật &amp; Tiêu chuẩn sân</span>
-                    </h4>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div className="tiya-spec-section">
+                    <div className="tiya-spec-section__title">
+                      <span className="material-symbols-outlined">verified</span>
+                      <span>{isEn ? 'Specifications & Court Standards' : 'Thông số kỹ thuật & Tiêu chuẩn sân'}</span>
+                    </div>
+                    <div className="tiya-spec-grid">
                       {selectedFacility.specs.map((spec, sIdx) => (
-                        <div key={sIdx} className="p-2.5 rounded-lg bg-white border border-slate-200">
-                          <span className="text-slate-400 block text-[10px] uppercase font-bold">{spec.label}</span>
-                          <strong className="text-slate-800 font-semibold">{spec.value}</strong>
+                        <div key={sIdx} className="tiya-spec-item">
+                          <span className="tiya-spec-item__label">{isEn ? translateSpecLabel(spec.label, true) : spec.label}</span>
+                          <strong className="tiya-spec-item__val">{isEn ? translateSpecValue(spec.value, true) : spec.value}</strong>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  <div>
-                    <h4 className="font-chivo text-xs font-bold uppercase text-slate-900 mb-2.5 flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-red-600 text-[18px]">check_circle</span>
-                      <span>Tiện ích dịch vụ tích hợp sẵn</span>
-                    </h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="tiya-spec-section" style={{ marginBottom: 0 }}>
+                    <div className="tiya-spec-section__title">
+                      <span className="material-symbols-outlined">check_circle</span>
+                      <span>{isEn ? 'Included Service Amenities' : 'Tiện ích dịch vụ tích hợp sẵn'}</span>
+                    </div>
+                    <div className="tiya-amenity-grid">
                       {selectedFacility.amenities.map((amenity, aIdx) => (
-                        <div key={aIdx} className="flex items-center gap-2 p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 font-medium">
-                          <span className="material-symbols-outlined text-emerald-600 text-[18px]">done</span>
-                          <span>{amenity}</span>
+                        <div key={aIdx} className="tiya-amenity-item">
+                          <span className="material-symbols-outlined">done</span>
+                          <span>{isEn ? translateAmenity(amenity, true) : amenity}</span>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  <div className="p-4 rounded-xl bg-red-50 border border-red-200/80 text-xs text-red-900">
-                    <strong className="block font-bold mb-1">Mức giá tham khảo:</strong>
-                    <span>{selectedFacility.priceRate}. Hội viên sở hữu gói tập tháng hoặc thẻ hội viên được hưởng ưu đãi giảm giá khi thuê sân.</span>
+                  <div className="tiya-price-callout">
+                    <strong>{isEn ? 'Membership: ' : 'Gói tập: '}</strong>
+                    <a href={membershipAction.href}>{membershipAction.label}</a>
+                    <p className="mt-2 text-sm">{isEn ? 'Prices and access to classes depend on the selected package.' : 'Giá và quyền tham gia lớp được quy định trong từng gói tập.'}</p>
                   </div>
                 </div>
               ) : activeModalTab === 'photos' ? (
                 /* PHOTOS GALLERY TAB */
-                <div className="space-y-4">
-                  <div className="rounded-xl overflow-hidden border border-slate-200 shadow-sm">
-                    <img
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ borderRadius: '14px', overflow: 'hidden', border: '1px solid #E2E8F0', boxShadow: '0 4px 14px rgba(0,0,0,0.06)' }}>
+                    {selectedFacility.image ? <img
                       src={selectedFacility.image}
                       alt={selectedFacility.name}
-                      className="w-full h-64 object-cover"
-                    />
-                    <div className="p-3 bg-slate-900 text-white text-xs font-medium flex items-center justify-between">
-                      <span>Góc máy toàn cảnh - {selectedFacility.name}</span>
-                      <span className="text-slate-400 text-[11px]">{selectedFacility.location}</span>
+                      style={{ width: '100%', height: '240px', objectFit: 'cover', display: 'block' }}
+                    /> : <p className="p-12 text-center text-slate-500">{isEn ? 'No venue photo available.' : 'Chưa có ảnh phòng / sân.'}</p>}
+                    <div style={{ padding: '12px 18px', background: 'var(--secondary-color)', color: 'var(--white-color)', fontSize: '12.5px', fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>{isEn ? `Panoramic View — ${isEn ? translateFacilityName(selectedFacility.name, true) : selectedFacility.name}` : `Góc máy toàn cảnh — ${selectedFacility.name}`}</span>
+                      <span style={{ color: 'var(--custom-btn-bg-color)', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' }}>{isEn ? translateLocation(selectedFacility.location, true) : selectedFacility.location}</span>
                     </div>
                   </div>
 
                   {selectedFacility.secondaryImage && (
-                    <div className="rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+                    <div style={{ borderRadius: '14px', overflow: 'hidden', border: '1px solid #E2E8F0', boxShadow: '0 4px 14px rgba(0,0,0,0.06)' }}>
                       <img
                         src={selectedFacility.secondaryImage}
                         alt={`${selectedFacility.name} chi tiết`}
-                        className="w-full h-56 object-cover"
+                        style={{ width: '100%', height: '220px', objectFit: 'cover', display: 'block' }}
                       />
-                      <div className="p-3 bg-slate-900 text-white text-xs font-medium flex items-center justify-between">
-                        <span>Chi tiết mặt sàn &amp; không gian tập luyện</span>
-                        <span className="text-slate-400 text-[11px]">Thực tế tại trung tâm</span>
+                      <div style={{ padding: '12px 18px', background: 'var(--secondary-color)', color: 'var(--white-color)', fontSize: '12.5px', fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>{isEn ? 'Floor surface & equipment details' : 'Chi tiết mặt sàn & trang thiết bị'}</span>
+                        <span style={{ color: 'var(--primary-color)', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' }}>{isEn ? 'SCMS Actual' : 'Thực tế SCMS'}</span>
                       </div>
                     </div>
                   )}
                 </div>
               ) : (
-                /* BOOKING & TOUR FORM TAB */
-                <>
-                  {/* Quick Card Summary */}
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                    <div className="flex items-start sm:items-center gap-3">
-                      <img
-                        src={selectedFacility.image}
-                        alt={selectedFacility.name}
-                        className="w-12 h-12 sm:w-16 sm:h-16 rounded-lg object-cover shrink-0"
-                      />
-                      <div className="text-xs flex-1 min-w-0">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <strong className="text-slate-900 block font-bold">{selectedFacility.name}</strong>
-                          <button
-                            type="button"
-                            onClick={() => setShowFacilityPicker(prev => !prev)}
-                            aria-expanded={showFacilityPicker}
-                            aria-controls="booking-facility-picker"
-                            className="self-start sm:self-auto shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-red-200 bg-white text-red-600 text-[11px] font-bold hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 transition-colors"
-                          >
-                            <span className="material-symbols-outlined text-[16px]" aria-hidden="true">swap_horiz</span>
-                            <span>Đổi sân</span>
-                          </button>
-                        </div>
-                        <span className="text-slate-500 block mt-0.5">{selectedFacility.location} • Giờ mở cửa: {selectedFacility.openHours}</span>
-                        <span className="text-red-600 font-semibold block mt-0.5">{selectedFacility.priceRate}</span>
-                      </div>
-                    </div>
-                    {showFacilityPicker && (
-                      <div id="booking-facility-picker" className="mt-3 pt-3 border-t border-slate-200">
-                        <label htmlFor="booking-facility" className="block text-xs font-bold text-slate-700 mb-1.5">
-                          Chọn sân hoặc phòng tập muốn đặt
-                        </label>
-                        <select
-                          id="booking-facility"
-                          autoFocus
-                          value={selectedFacility.id}
-                          onChange={e => handleChangeFacility(e.target.value)}
-                          className="w-full min-w-0 px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600"
-                        >
-                          {SCMS_FACILITIES.map(facility => (
-                            <option key={facility.id} value={facility.id}>
-                              {facility.name} — {facility.location}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Form */}
-                  <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                      <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-red-600 text-[20px]">calendar_month</span>
-                        <span className="text-xs font-chivo font-black uppercase tracking-wider text-slate-900">
-                          Phiếu Đăng Ký Đặt Thuê Cụm Sân
+                /* PACKAGES & SCHEDULE TAB - CONCISE & EASY TO CHOOSE */
+                <div className="space-y-4">
+                  {/* 1. Quick Facility Summary Banner */}
+                  <div className="p-3.5 sm:p-4 rounded-xl bg-slate-50 border border-slate-200/90 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                        <span className="material-symbols-outlined text-[22px]">
+                          {getFacilityCategoryMeta(selectedFacility).icon || 'stadium'}
                         </span>
                       </div>
-                      <span className="text-[11px] text-slate-500 font-medium">
-                        Giữ chỗ &amp; xác nhận nhanh qua điện thoại
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                          <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                            {isEn ? translateFacilityBadge(selectedFacility.badge, true) : (selectedFacility.badge || 'Sân bãi tiêu chuẩn')}
+                          </span>
+                          <span className="text-xs font-semibold text-slate-500">
+                            ⏱ {selectedFacility.openHours || '06:00 - 22:00'} • 👥 {selectedFacility.capacity || (isEn ? '30 slots' : 'Sức chứa tiêu chuẩn')}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-700 font-medium leading-snug">
+                          {isEn
+                            ? `Join with a membership pass to train at ${selectedFacility.name} with free lockers & warm showers.`
+                            : `Đăng ký gói hội viên để tập luyện tự do tại ${selectedFacility.name}, miễn phí tủ đồ thông minh và phòng tắm.`}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. Three Core Package Cards for Quick Selection */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h5 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[17px] text-amber-600">loyalty</span>
+                        {isEn ? 'Choose a Membership Pass' : 'Chọn gói tập phù hợp'}
+                      </h5>
+                      <span className="text-[11px] text-slate-500">
+                        {isEn ? 'Instant online activation' : 'Kích hoạt ngay sau thanh toán'}
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                          Họ và tên người liên hệ *
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="Nguyễn Văn A"
-                          value={formState.fullName}
-                          onChange={e => setFormState({ ...formState, fullName: e.target.value })}
-                          className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                          Số điện thoại liên hệ *
-                        </label>
-                        <input
-                          type="tel"
-                          required
-                          placeholder="0912 345 678"
-                          value={formState.phone}
-                          onChange={e => setFormState({ ...formState, phone: e.target.value })}
-                          className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white"
-                        />
-                      </div>
-                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {packages.slice(0, 3).map((pkg) => {
+                        const priceVnd = Number(pkg.price || 0).toLocaleString('vi-VN');
+                        const isPop = pkg.popular || pkg.id === 2 || (pkg.name || '').includes('Pro');
+                        const unit = pkg.durationDays >= 365 ? (isEn ? 'year' : 'năm') : pkg.durationDays >= 90 ? (isEn ? 'quarter' : 'quý') : (isEn ? 'month' : 'tháng');
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                          Email (để nhận hóa đơn &amp; xác nhận)
-                        </label>
-                        <input
-                          type="email"
-                          placeholder="vidu@scms.vn"
-                          value={formState.email}
-                          onChange={e => setFormState({ ...formState, email: e.target.value })}
-                          className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                          Đơn vị / Doanh nghiệp / CLB
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Tập thể lớp / Công ty ABC..."
-                          value={formState.organization}
-                          onChange={e => setFormState({ ...formState, organization: e.target.value })}
-                          className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white"
-                        />
-                      </div>
-                    </div>
+                        return (
+                          <div
+                            key={pkg.id}
+                            className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between ${
+                              isPop
+                                ? 'bg-amber-50/50 border-amber-300 ring-1 ring-amber-300/50 shadow-sm'
+                                : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
+                            }`}
+                          >
+                            <div>
+                              <div className="flex items-center justify-between gap-1 mb-1.5">
+                                <span className={`text-[9.5px] font-bold uppercase px-2 py-0.5 rounded ${
+                                  isPop ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-600'
+                                }`}>
+                                  {isPop ? (isEn ? 'Most Popular' : 'Phổ biến nhất') : (pkg.badge || (isEn ? 'Standard' : 'Tiêu chuẩn'))}
+                                </span>
+                                <span className="text-[11px] font-semibold text-slate-400">
+                                  {pkg.durationDays} {isEn ? 'days' : 'ngày'}
+                                </span>
+                              </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                          Ngày dự kiến *
-                        </label>
-                        <input
-                          type="date"
-                          required
-                          value={formState.expectedDate}
-                          onChange={e => setFormState({ ...formState, expectedDate: e.target.value })}
-                          className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                          Khung giờ mong muốn
-                        </label>
-                        <select
-                          value={formState.timeSlot}
-                          onChange={e => setFormState({ ...formState, timeSlot: e.target.value })}
-                          className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white"
-                        >
-                          <option value="Sáng sớm (05:30 - 08:00)">Buổi sáng sớm (05:30 - 08:00)</option>
-                          <option value="Sáng (08:00 - 11:30)">Buổi sáng (08:00 - 11:30)</option>
-                          <option value="Chiều (13:30 - 17:30)">Buổi chiều (13:30 - 17:30)</option>
-                          <option value="Tối (17:30 - 22:00)">Buổi tối (17:30 - 22:00)</option>
-                          <option value="Trọn gói sự kiện">Thuê trọn ngày tổ chức giải đấu</option>
-                        </select>
-                      </div>
-                    </div>
+                              <h6 className="text-xs sm:text-sm font-extrabold text-slate-900 leading-tight">
+                                {isEn && pkg.nameEn ? pkg.nameEn : pkg.name}
+                              </h6>
 
-                    {/* Dịch vụ bổ trợ (Optional Extra Services) */}
-                    <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                        Dịch vụ bổ trợ mong muốn:
-                      </label>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        {[
-                          'Nước uống đóng chai',
-                          'Áo bib phân đội',
-                          'Trọng tài giao lưu',
-                          'Bóng tập thể thao',
-                          'Loa mic di động',
-                          'Bảng lật điểm số tay'
-                        ].map((srv, idx) => (
-                          <label key={idx} className="flex items-center gap-2 p-2 rounded bg-slate-50 border border-slate-200 cursor-pointer hover:bg-slate-100">
-                            <input
-                              type="checkbox"
-                              checked={formState.extraServices.includes(srv)}
-                              onChange={() => handleToggleExtraService(srv)}
-                              className="accent-red-600"
-                            />
-                            <span className="text-slate-700">{srv}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
+                              <div className="my-2">
+                                <span className="text-base sm:text-lg font-black text-[#2D6A4F] font-chivo">
+                                  {priceVnd}đ
+                                </span>
+                                <span className="text-[11px] text-slate-500 ml-1">
+                                  / {unit}
+                                </span>
+                              </div>
 
-                    <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                        Ghi chú yêu cầu cụ thể
-                      </label>
-                      <textarea
-                        rows={2}
-                        placeholder="Số lượng người tham gia dự kiến, yêu cầu về bảng điểm, nước uống hoặc thời gian bàn giao..."
-                        value={formState.notes}
-                        onChange={e => setFormState({ ...formState, notes: e.target.value })}
-                        className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white resize-none"
-                      />
-                    </div>
+                              <ul className="space-y-1 text-[11px] text-slate-600 mb-3">
+                                <li className="flex items-center gap-1.5">
+                                  <span className="material-symbols-outlined text-[13px] text-emerald-600 shrink-0">check</span>
+                                  <span>{pkg.accessType || (isEn ? 'Court training included' : 'Tập tự do tại sân bãi')}</span>
+                                </li>
+                                <li className="flex items-center gap-1.5">
+                                  <span className="material-symbols-outlined text-[13px] text-emerald-600 shrink-0">check</span>
+                                  <span>{isEn ? 'Smart lockers & shower' : 'Tủ đồ thông minh miễn phí'}</span>
+                                </li>
+                              </ul>
+                            </div>
 
-                    <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
-                      <button
-                        type="button"
-                        onClick={handleCloseModal}
-                        className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600"
+                            <a
+                              href={membershipAction.href}
+                              className={`w-full py-2 px-3 rounded-lg text-xs font-bold text-center flex items-center justify-center gap-1 transition active:scale-95 ${
+                                isPop
+                                  ? 'bg-[#2D6A4F] hover:bg-[#1b4332] text-white shadow-sm'
+                                  : 'bg-slate-100 hover:bg-slate-200 text-slate-800'
+                              }`}
+                            >
+                              <span>{isEn ? 'Select Pass' : 'Chọn gói này'}</span>
+                              <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                            </a>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 3. Action Toolbar & Hotline */}
+                  <div className="pt-2 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                      <a
+                        href={membershipAction.href}
+                        className="flex-1 sm:flex-none py-2 px-4 rounded-lg bg-[#2D6A4F] hover:bg-[#1b4332] text-white text-xs font-bold text-center inline-flex items-center justify-center gap-1.5 shadow-sm transition"
                       >
-                        Đóng
-                      </button>
-                      <button
-                        type="submit"
-                        className="px-6 py-2.5 text-xs font-bold uppercase tracking-wider rounded-lg bg-red-600 hover:bg-red-700 text-white shadow-md transition-colors flex items-center gap-1.5"
+                        <span className="material-symbols-outlined text-[16px]">visibility</span>
+                        <span>{isEn ? 'View All Packages' : 'Xem tất cả gói tập'}</span>
+                      </a>
+                      <a
+                        href={isMember ? '#/member/schedule' : '#khoa-hoc'}
+                        className="flex-1 sm:flex-none py-2 px-4 rounded-lg bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-bold text-center inline-flex items-center justify-center gap-1.5 transition"
                       >
-                        <span className="material-symbols-outlined text-[16px]">send</span>
-                        <span>Xác Nhận Đặt Thuê Sân</span>
-                      </button>
+                        <span className="material-symbols-outlined text-[16px] text-blue-600">calendar_month</span>
+                        <span>{isEn ? 'Class Timetable' : 'Xem lịch mở ca'}</span>
+                      </a>
                     </div>
-                  </form>
-                </>
+
+                    {contactPhone && (
+                      <div className="text-[11.5px] text-slate-500 flex items-center gap-1.5">
+                        <span>{isEn ? 'Need advice?' : 'Cần tư vấn?'}</span>
+                        <a href={`tel:${contactPhone}`} className="font-bold text-emerald-700 hover:underline inline-flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">call</span>
+                          <span>{contactPhone}</span>
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
 

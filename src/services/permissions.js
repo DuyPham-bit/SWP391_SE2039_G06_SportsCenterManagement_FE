@@ -44,13 +44,23 @@ export const SYSTEM_CAPABILITIES = [
     defaultRole: 'MANAGER'
   },
   {
+    id: 'manage_coach_operations',
+    label: 'Vận hành đội ngũ HLV',
+    desc: 'Duyệt nghỉ phép, cấu hình KPI/hoa hồng, tài nguyên và bảo trì thiết bị',
+    path: '#/manager/coach-operations',
+    icon: 'manage_accounts',
+    category: 'VẬN HÀNH & NHÂN SỰ',
+    targetScreenName: 'Vận Hành Đội Ngũ HLV',
+    defaultRole: 'MANAGER'
+  },
+  {
     id: 'manage_landing_content',
-    label: 'Nội Dung Trang Chủ',
+    label: 'QUẢN LÝ NỘI DUNG TRANG CHỦ & ĐA PHƯƠNG TIỆN',
     desc: 'Tùy biến nội dung landing page, môn học, cụm sân bãi và hình ảnh đám mây',
     path: '#/manager/home-content',
     icon: 'dashboard_customize',
     category: 'VẬN HÀNH & NHÂN SỰ',
-    targetScreenName: 'Nội Dung Trang Chủ',
+    targetScreenName: 'QUẢN LÝ NỘI DUNG TRANG CHỦ & ĐA PHƯƠNG TIỆN',
     defaultRole: 'MANAGER'
   },
   {
@@ -66,7 +76,7 @@ export const SYSTEM_CAPABILITIES = [
   {
     id: 'manage_roles',
     label: 'Cấu hình Phân quyền',
-    desc: 'Thiết lập ma trận quyền hạn cho các nhóm người dùng',
+    desc: 'Thiết lập quyền hạn cho các nhóm người dùng',
     path: '#/manager/roles-permissions',
     icon: 'admin_panel_settings',
     category: 'BÁO CÁO & BẢO MẬT',
@@ -157,6 +167,26 @@ export const SYSTEM_CAPABILITIES = [
     targetScreenName: 'Gợi Ý Giáo Án AI',
     defaultRole: 'COACH'
   },
+  {
+    id: 'coach_support',
+    label: 'Yêu cầu Hỗ trợ',
+    desc: 'Gửi yêu cầu hỗ trợ chuyên môn, thiết bị và lịch trình tới BQL',
+    path: '#/coach/support',
+    icon: 'support_agent',
+    category: 'HUẤN LUYỆN VIÊN',
+    targetScreenName: 'Yêu Cầu Hỗ Trợ',
+    defaultRole: 'COACH'
+  },
+  {
+    id: 'manage_coach_workspace',
+    label: 'Không gian HLV chuyên nghiệp',
+    desc: 'Lịch PT, hồ sơ sức khỏe, bài tập, dinh dưỡng, chat, KPI và tài nguyên',
+    path: '#/coach/professional',
+    icon: 'workspace_premium',
+    category: 'HUẤN LUYỆN VIÊN',
+    targetScreenName: 'Coach Professional Hub',
+    defaultRole: 'COACH'
+  },
 
   // 4. Hội viên
   {
@@ -170,6 +200,26 @@ export const SYSTEM_CAPABILITIES = [
     defaultRole: 'MEMBER'
   },
   {
+    id: 'cancel_booking',
+    label: 'Hủy Đặt Chỗ',
+    desc: 'Hội viên chủ động hủy đặt chỗ trước giờ quy định',
+    path: '#/member/bookings',
+    icon: 'event_busy',
+    category: 'HỘI VIÊN & ĐẶT CHỖ',
+    targetScreenName: 'Lớp Đã Đặt & Hủy',
+    defaultRole: 'MEMBER'
+  },
+  {
+    id: 'view_my_progress',
+    label: 'Xem Tiến Độ Rèn Luyện',
+    desc: 'Theo dõi giáo án, chỉ số thể lực và nhận xét từ HLV',
+    path: '#/member/progress',
+    icon: 'stacked_line_chart',
+    category: 'HỘI VIÊN & ĐẶT CHỖ',
+    targetScreenName: 'Giáo Án & Tiến Độ',
+    defaultRole: 'MEMBER'
+  },
+  {
     id: 'ask_ai_assistant',
     label: 'Trợ lý AI Hội viên',
     desc: 'Tương tác hỏi đáp kiến thức thể lực & dinh dưỡng',
@@ -178,10 +228,74 @@ export const SYSTEM_CAPABILITIES = [
     category: 'HỘI VIÊN & ĐẶT CHỖ',
     targetScreenName: 'Trợ Lý Thể Thao AI',
     defaultRole: 'MEMBER'
+  },
+  {
+    id: 'member_support',
+    label: 'Yêu cầu Hỗ trợ',
+    desc: 'Gửi và theo dõi yêu cầu hỗ trợ, khiếu nại tới trung tâm',
+    path: '#/member/support',
+    icon: 'support_agent',
+    category: 'HỘI VIÊN & ĐẶT CHỖ',
+    targetScreenName: 'Yêu Cầu Hỗ Trợ',
+    defaultRole: 'MEMBER'
+  },
+  {
+    id: 'use_coach_portal',
+    label: 'Tương tác với HLV',
+    desc: 'Xác nhận lịch PT, check-in bài tập, nhật ký dinh dưỡng, chat và đánh giá',
+    path: '#/member/coach-portal',
+    icon: 'connect_without_contact',
+    category: 'HỘI VIÊN & ĐẶT CHỖ',
+    targetScreenName: 'Cổng Tương Tác HLV',
+    defaultRole: 'MEMBER'
   }
 ];
 
-// Helper to get active permissions of a role
+// Per-user custom permission overrides
+export function getUserCustomOverrides(centerId, userId) {
+  if (!centerId || !userId) return null;
+  try {
+    const raw = localStorage.getItem(`scms_user_perm_override_${centerId}_${userId}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveUserCustomOverrides(centerId, userId, overrides) {
+  if (!centerId || !userId) return;
+  try {
+    if (!overrides) {
+      localStorage.removeItem(`scms_user_perm_override_${centerId}_${userId}`);
+    } else {
+      localStorage.setItem(`scms_user_perm_override_${centerId}_${userId}`, JSON.stringify(overrides));
+    }
+    window.dispatchEvent(new CustomEvent('SCMS_PERMISSIONS_CHANGED', { detail: { centerId, userId } }));
+  } catch (e) {
+    console.error('Failed to save user overrides', e);
+  }
+}
+
+export function getAllUserCustomOverrides(centerId) {
+  const result = {};
+  if (!centerId) return result;
+  try {
+    const prefix = `scms_user_perm_override_${centerId}_`;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(prefix)) {
+        const userId = key.replace(prefix, '');
+        const data = JSON.parse(localStorage.getItem(key));
+        if (data) result[userId] = data;
+      }
+    }
+  } catch (e) {
+    console.error('Failed to get all user overrides', e);
+  }
+  return result;
+}
+
+// Capabilities come only from the authenticated API response.
 export function getPermissionsForRole(role) {
   const normalized = String(role || '').toUpperCase();
   const user = getAuthUser();
@@ -189,10 +303,8 @@ export function getPermissionsForRole(role) {
   return [];
 }
 
-// Helper to check if a role has a specific capability
+// Helper to check if a role or user has a specific capability
 export function hasCapability(role, capId) {
-  const normalized = String(role || '').toUpperCase();
-  if (normalized === 'MANAGER' || normalized === 'ADMIN' || normalized === 'SYSTEMADMIN') return true; // Superuser access
   if (!capId) return true;
   const perms = getPermissionsForRole(role);
   return perms.includes(capId);
@@ -210,27 +322,42 @@ export function getDynamicNavItems(role) {
 
   switch (normalized) {
     case 'SYSTEMADMIN':
-    case 'ADMIN':
+    case 'ADMIN': {
+      return [
+        { label: 'TỔNG QUAN HỆ THỐNG', isHeader: true },
+        { path: '#/admin/dashboard', icon: 'admin_panel_settings', label: 'Bảng Quản Trị Admin' },
+        { label: 'QUẢN TRỊ HỆ THỐNG', isHeader: true },
+        { path: '#/admin/centers', icon: 'account_tree', label: 'Quản Lý Cơ Sở' },
+        { path: '#/admin/managers', icon: 'manage_accounts', label: 'Tài Khoản Manager' },
+        { path: '#/admin/accounts', icon: 'group', label: 'Tài Khoản & Phiên' },
+        { label: 'BẢO MẬT & NỘI DUNG', isHeader: true },
+        { path: '#/admin/roles-permissions', icon: 'policy', label: 'Vai Trò & Phân Quyền' },
+        { path: '#/admin/audit-logs', icon: 'history', label: 'Nhật Ký Audit Hệ Thống' },
+        { path: '#/admin/home-content', icon: 'dashboard_customize', label: 'Nội Dung Trang Chủ' }
+      ];
+    }
+
     case 'MANAGER': {
-      // Base manager & admin nav
-      const isSystemAdmin = normalized === 'SYSTEMADMIN';
-      const isAnyAdmin = normalized === 'ADMIN' || isSystemAdmin;
       const items = [
         { label: 'TỔNG QUAN', isHeader: true },
-        { path: '#/manager/dashboard', icon: 'dashboard', label: isSystemAdmin ? 'Bảng Quản Trị Hệ Thống' : (isAnyAdmin ? 'Bảng Quản Trị Admin' : 'Bảng Quản Lý') },
+        { path: '#/manager/dashboard', icon: 'dashboard', label: 'Bảng Quản Lý Cơ Sở' },
         { label: 'VẬN HÀNH & NHÂN SỰ', isHeader: true }
       ];
 
-      if (normalized === 'MANAGER') items.push({ path: '#/manager/members', icon: 'group', label: 'Quản Lý Thành Viên' });
+      items.push({ path: '#/manager/members', icon: 'group', label: 'Quản Lý Thành Viên' });
+      items.push({ path: '#/manager/support-communications', icon: 'campaign', label: 'Hỗ Trợ & Thông Báo' });
       if (perms.includes('manage_staff')) items.push({ path: '#/manager/staff', icon: 'badge', label: 'Quản Lý Nhân Viên' });
       if (perms.includes('manage_packages')) items.push({ path: '#/manager/packages', icon: 'card_membership', label: 'Gói Tập Hội Viên' });
       if (perms.includes('manage_classes')) items.push({ path: '#/manager/classes-rooms', icon: 'sports_score', label: 'Lớp, Bộ Môn & Phòng' });
       if (perms.includes('assign_coach')) items.push({ path: '#/manager/coach-assignment', icon: 'assignment_ind', label: 'Phân Công HLV' });
-      items.push({ path: '#/manager/home-content', icon: 'dashboard_customize', label: 'Nội Dung Trang Chủ' });
+      if (perms.includes('manage_coach_operations')) items.push({ path: '#/manager/coach-operations', icon: 'manage_accounts', label: 'Vận Hành Đội Ngũ HLV' });
+      items.push({ path: '#/manager/home-content', icon: 'dashboard_customize', label: 'Quản Lý Nội Dung Trang Chủ' });
+
+      items.push({ label: 'TÀI CHÍNH & HÓA ĐƠN', isHeader: true });
+      items.push({ path: '#/manager/invoices', icon: 'receipt_long', label: 'Quản Lý Hóa Đơn & Thu Tiền' });
 
       items.push({ label: 'BÁO CÁO & BẢO MẬT', isHeader: true });
       if (perms.includes('view_reports')) items.push({ path: '#/manager/reports', icon: 'analytics', label: 'Báo Cáo & Thống Kê' });
-      if (perms.includes('manage_roles')) items.push({ path: '#/manager/roles-permissions', icon: 'admin_panel_settings', label: 'Vai Trò & Phân Quyền' });
       if (perms.includes('view_audit_logs')) items.push({ path: '#/manager/audit-logs', icon: 'history', label: 'Nhật Ký Audit Logs' });
 
       return items;
@@ -281,6 +408,9 @@ export function getDynamicNavItems(role) {
         items.push({ path: '#/coach/schedule', icon: 'calendar_month', label: 'Lịch Giảng Dạy' });
         items.push({ path: '#/coach/members', icon: 'group', label: 'Danh Sách Học Viên' });
       }
+      if (perms.includes('manage_coach_workspace')) {
+        items.push({ path: '#/coach/professional', icon: 'workspace_premium', label: 'Coach Professional Hub' });
+      }
       if (perms.includes('take_attendance')) {
         items.push({ path: '#/coach/attendance', icon: 'fact_check', label: 'Điểm Danh Lớp' });
       }
@@ -300,8 +430,11 @@ export function getDynamicNavItems(role) {
         }
       }
 
+      items.push({ label: 'HỖ TRỢ & LIÊN HỆ', isHeader: true });
+      items.push({ path: '#/coach/support', icon: 'support_agent', label: 'Yêu Cầu Hỗ Trợ' });
+
       // Add extra granted permissions if assigned by Manager
-      const defaultCoachCapIds = ['view_teaching_schedule', 'view_class_members', 'create_training_plan', 'record_workout_progress', 'take_attendance', 'send_coach_notifications', 'get_ai_recommendation'];
+      const defaultCoachCapIds = ['view_teaching_schedule', 'view_class_members', 'create_training_plan', 'record_workout_progress', 'take_attendance', 'send_coach_notifications', 'get_ai_recommendation', 'coach_support', 'manage_coach_workspace'];
       const extraCaps = perms.filter(capId => !defaultCoachCapIds.includes(capId));
 
       if (extraCaps.length > 0) {
@@ -333,14 +466,12 @@ export function getDynamicNavItems(role) {
 
       items.push({ label: 'RÈN LUYỆN & HỖ TRỢ', isHeader: true });
       if (perms.includes('view_my_progress')) items.push({ path: '#/member/progress', icon: 'stacked_line_chart', label: 'Giáo Án, Tiến Độ & Nhận Xét' });
+      if (perms.includes('use_coach_portal')) items.push({ path: '#/member/coach-portal', icon: 'connect_without_contact', label: 'Tương Tác Với HLV' });
       items.push({ path: '#/member/notifications', icon: 'notifications', label: 'Thông Báo Của Tôi' });
-
-      if (perms.includes('ask_ai_assistant')) {
-        items.push({ path: '#/member/ai-assistant', icon: 'smart_toy', label: 'Trợ Lý Thể Thao AI' });
-      }
+      items.push({ path: '#/member/support', icon: 'support_agent', label: 'Yêu Cầu Hỗ Trợ' });
 
       // Add extra granted permissions if assigned by Manager
-      const defaultMemberCapIds = ['view_packages', 'subscribe_package', 'view_schedules', 'book_class', 'cancel_booking', 'view_my_progress', 'ask_ai_assistant'];
+      const defaultMemberCapIds = ['view_packages', 'subscribe_package', 'view_schedules', 'book_class', 'cancel_booking', 'view_my_progress', 'ask_ai_assistant', 'member_support'];
       const extraCaps = perms.filter(capId => !defaultMemberCapIds.includes(capId));
 
       if (extraCaps.length > 0) {

@@ -35,6 +35,9 @@ export function GoogleLoginModal({ isOpen, onClose, onSuccess, linkAccount = fal
       if (!active || !buttonRef.current) return;
       google.accounts.id.initialize({
         client_id: googleClientId,
+        error_callback: () => {
+          if (active) setError(`Tên miền/cổng hiện tại (${window.location.origin}) chưa được thêm vào Authorized JavaScript origins trong Google Cloud Console.`);
+        },
         callback: async ({ credential }) => {
           if (!active) return;
           if (linkAccount && !passwordRef.current) {
@@ -49,7 +52,7 @@ export function GoogleLoginModal({ isOpen, onClose, onSuccess, linkAccount = fal
               onClose();
             } else {
               const user = await loginWithGoogle({ credential });
-              showSuccess('Đăng nhập Google thành công.');
+              showSuccess(`Đăng nhập thành công, ${user.fullName || 'bạn'}!`);
               onClose();
               onSuccess?.(user);
             }

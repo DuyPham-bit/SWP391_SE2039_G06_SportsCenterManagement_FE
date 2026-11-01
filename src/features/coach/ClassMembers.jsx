@@ -1,17 +1,19 @@
+import React, { useState, useEffect } from 'react';
 import { coachApi } from '../../services/api.js';
 import { useAuth } from '../../context/AuthContext.js';
-import { useToast } from '../../context/ToastContext.js';
+import { useToast } from '../../context/ToastContext.jsx';
 import { Table, LoadingSpinner } from '../../components/common/Table.js';
-import { Badge } from '../../components/common/StatCard.js';
-import { Modal } from '../../components/common/Modal.js';
-import { CoachError, coachInput } from './CoachShared.js';
+import { Modal } from '../../components/common/Modal.jsx';
+import { CoachError, coachInput } from './CoachShared.jsx';
 import { coachDate } from './coachOverview.js';
-
-const { useState, useEffect } = React;
+import { useLanguage } from '../../context/LanguageContext.jsx';
+import { translateClassName, translateSportName } from '../../services/i18nHelper.js';
 
 export function ClassMembers() {
   const { currentUser } = useAuth();
-  const { showSuccess, showError } = useToast();
+  const { showSuccess, showError, confirm } = useToast();
+  const { language } = useLanguage();
+  const isEn = language === 'en';
 
   const [classes, setClasses] = useState([]);
   const [selectedClassId, setSelectedClassId] = useState(Number(new URLSearchParams(window.location.hash.split('?')[1]).get('classId')) || '');
@@ -108,7 +110,7 @@ export function ClassMembers() {
 
     if (existing) {
       setExistingPlanId(existing.id);
-      setPlanTitle(existing.title || `Giáo án cá nhân: ${memberRow.memberName}`);
+      setPlanTitle(existing.title || (isEn ? `Personal Plan: ${memberRow.memberName}` : `Giáo án cá nhân: ${memberRow.memberName}`));
       setFitnessCondition(existing.fitnessCondition || '');
       setPlanGoal(existing.goal || '');
       setStartDate(existing.startDate || coachDate());
@@ -116,7 +118,7 @@ export function ClassMembers() {
       setExercises((existing.exercises || []).map(ex => ({ ...ex })));
     } else {
       setExistingPlanId(null);
-      setPlanTitle(`Giáo án riêng biệt: ${memberRow.memberName}`);
+      setPlanTitle(isEn ? `Custom Plan: ${memberRow.memberName}` : `Giáo án riêng biệt: ${memberRow.memberName}`);
       setFitnessCondition(memberRow.medicalNote || '');
       setPlanGoal(memberRow.fitnessGoal || '');
       setStartDate(coachDate());
@@ -146,12 +148,18 @@ export function ClassMembers() {
   const handleSavePersonalPlan = async (e) => {
     e.preventDefault();
     if (!planTitle.trim() || !planGoal.trim()) {
-      showError('Vui lòng nhập tên giáo án và mục tiêu riêng!');
+      showError(isEn ? 'Please enter a plan title and specific fitness goal!' : 'Vui lòng nhập tên giáo án và mục tiêu riêng!');
+      return;
+    }
+
+    if (!startDate || !startDate.trim()) {
+      showError(isEn ? 'Please choose an effective start date!' : 'Vui lòng chọn ngày bắt đầu áp dụng giáo án!');
       return;
     }
 
     if (!exercises.length || exercises.some(ex => !ex.name.trim()) || (endDate && endDate < startDate)) {
-      showError('Nhập ít nhất một bài tập có tên và khoảng ngày hợp lệ.'); return;
+      showError(isEn ? 'Please add at least one valid exercise and a valid date range.' : 'Nhập ít nhất một bài tập có tên và khoảng ngày hợp lệ.');
+      return;
     }
     setSaving(true);
     try {
@@ -162,7 +170,7 @@ export function ClassMembers() {
         memberId: activeMember.memberId,
         memberName: activeMember.memberName,
         coachId: currentUser?.id,
-        coachName: currentUser?.fullName || 'Huấn luyện viên',
+        coachName: currentUser?.fullName || (isEn ? 'Coach' : 'Huấn luyện viên'),
         title: planTitle.trim(),
         fitnessCondition: fitnessCondition.trim(),
         goal: planGoal.trim(),
@@ -171,11 +179,11 @@ export function ClassMembers() {
         exercises
       });
 
-      showSuccess(`Đã lưu giáo án riêng cho ${activeMember.memberName}! Ngôi sao đánh dấu đã phát sáng ⭐`);
+      showSuccess(isEn ? `Custom plan saved for ${activeMember.memberName}! Star indicator active ⭐` : `Đã lưu giáo án riêng cho ${activeMember.memberName}! Ngôi sao đánh dấu đã phát sáng ⭐`);
       setModalOpen(false);
       loadData();
     } catch (err) {
-      showError(err.message || 'Lỗi khi lưu giáo án riêng');
+      showError(err.message || (isEn ? 'Error saving custom plan' : 'Lỗi khi lưu giáo án riêng'));
     } finally {
       setSaving(false);
     }
@@ -183,40 +191,70 @@ export function ClassMembers() {
 
   // Delete / Remove personal plan -> Star becomes hollow
   const handleDeletePersonalPlan = async () => {
-    if (!window.confirm(`Bạn có chắc muốn huỷ giáo án riêng của ${activeMember?.memberName}? Học viên sẽ quay về áp dụng giáo án chung của lớp.`)) {
+    const ok = await confirm({
+      title: isEn ? 'Remove Custom Syllabus' : 'Xác nhận hủy giáo án riêng',
+      message: isEn
+        ? `Are you sure you want to remove the custom plan for ${activeMember?.memberName}?`
+        : `Bạn có chắc muốn hủy giáo án riêng của ${activeMember?.memberName}?`,
+      detail: isEn
+        ? 'The student will revert to the standard class syllabus.'
+        : 'Học viên sẽ quay về áp dụng giáo án chung của lớp.',
+      confirmText: isEn ? 'Remove Plan' : 'Hủy giáo án',
+      cancelText: isEn ? 'Keep Plan' : 'Giữ lại',
+      type: 'danger'
+    });
+    if (!ok) {
       return;
     }
 
     setDeleting(true);
     try {
       await coachApi.deletePersonalTrainingPlan(selectedClassId, activeMember.memberId, currentUser?.fullName);
-      showSuccess(`Đã huỷ giáo án riêng cho ${activeMember.memberName}. Ngôi sao đã trở về rỗng.`);
+      showSuccess(isEn ? `Removed custom plan for ${activeMember.memberName}.` : `Đã huỷ giáo án riêng cho ${activeMember.memberName}. Ngôi sao đã trở về rỗng.`);
       setModalOpen(false);
       loadData();
     } catch (err) {
-      showError('Không thể xóa giáo án riêng');
+      showError(isEn ? 'Failed to remove custom plan' : 'Không thể xóa giáo án riêng');
     } finally {
       setDeleting(false);
     }
   };
 
   const columns = [
-    { header: 'Mục tiêu', accessor: 'fitnessGoal' },
-    { header: 'Trình độ', accessor: 'fitnessLevel' },
     {
-      header: 'Học Viên',
+      header: isEn ? 'Goal' : 'Mục tiêu',
+      render: row => row.fitnessGoal?.trim() ? (
+        <span className="font-medium text-slate-800">{row.fitnessGoal}</span>
+      ) : (
+        <span className="text-slate-400 italic text-xs">{isEn ? 'Not updated' : 'Chưa cập nhật'}</span>
+      )
+    },
+    {
+      header: isEn ? 'Level' : 'Trình độ',
+      render: row => row.fitnessLevel?.trim() ? (
+        <span className="font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md text-xs">{row.fitnessLevel}</span>
+      ) : (
+        <span className="text-slate-400 italic text-xs">{isEn ? 'Not evaluated' : 'Chưa đánh giá'}</span>
+      )
+    },
+    {
+      header: isEn ? 'Student' : 'Học Viên',
       render: (row) => (
         <div className="flex items-center gap-3">
           <img
             src={row.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100'}
-            alt=""
-            className="w-9 h-9 rounded-full object-cover border border-slate-200"
+            onError={e => {
+              e.currentTarget.onerror = null;
+              e.currentTarget.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100';
+            }}
+            alt={row.memberName || 'Student'}
+            className="w-9 h-9 rounded-full object-cover border border-slate-200 shrink-0"
           />
           <div>
             <div className="font-bold text-slate-900 flex items-center gap-1.5">
               <span>{row.memberName}</span>
               {getPersonalPlanForMember(row.memberId) && (
-                <span className="material-symbols-outlined text-[15px] text-amber-500 fill-amber-500" title="Đã có giáo án riêng biệt">
+                <span className="material-symbols-outlined text-[15px] text-amber-500 fill-amber-500" title={isEn ? "Personal custom plan active" : "Đã có giáo án riêng biệt"}>
                   star
                 </span>
               )}
@@ -227,34 +265,46 @@ export function ClassMembers() {
       )
     },
     {
-      header: 'Mã Thẻ',
-      render: (row) => <span className="font-chivo font-bold text-red-600">{row.memberCode}</span>
+      header: isEn ? 'Card / Code' : 'Mã Thẻ',
+      className: 'whitespace-nowrap min-w-[130px]',
+      render: (row) => (
+        <span className="font-bold font-mono text-[#1E2235] bg-[#81B29A]/15 px-2.5 py-1 rounded-md border border-[#81B29A]/30 text-xs whitespace-nowrap inline-block">
+          {row.memberCode}
+        </span>
+      )
     },
     {
-      header: 'Số Điện Thoại',
-      accessor: 'phone'
+      header: isEn ? 'Phone Number' : 'Số Điện Thoại',
+      accessor: 'phone',
+      className: 'whitespace-nowrap min-w-[130px]'
     },
     {
-      header: 'Hồ sơ',
-      render: row => <button onClick={() => setProfile(row)} className="text-red-600 font-semibold text-xs underline">Xem hồ sơ</button>
+      header: isEn ? 'Profile' : 'Hồ sơ',
+      className: 'whitespace-nowrap min-w-[90px]',
+      render: row => (
+        <button onClick={() => setProfile(row)} className="text-[#3D405B] hover:text-[#E07A5F] font-semibold text-xs underline transition-colors cursor-pointer whitespace-nowrap">
+          {isEn ? 'View Profile' : 'Xem hồ sơ'}
+        </button>
+      )
     },
     {
-      header: 'Giáo Án Riêng (⭐)',
+      header: isEn ? 'Personal Plan (⭐)' : 'Giáo Án Riêng (⭐)',
+      className: 'whitespace-nowrap min-w-[180px]',
       render: (row) => {
         const hasCustomPlan = !!getPersonalPlanForMember(row.memberId);
         return (
           <button
             type="button"
             onClick={() => handleOpenPersonalPlanModal(row)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all text-xs font-semibold ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all text-xs font-semibold whitespace-nowrap ${
               hasCustomPlan
                 ? 'bg-amber-50 border-amber-300 text-amber-900 shadow-xs hover:bg-amber-100 ring-2 ring-amber-400/30'
                 : 'bg-white border-slate-200 text-slate-500 hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50/50'
             }`}
             title={
               hasCustomPlan
-                ? 'Học viên có thể chất đặc biệt đã được thiết lập giáo án riêng. Bấm để xem / chỉnh sửa / huỷ'
-                : 'Học viên có thể trạng khác biệt? Bấm để thiết lập giáo án riêng (tăng/giảm khối lượng)'
+                ? (isEn ? 'Student has a customized training plan. Click to view / edit / delete' : 'Học viên có thể chất đặc biệt đã được thiết lập giáo án riêng. Bấm để xem / chỉnh sửa / huỷ')
+                : (isEn ? 'Different conditioning needs? Click to set up a custom plan' : 'Học viên có thể trạng khác biệt? Bấm để thiết lập giáo án riêng (tăng/giảm khối lượng)')
             }
           >
             {hasCustomPlan ? (
@@ -263,7 +313,7 @@ export function ClassMembers() {
                   star
                 </span>
                 <span className="font-chivo font-black uppercase text-[11px] tracking-wide text-amber-700">
-                  Có giáo án riêng
+                  {isEn ? 'Custom Plan Active' : 'Có giáo án riêng'}
                 </span>
               </>
             ) : (
@@ -271,7 +321,7 @@ export function ClassMembers() {
                 <span className="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-amber-500 transition-colors">
                   star_outline
                 </span>
-                <span className="text-[11px] font-medium">Soạn giáo án riêng</span>
+                <span className="text-[11px] font-medium">{isEn ? 'Custom Plan' : 'Soạn giáo án riêng'}</span>
               </>
             )}
           </button>
@@ -279,36 +329,65 @@ export function ClassMembers() {
       }
     },
     {
-      header: 'Thao Tác Chuyên Môn',
-      render: (row) => (
-        <div className="flex items-center gap-2">
+      header: isEn ? 'Actions' : 'Thao Tác Chuyên Môn',
+      className: 'whitespace-nowrap min-w-[140px]',
+      render: () => (
+        <div className="flex items-center gap-2 whitespace-nowrap">
           <a
             href="#/coach/progress"
-            className="px-2.5 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 text-xs font-bold font-chivo uppercase tracking-wider transition-colors flex items-center gap-1"
+            className="px-3 py-1.5 rounded-lg bg-[#81B29A]/15 hover:bg-[#81B29A]/25 text-[#2D6A4F] text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1"
           >
             <span className="material-symbols-outlined text-[15px]">monitor_heart</span>
-            <span>Ghi Chỉ Số</span>
+            <span>{isEn ? 'Log Vitals' : 'Ghi Chỉ Số'}</span>
           </a>
         </div>
       )
     }
   ];
 
-  if (loading) return <LoadingSpinner text="Đang tải danh sách học viên..." />;
+  if (loading) return <LoadingSpinner text={isEn ? "Loading student roster..." : "Đang tải danh sách học viên..."} />;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <span className="font-chivo text-xs font-bold uppercase tracking-wider text-red-600">
-          MANAGE CLASS MEMBERS
-        </span>
-        <h1 className="font-chivo text-2xl font-black text-slate-900 tracking-tight">
-          Danh Sách Học Viên Theo Lớp Học
-        </h1>
-        <p className="text-xs text-slate-500 mt-0.5">
-          Theo dõi hồ sơ học viên theo từng lớp bạn đảm nhiệm và thiết lập giáo án riêng (⭐) cho học viên có thể chất đặc biệt.
-        </p>
+      {/* 1. TOP HEADER BANNER */}
+      <div className="rounded-3xl bg-gradient-to-r from-[#2F7B5D] via-[#24828F] via-[#3FAEB8] to-[#E5A33C] dark:from-[#184534] dark:via-[#144850] dark:via-[#1B5760] dark:to-[#5E4014] text-white p-6 sm:p-8 relative overflow-hidden border border-white/30 dark:border-white/10 shadow-xl shadow-[#24828F]/20 flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
+        {/* Dynamic ambient glow & sports wave overlays matching logo palette */}
+        <div className="pointer-events-none absolute -right-16 -top-16 w-80 h-80 rounded-full bg-gradient-to-br from-[#F2CC8F]/45 via-[#E5A33C]/30 to-transparent blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-16 -left-16 w-80 h-80 rounded-full bg-gradient-to-tr from-[#81B29A]/40 via-[#2F7B5D]/30 to-transparent blur-3xl" />
+        <div className="pointer-events-none absolute top-1/2 left-1/3 -translate-y-1/2 w-96 h-40 bg-[#A8DADC]/30 rounded-full blur-3xl" />
+
+        {/* Subtle decorative Olympic curved motion lines */}
+        <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-15 overflow-hidden" preserveAspectRatio="none" viewBox="0 0 1000 300">
+          <path d="M-50,220 C200,80 450,260 750,120 C900,40 1050,180 1100,140" fill="none" stroke="white" strokeWidth="2.5" strokeDasharray="6 6" />
+          <path d="M-20,260 C250,120 500,300 800,160 C950,90 1050,200 1120,180" fill="none" stroke="white" strokeWidth="1.5" />
+          <circle cx="850" cy="80" r="140" fill="none" stroke="white" strokeWidth="1" opacity="0.4" />
+        </svg>
+
+        <div className="space-y-1 relative z-10">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/90 dark:bg-slate-900/90 text-[#1B4332] dark:text-emerald-300 text-xs font-black uppercase tracking-wider backdrop-blur-md border border-white/80 dark:border-white/20 mb-2 shadow-xs">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>{isEn ? 'Student Management' : 'Quản lý học viên'}</span>
+          </div>
+          <h1 className="text-2xl md:text-3xl font-chivo font-black tracking-tight text-white flex items-center gap-2.5 drop-shadow-[0_2px_8px_rgba(0,0,0,0.22)]">
+            <span className="material-symbols-outlined text-[28px] text-amber-300">groups</span>
+            <span>{isEn ? 'Enrolled Students by Class' : 'Danh Sách Học Viên Theo Lớp Học'}</span>
+          </h1>
+          <p className="text-xs sm:text-sm text-white/95 max-w-2xl font-medium leading-relaxed drop-shadow-xs">
+            {isEn
+              ? 'Track student profiles in assigned classes and customize personal training plans (⭐) for special conditioning.'
+              : 'Theo dõi hồ sơ học viên theo từng lớp bạn đảm nhiệm và thiết lập giáo án riêng (⭐) cho học viên có thể chất đặc biệt.'}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0 relative z-10">
+          <a
+            href="#/coach/progress"
+            className="px-4 py-2.5 rounded-xl border border-white/30 bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer backdrop-blur-md shadow-xs hover-lift"
+          >
+            <span className="material-symbols-outlined text-[16px] text-amber-300">monitor_heart</span>
+            <span>{isEn ? 'Log Vitals' : 'Ghi Chỉ Số'}</span>
+          </a>
+        </div>
       </div>
 
       {/* Class Selector Bar */}
@@ -317,21 +396,21 @@ export function ClassMembers() {
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <span className="text-xs font-bold uppercase tracking-wider text-slate-500 shrink-0">
-            Chọn lớp học:
+            {isEn ? 'Select Class:' : 'Chọn lớp học:'}
           </span>
           {classes.length === 0 ? (
             <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200">
-              Bạn chưa có lớp học nào được phân công.
+              {isEn ? 'No assigned classes yet.' : 'Bạn chưa có lớp học nào được phân công.'}
             </span>
           ) : (
             <select
               value={selectedClassId}
               onChange={e => setSelectedClassId(Number(e.target.value))}
-              className="px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 bg-white font-semibold text-slate-900"
+              className="px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#81B29A] focus:border-[#81B29A] bg-white font-semibold text-slate-900"
             >
               {classes.map(cls => (
                 <option key={cls.id} value={cls.id}>
-                  {cls.name} ({cls.sportName})
+                  {translateClassName(cls.name, isEn)} ({translateSportName(cls.sportName, isEn)})
                 </option>
               ))}
             </select>
@@ -340,11 +419,13 @@ export function ClassMembers() {
 
         {selectedClass && (
           <div className="flex items-center gap-3 text-xs flex-wrap">
-            <span className="text-slate-500">Sĩ số: <strong className="text-red-600 font-bold">{members.length} / {selectedClass.capacity}</strong></span>
+            <span className="text-slate-500">
+              {isEn ? 'Enrollment:' : 'Sĩ số:'} <strong className="text-[#1E2235] font-bold">{members.length} / {selectedClass.capacity}</strong>
+            </span>
             <span className="text-slate-300">|</span>
             <span className="text-amber-700 font-medium flex items-center gap-1">
               <span className="material-symbols-outlined text-[15px] text-amber-500 fill-amber-500">star</span>
-              <span><strong>{members.filter(m => getPersonalPlanForMember(m.memberId)).length}</strong> giáo án riêng</span>
+              <span><strong>{members.filter(m => getPersonalPlanForMember(m.memberId)).length}</strong> {isEn ? 'custom plans' : 'giáo án riêng'}</span>
             </span>
           </div>
         )}
@@ -355,29 +436,49 @@ export function ClassMembers() {
         <div className="flex items-center gap-2">
           <span className="material-symbols-outlined text-amber-600 text-[22px] shrink-0">stars</span>
           <div>
-            <span className="font-bold">Quy tắc giáo án riêng:</span> Mọi học viên trong lớp mặc định áp dụng giáo án chung của lớp. Đối với học viên có thể chất khác biệt (cần tăng cường độ hoặc giảm tải), bạn bấm vào biểu tượng <strong>ngôi sao (⭐)</strong> để tạo giáo án riêng. Sau khi lưu, ngôi sao sẽ phát sáng vàng để nhận biết!
+            <span className="font-bold">{isEn ? 'Custom plan rule:' : 'Quy tắc giáo án riêng:'}</span>{' '}
+            {isEn
+              ? 'All enrolled students follow the shared class syllabus by default. For members needing special conditioning or rehab, click the star icon (⭐) to configure a custom plan. The star lights up gold when activated!'
+              : 'Mọi học viên trong lớp mặc định áp dụng giáo án chung của lớp. Đối với học viên có thể chất khác biệt (cần tăng cường độ hoặc giảm tải), bạn bấm vào biểu tượng ngôi sao (⭐) để tạo giáo án riêng. Sau khi lưu, ngôi sao sẽ phát sáng vàng để nhận biết!'}
           </div>
         </div>
       </div>
 
       {/* Table */}
-      {membersLoading ? <LoadingSpinner text="Đang tải học viên của lớp..." /> : !membersError && !error && <Table
-        columns={columns}
-        data={members}
-        searchKey="memberName"
-        searchPlaceholder="Tìm theo tên học viên..."
-        emptyMessage="Chưa có học viên nào đặt chỗ cho lớp này"
-      />}
+      {membersLoading ? (
+        <LoadingSpinner text={isEn ? "Loading class members..." : "Đang tải học viên của lớp..."} />
+      ) : !membersError && !error && (
+        <Table
+          columns={columns}
+          data={members}
+          searchKey="memberName"
+          searchPlaceholder={isEn ? "Search by student name..." : "Tìm theo tên học viên..."}
+          emptyMessage={isEn ? "No students have enrolled in this class yet" : "Chưa có học viên nào đặt chỗ cho lớp này"}
+        />
+      )}
 
-      <Modal isOpen={Boolean(profile)} onClose={() => setProfile(null)} title={`Hồ sơ học viên: ${profile?.memberName || ''}`}>
-        {profile && <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm break-words">
-          {[
-            ['Mã thẻ', profile.memberCode], ['Email', profile.email], ['Điện thoại', profile.phone],
-            ['Ngày sinh', profile.dateOfBirth], ['Giới tính', profile.gender],
-            ['Chiều cao (cm)', profile.heightCm], ['Cân nặng hồ sơ (kg)', profile.weightKg],
-            ['Mục tiêu tập luyện', profile.fitnessGoal], ['Trình độ', profile.fitnessLevel], ['Lưu ý thể trạng', profile.medicalNote]
-          ].map(([label, value]) => <div key={label}><dt className="text-slate-500 text-xs">{label}</dt><dd className="font-semibold whitespace-pre-wrap mt-1">{value ?? 'Chưa cập nhật'}</dd></div>)}
-        </dl>}
+      <Modal isOpen={Boolean(profile)} onClose={() => setProfile(null)} title={isEn ? `Student Profile: ${profile?.memberName || ''}` : `Hồ sơ học viên: ${profile?.memberName || ''}`}>
+        {profile && (
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm break-words">
+            {[
+              [isEn ? 'Member Code' : 'Mã thẻ', profile.memberCode],
+              [isEn ? 'Email' : 'Email', profile.email],
+              [isEn ? 'Phone' : 'Điện thoại', profile.phone],
+              [isEn ? 'Date of Birth' : 'Ngày sinh', profile.dateOfBirth],
+              [isEn ? 'Gender' : 'Giới tính', profile.gender],
+              [isEn ? 'Height (cm)' : 'Chiều cao (cm)', profile.heightCm],
+              [isEn ? 'Weight (kg)' : 'Cân nặng hồ sơ (kg)', profile.weightKg],
+              [isEn ? 'Fitness Goal' : 'Mục tiêu tập luyện', profile.fitnessGoal],
+              [isEn ? 'Fitness Level' : 'Trình độ', profile.fitnessLevel],
+              [isEn ? 'Health Notes' : 'Lưu ý thể trạng', profile.medicalNote]
+            ].map(([label, value]) => (
+              <div key={label}>
+                <dt className="text-slate-500 text-xs">{label}</dt>
+                <dd className="font-semibold whitespace-pre-wrap mt-1">{(value && String(value).trim()) ? value : (isEn ? 'Not updated' : 'Chưa cập nhật')}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
       </Modal>
 
       {/* Modal: Soạn giáo án riêng cho học viên */}
@@ -386,8 +487,8 @@ export function ClassMembers() {
         onClose={() => setModalOpen(false)}
         title={
           existingPlanId
-            ? `Cập Nhật Giáo Án Riêng: ${activeMember?.memberName}`
-            : `Soạn Giáo Án Riêng Cho Học Viên: ${activeMember?.memberName}`
+            ? (isEn ? `Update Custom Plan: ${activeMember?.memberName}` : `Cập Nhật Giáo Án Riêng: ${activeMember?.memberName}`)
+            : (isEn ? `Create Custom Plan: ${activeMember?.memberName}` : `Soạn Giáo Án Riêng Cho Học Viên: ${activeMember?.memberName}`)
         }
         maxWidth="max-w-2xl"
       >
@@ -398,43 +499,49 @@ export function ClassMembers() {
               <div className="flex items-center gap-3">
                 <img
                   src={activeMember.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100'}
-                  alt=""
+                  onError={e => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100';
+                  }}
+                  alt={activeMember.memberName || 'Student'}
                   className="w-11 h-11 rounded-full object-cover border-2 border-amber-400 shrink-0"
                 />
                 <div>
                   <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
                     <span>{activeMember.memberName}</span>
-                    <span className="font-chivo text-xs text-red-600">({activeMember.memberCode})</span>
+                    <span className="text-xs font-bold text-[#2D6A4F]">({activeMember.memberCode})</span>
                     {existingPlanId && (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200 text-amber-900 flex items-center gap-0.5">
                         <span className="material-symbols-outlined text-[12px] text-amber-700">star</span>
-                        Đang áp dụng giáo án riêng
+                        {isEn ? 'Custom plan active' : 'Đang áp dụng giáo án riêng'}
                       </span>
                     )}
                   </div>
                   <div className="text-xs text-slate-600 mt-0.5">
-                    Lớp: <strong>{selectedClass?.name}</strong> • SĐT: <strong>{activeMember.phone || 'N/A'}</strong>
+                    {isEn ? 'Class:' : 'Lớp:'} <strong>{selectedClass?.name}</strong> • {isEn ? 'Phone:' : 'SĐT:'} <strong>{activeMember.phone || 'N/A'}</strong>
                   </div>
                 </div>
               </div>
 
               <div className="text-right shrink-0">
                 <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider block">
-                  CHẾ ĐỘ CÁ NHÂN HÓA
+                  {isEn ? 'PERSONALIZED MODE' : 'CHẾ ĐỘ CÁ NHÂN HÓA'}
                 </span>
-                <span className="text-[10px] text-slate-500">Ưu tiên hơn giáo án lớp</span>
+                <span className="text-[10px] text-slate-500">
+                  {isEn ? 'Overrides shared syllabus' : 'Ưu tiên hơn giáo án lớp'}
+                </span>
               </div>
             </div>
 
             {/* Row 1: Tên giáo án riêng */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                Tên giáo án riêng *
+                {isEn ? 'Custom Plan Title *' : 'Tên giáo án riêng *'}
               </label>
               <input
                 type="text"
                 required
-                placeholder="VD: Phác đồ tăng cường sức bền sải bơi hoặc Giảm tải phục hồi cổ chân"
+                placeholder={isEn ? "e.g. Stroke Endurance Rehab or Lower Limb Recovery" : "VD: Phác đồ tăng cường sức bền sải bơi hoặc Giảm tải phục hồi cổ chân"}
                 value={planTitle}
                 onChange={e => setPlanTitle(e.target.value)}
                 className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white"
@@ -444,11 +551,11 @@ export function ClassMembers() {
             {/* Row 2: Thể trạng khác biệt & Lý do điều chỉnh */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                Tình trạng thể chất &amp; Lý do điều chỉnh riêng
+                {isEn ? 'Physical Condition & Special Notes' : 'Tình trạng thể chất & Lý do điều chỉnh riêng'}
               </label>
               <input
                 type="text"
-                placeholder="VD: Học viên có tiền sử giãn dây chằng gối, giảm 30% bài tập plyometric; hoặc Nền tảng thể lực tốt, tăng 2 hiệp"
+                placeholder={isEn ? "e.g. Previous knee ligament issue, reduce plyometrics by 30%" : "VD: Học viên có tiền sử giãn dây chằng gối, giảm 30% bài tập plyometric; hoặc Nền tảng thể lực tốt, tăng 2 hiệp"}
                 value={fitnessCondition}
                 onChange={e => setFitnessCondition(e.target.value)}
                 className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white"
@@ -456,16 +563,19 @@ export function ClassMembers() {
             </div>
 
             {/* Row 3: Mục tiêu riêng & Thời hạn */}
-            <label className="block text-xs font-bold">Ngày bắt đầu<input aria-label="Ngày bắt đầu giáo án cá nhân" type="date" required className={coachInput} value={startDate} onChange={e => setStartDate(e.target.value)} /></label>
+            <label className="block text-xs font-bold">
+              {isEn ? 'Start Date' : 'Ngày bắt đầu'}
+              <input aria-label={isEn ? "Start Date" : "Ngày bắt đầu giáo án cá nhân"} type="date" required className={coachInput} value={startDate} onChange={e => setStartDate(e.target.value)} />
+            </label>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="sm:col-span-2">
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Mục tiêu cá nhân hóa *
+                  {isEn ? 'Personalized Goal *' : 'Mục tiêu cá nhân hóa *'}
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="VD: Phục hồi chức năng vận động 100%, nâng VO2 max"
+                  placeholder={isEn ? "e.g. 100% mobility restoration, increase VO2 max" : "VD: Phục hồi chức năng vận động 100%, nâng VO2 max"}
                   value={planGoal}
                   onChange={e => setPlanGoal(e.target.value)}
                   className="w-full px-3.5 py-2 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white"
@@ -474,7 +584,7 @@ export function ClassMembers() {
 
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                  Ngày kết thúc
+                  {isEn ? 'End Date (Optional)' : 'Ngày kết thúc'}
                 </label>
                 <input
                   type="date"
@@ -490,9 +600,11 @@ export function ClassMembers() {
               <div className="flex items-center justify-between">
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                    Bài tập điều chỉnh riêng cho học viên ({exercises.length})
+                    {isEn ? `Custom Exercises (${exercises.length})` : `Bài tập điều chỉnh riêng cho học viên (${exercises.length})`}
                   </label>
-                  <p className="text-[11px] text-slate-500">Tùy biến số hiệp, số lần lặp và ghi chú kỹ thuật cho học viên này.</p>
+                  <p className="text-[11px] text-slate-500">
+                    {isEn ? 'Customize sets, repetitions, and technical tips for this student.' : 'Tùy biến số hiệp, số lần lặp và ghi chú kỹ thuật cho học viên này.'}
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -500,7 +612,7 @@ export function ClassMembers() {
                   className="text-xs font-bold text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded-lg border border-amber-200 flex items-center gap-1 transition-colors"
                 >
                   <span className="material-symbols-outlined text-[16px]">add</span>
-                  <span>Thêm bài tập</span>
+                  <span>{isEn ? 'Add Exercise' : 'Thêm bài tập'}</span>
                 </button>
               </div>
 
@@ -509,7 +621,7 @@ export function ClassMembers() {
                   <div className="col-span-5">
                     <input
                       type="text"
-                      placeholder="Tên bài tập"
+                      placeholder={isEn ? "Exercise Name" : "Tên bài tập"}
                       value={ex.name}
                       onChange={e => handleExerciseChange(idx, 'name', e.target.value)}
                       className="w-full px-2.5 py-1.5 text-xs rounded border border-slate-300 bg-white"
@@ -518,7 +630,7 @@ export function ClassMembers() {
                   <div className="col-span-2">
                     <input
                       type="text"
-                      placeholder="Số hiệp"
+                      placeholder={isEn ? "Sets" : "Số hiệp"}
                       value={ex.sets}
                       onChange={e => handleExerciseChange(idx, 'sets', e.target.value)}
                       className="w-full px-2 py-1.5 text-xs rounded border border-slate-300 bg-white text-center"
@@ -527,7 +639,7 @@ export function ClassMembers() {
                   <div className="col-span-2">
                     <input
                       type="text"
-                      placeholder="Lặp lại"
+                      placeholder={isEn ? "Reps" : "Lặp lại"}
                       value={ex.reps}
                       onChange={e => handleExerciseChange(idx, 'reps', e.target.value)}
                       className="w-full px-2 py-1.5 text-xs rounded border border-slate-300 bg-white text-center"
@@ -536,7 +648,7 @@ export function ClassMembers() {
                   <div className="col-span-2">
                     <input
                       type="text"
-                      placeholder="Lưu ý riêng"
+                      placeholder={isEn ? "Notes" : "Lưu ý riêng"}
                       value={ex.note}
                       onChange={e => handleExerciseChange(idx, 'note', e.target.value)}
                       className="w-full px-2 py-1.5 text-xs rounded border border-slate-300 bg-white"
@@ -547,7 +659,7 @@ export function ClassMembers() {
                       type="button"
                       onClick={() => handleRemoveExercise(idx)}
                       className="text-slate-400 hover:text-red-600 p-1"
-                      title="Xóa bài tập này"
+                      title={isEn ? "Remove exercise" : "Xóa bài tập này"}
                     >
                       <span className="material-symbols-outlined text-[18px]">delete</span>
                     </button>
@@ -563,10 +675,10 @@ export function ClassMembers() {
                   type="button"
                   disabled={deleting}
                   onClick={handleDeletePersonalPlan}
-                  className="px-3.5 py-2 text-xs font-bold uppercase tracking-wider rounded-lg text-red-600 hover:bg-red-50 border border-red-200 transition-colors flex items-center gap-1"
+                  className="px-3.5 py-2 text-xs font-bold uppercase tracking-wider rounded-lg text-[#E07A5F] hover:bg-[#E07A5F]/10 border border-[#E07A5F]/30 transition-colors flex items-center gap-1 cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-[16px]">star_border</span>
-                  <span>{deleting ? 'Đang huỷ...' : 'Huỷ giáo án riêng (Về sao rỗng)'}</span>
+                  <span>{deleting ? (isEn ? 'Deleting...' : 'Đang huỷ...') : (isEn ? 'Delete Custom Plan' : 'Huỷ giáo án riêng (Về sao rỗng)')}</span>
                 </button>
               ) : (
                 <div />
@@ -576,24 +688,24 @@ export function ClassMembers() {
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600"
+                  className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 cursor-pointer"
                 >
-                  Đóng
+                  {isEn ? 'Close' : 'Đóng'}
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-5 py-2 text-xs font-bold uppercase tracking-wider rounded-lg text-slate-900 bg-amber-400 hover:bg-amber-500 shadow-md transition-all flex items-center gap-1.5 font-chivo"
+                  className="px-5 py-2 text-xs font-bold uppercase tracking-wider rounded-xl text-[#1E2235] hover:text-white bg-[#F2CC8F] hover:bg-[#E07A5F] shadow-sm hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   {saving ? (
                     <>
                       <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
-                      <span>Đang lưu...</span>
+                      <span>{isEn ? 'Saving...' : 'Đang lưu...'}</span>
                     </>
                   ) : (
                     <>
-                      <span className="material-symbols-outlined text-[18px] text-slate-900">star</span>
-                      <span>Lưu &amp; Kích Hoạt Giáo Án Riêng</span>
+                      <span className="material-symbols-outlined text-[18px]">star</span>
+                      <span>{isEn ? 'Save & Activate Custom Plan' : 'Lưu & Kích Hoạt Giáo Án Riêng'}</span>
                     </>
                   )}
                 </button>

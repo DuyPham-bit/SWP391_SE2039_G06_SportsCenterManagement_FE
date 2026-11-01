@@ -7,7 +7,7 @@
     "dev": "vite",
     "start": "vite",
     "build": "vite build",
-    "build:api": "vite build --outDir ../Backend/Backend/SportsCenterManagement.API/wwwroot --emptyOutDir",
+    "build:api": "vite build --outDir ../Backend/SportsCenterManagement.API/wwwroot --emptyOutDir",
     "preview": "vite preview"
   },
   "keywords": [
@@ -20,8 +20,14 @@
   "author": "SCMS Development Team",
   "license": "MIT",
   "dependencies": {
+    "exceljs": "4.4.0",
+    "html5-qrcode": "^2.3.8",
+    "motion": "^14.6.0",
+    "pdfmake": "0.2.20",
+    "qrcode": "^1.5.4",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "three": "^0.187.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
